@@ -2,10 +2,6 @@ alias ..="cd .."
 
 # quick edit aliases
 alias reload="source ~/.bash/aliases.bash"
-alias ea='vim ~/.bash/aliases.bash && reload'
-
-# use terminal mvim
-alias vim='mvim -v'
 
 # See disk usage in the current folder only
 alias ds='du -h -d 1'

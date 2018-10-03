@@ -9,8 +9,7 @@ In this repository you'll find Minikin's dotfiles.
 
 ## Symlinking these files
 
-Clone the directory somewhere (I chose `~/Dropbox/dotfiles` so it would be easily synced across my machines).
-Make sure you grab the submodules too, as the vim plugins are added as submodules.
+Clone the directory somewhere.
 
 Then we need to symlink these into your home directory. Run:
 

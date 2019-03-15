@@ -123,3 +123,5 @@ tab-reset() {
     echo -ne "\033]6;1;bg;*;default\a"
 }
 
+
+alias fw='flutter packages pub run build_runner watch'

@@ -1,5 +1,5 @@
 [user]
-	name = minikin
+	name = Sasha Prokhorenko
 	email = djminikin@gmail.com
 
 [color]
@@ -32,7 +32,7 @@
 
 [core]
 	excludesfile = /Users/ben/.gitignore_global
-	editor = vim
+	editor = code
 
 [difftool "sourcetree"]
 	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
@@ -63,8 +63,9 @@
 	smudge = git hawser smudge %f
 	required = true
 [filter "lfs"]
-	clean = git-lfs clean %f
-	smudge = git-lfs smudge %f
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
 	required = true
+	process = git-lfs filter-process
 [credential]
 	helper = osxkeychain

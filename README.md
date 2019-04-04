@@ -27,7 +27,7 @@ I highly recommend you back up any existing dotfiles before trying this out. Use
 open bash profile
 
 ```sh
-code ~./bash_profile
+code ~/.bash_profile
 ```
 
 navigate to bash folder

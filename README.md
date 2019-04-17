@@ -30,10 +30,14 @@ open bash profile
 code ~/.bash_profile
 ```
 
+```sh
+echo "alias lg='lazygit'" >> ~/.bash
+```
+
 navigate to bash folder
 
 ```sh
-cd ~/.bash
+cd  ~/.bash
 ```
 
 reload bash

@@ -31,7 +31,7 @@ code ~/.bash_profile
 ```
 
 ```sh
-echo "alias lg='lazygit'" >> ~/.bash
+echo "alias lg='lazygit'" >> ~/.bash_profile
 ```
 
 navigate to bash folder

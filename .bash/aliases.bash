@@ -61,6 +61,7 @@ alias gpush='git push origin master'
 alias gc='git commit -v'
 alias gca='git commit -v -a'
 alias gl='git log --oneline'
+alias gfpull='git fetch && git pull origin develop'
 
 # Pretty-printing
 alias format_json='python -m json.tool'

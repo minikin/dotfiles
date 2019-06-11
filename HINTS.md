@@ -1,7 +1,22 @@
 ## Hints
 
-# Zsh
+### Zsh
 
+open zsh profile
+
+```sh
+code ~/.zshrc
+```
+
+```sh
+echo "alias lg='lazygit'" >> ~/.bash_profile
+```
+
+reload zsh
+
+```zsh
+source ~/.zshrc
+```
 
 ### Bash 
 
@@ -10,6 +25,8 @@ open bash profile
 ```sh
 code ~/.bash_profile
 ```
+
+add new alias
 
 ```sh
 echo "alias lg='lazygit'" >> ~/.bash_profile

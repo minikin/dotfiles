@@ -1,4 +1,4 @@
-# Sasha Prokhorenko's Dotfiles
+# Sasha Prokhorenko's new mac setup script
 
 In this repository you'll find Sasha Prokhorenko's dotfiles.
 
@@ -10,19 +10,14 @@ In this repository you'll find Sasha Prokhorenko's dotfiles.
 ## Prerequisites
 
 - Some version of ruby
-- `rake` and the `colored` gems installed locally
+- `JAVA` and the `BREW` gems installed locally
 
-## Symlinking these files
+## Install software and symlinking  files
 
 Clone the directory somewhere.
 
-Then we need to symlink these into your home directory. Run:
+Then we need to install software and symlink these into your home directory. Run:
 
 ```zsh
-rake symlink
+make  setup
 ```
-
-This will symlink all of the dotfiles from the repo into your home folder.
-It will prompt before overwriting files, so you can skip existing ones if you want.
-
-I highly recommend you back up any existing dotfiles before trying this out. Use at your own risk.

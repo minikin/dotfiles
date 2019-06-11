@@ -6,7 +6,7 @@ export EDITOR=code
 alias ..="cd .."
 
 # quick edit aliases
-alias reload="source ~/.bash/aliases.bash"
+alias reload="source ~/.zshrc"
 
 # See disk usage in the current folder only
 alias ds='du -h -d 1'
@@ -132,7 +132,6 @@ tab-color() {
 tab-reset() {
     echo -ne "\033]6;1;bg;*;default\a"
 }
-
 
 #Flutter
 alias fw='flutter packages pub run build_runner watch'

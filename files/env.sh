@@ -1,3 +1,8 @@
+#!/bin/zsh
+
+# Specify default editor. Possible values: vim, nano, ed etc.
+export EDITOR=code
+
 alias ..="cd .."
 
 # quick edit aliases
@@ -127,6 +132,7 @@ tab-color() {
 tab-reset() {
     echo -ne "\033]6;1;bg;*;default\a"
 }
+
 
 #Flutter
 alias fw='flutter packages pub run build_runner watch'

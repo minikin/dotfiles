@@ -1,5 +1,8 @@
 #!/bin/zsh
 
+# Add commonly used folders to $PATH
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
 # Specify default editor. Possible values: vim, nano, ed etc.
 export EDITOR=code
 
@@ -14,46 +17,6 @@ alias ds='du -h -d 1'
 alias ll='ls -l'
 alias cpwd='pwd | pbcopy' #copy working directory
 alias cpdir=cpwd
-
-#terminal
-function title() {
-  echo -n -e "\033]0;$1\007"
-}
-
-#Finder
-alias o='open . &'
-
-#Processes
-alias tu='top -o cpu' # processes sorted by CPU
-alias tm='top -o vsize' # processes sorted by Memory
-
-#Rails
-alias rs='bundle exec rails server'
-alias r='rake'
-alias rmig='bundle exec rake db:migrate'
-alias rc='bundle exec rails console'
-
-# CocoaPods
-alias pod-dev=$HOME/projects/CocoaPods/bin/pod
-
-# bundler
-alias bec='bundle exec cucumber'
-function be() {
-  bundle exec $*
-}
-
-#Heroku
-function hrmig() {
-  heroku rake db:migrate --app $1
-}
-
-function hrdeploy {
-  rake heroku:deploy app=$1
-}
-
-# Chef
-alias kc='knife cookbook'
-alias kcu='knife cookbook upload'
 
 #Git
 alias g='git status'
@@ -97,9 +60,35 @@ function gi() {
 
 alias gd='git diff'
 
+
+alias cppcompile='c++ -std=c++11 -stdlib=libc++'
+alias zshconfig="code ~/.zshrc"
+alias ohmyzsh="code ~/.oh-my-zsh"
+
+function code {
+    if [[ $# = 0 ]]
+    then
+        open -a "Visual Studio Code"
+    else
+        local argPath="$1"
+        [[ $1 = /* ]] && argPath="$1" || argPath="$PWD/${1#./}"
+        open -a "Visual Studio Code" "$argPath"
+    fi
+}
+
+#Flutter
+alias fw='flutter packages pub run build_runner watch'
+alias fwdelete='flutter packages pub run build_runner watch --delete-conflicting-outputs'
+alias fri='flutter run --release'
+alias fra='flutter build apk --release && flutter install'
+alias ft='flutter test'
+alias ftc='flutter test --coverage'
+alias ftch='flutter test --coverage && genhtml coverage/lcov.info -o coverage/output/'
+
+
+#Xcode
 function xc() {
   project_file=$(cat <<EOF | ruby -rfileutils
-
   files = Dir.glob('**/*.{xcworkspace,xcodeproj}')
     .reject {|p|
       p.include?('Pods') ||
@@ -119,25 +108,3 @@ EOF
     open "$project_file" -a /Applications/Xcode.app
   fi
 }
-
-# starts an HTTP server on port 8000
-alias pserve='python -m SimpleHTTPServer 8000'
-
-tab-color() {
-    echo -ne "\033]6;1;bg;red;brightness;$1\a"
-    echo -ne "\033]6;1;bg;green;brightness;$2\a"
-    echo -ne "\033]6;1;bg;blue;brightness;$3\a"
-}
-
-tab-reset() {
-    echo -ne "\033]6;1;bg;*;default\a"
-}
-
-#Flutter
-alias fw='flutter packages pub run build_runner watch'
-alias fwdelete='flutter packages pub run build_runner watch --delete-conflicting-outputs'
-alias fri='flutter run --release'
-alias fra='flutter build apk --release && flutter install'
-alias ft='flutter test'
-alias ftc='flutter test --coverage'
-alias ftch='flutter test --coverage && genhtml coverage/lcov.info -o coverage/output/'

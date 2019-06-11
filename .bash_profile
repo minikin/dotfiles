@@ -9,7 +9,11 @@ source ~/.bashrc
 # Set Git language to English
 alias git='LC_ALL=en_US git'
 
-export PATH=$PATH:/Users/Sascha/flutter/bin
+export PATH=$PATH:/Developer/flutter/flutter/bin
 export PATH=$PATH:$HOME/.pub-cache/bin
 
 if which swiftenv > /dev/null; then eval "$(swiftenv init -)"; fi
+export PATH="/usr/local/sbin:$PATH"
+
+export PATH="$HOME/.cargo/bin:$PATH"
+alias lg='lazygit'

@@ -65,6 +65,11 @@ alias gl='git log --oneline'
 # Pretty-printing
 alias format_json='python -m json.tool'
 
+#fetch remote repo and pull from branch
+function gfpull() {
+  git fetch && git pull origin $*
+}
+
 #create a new branch & switch to it
 function gcb() {
   git checkout -b $*
@@ -123,5 +128,11 @@ tab-reset() {
     echo -ne "\033]6;1;bg;*;default\a"
 }
 
-
+#Flutter
 alias fw='flutter packages pub run build_runner watch'
+alias fwdelete='flutter packages pub run build_runner watch --delete-conflicting-outputs'
+alias fri='flutter run --release'
+alias fra='flutter build apk --release && flutter install'
+alias ft='flutter test'
+alias ftc='flutter test --coverage'
+alias ftch='flutter test --coverage && genhtml coverage/lcov.info -o coverage/output/'

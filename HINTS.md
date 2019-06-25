@@ -12,6 +12,12 @@ code ~/.zshrc
 echo "alias lg='lazygit'" >> ~/.bash_profile
 ```
 
+edit env.sh
+
+```zsh
+code ~/env.sh
+```
+
 reload zsh
 
 ```zsh

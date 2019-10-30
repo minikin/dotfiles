@@ -1,5 +1,12 @@
 [core]
 	editor = code --wait
 [user]
-	name = Sasha Prokhorenko
+	name = minikin
 	email = djminikin@gmail.com
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+[credential]
+	helper = osxkeychain

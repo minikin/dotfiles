@@ -31,14 +31,14 @@ endif
 	transmission \
 	vlc \
 	fastlane \
-	# visual-studio-code \
-	# iterm2
+	visual-studio-code \
+	iterm2
 	@echo "--------------------------------";
 	@echo "4: Installing Oh My Zsh."
 	@echo "--------------------------------";
-	# curl -Lo install.sh https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
-	# sh install.sh
-	# rm -f install.sh
+	curl -Lo install.sh https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
+	sh install.sh
+	rm -f install.sh
 	@echo "--------------------------------";
 	@echo "6: Installing CocoaPods."
 	@echo "--------------------------------";
@@ -49,4 +49,4 @@ endif
 	@echo "Successfully completed a new mac set-up!"
 	@echo "--------------------------------";
 
-  
+

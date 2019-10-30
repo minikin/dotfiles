@@ -1,6 +1,6 @@
-## Hints
+# Hints
 
-### Zsh
+## Zsh
 
 open zsh profile
 
@@ -24,7 +24,7 @@ reload zsh
 source ~/.zshrc
 ```
 
-### Bash 
+## Bash
 
 open bash profile
 
@@ -48,4 +48,17 @@ reload bash
 
 ```sh
 . ~/.bash_profile
+```
+
+## Create System Links
+
+```sh
+ln -s /Users/developer/Documents/Developer/Utils/dotfiles/.gitconfig .gitconfig
+
+ln -s /Users/developer/Documents/Developer/Utils/dotfiles/.gitignore_global .gitignore_global
+```
+
+```sh
+.gitconfig -> /Developer/Utils/dotfiles/.gitconfig
+.gitignore_global -> /Developer/Utils/dotfiles/.gitignore_global
 ```

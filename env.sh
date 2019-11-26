@@ -18,7 +18,8 @@ alias ll='ls -l'
 alias cpwd='pwd | pbcopy' #copy working directory
 alias cpdir=cpwd
 
-#Git
+# Git
+alias gd='git diff'
 alias g='git status'
 alias gb='git branch'
 alias grc='git rebase --continue'
@@ -33,37 +34,30 @@ alias gl='git log --oneline'
 # Pretty-printing
 alias format_json='python -m json.tool'
 
-#fetch remote repo and pull from branch
+# Fetch remote repo and pull from branch
 function gfpull() {
   git fetch && git pull origin $*
 }
 
-#create a new branch & switch to it
+# Create a new branch & switch to it
 function gcb() {
   git checkout -b $*
 }
 
-#move to a branch
+# Move to a branch
 function gco() {
   git checkout $*
 }
 
-#commit pending changes and quote args
+# Commit pending changes and quote args
 function gg() {
   git commit -v -a -m "$*"
 }
 
-# fetch gitignore templates from gitignore.io
+# Fetch gitignore templates from gitignore.io
 function gi() {
   curl https://www.gitignore.io/api/$*
 }
-
-alias gd='git diff'
-
-
-alias cppcompile='c++ -std=c++11 -stdlib=libc++'
-alias zshconfig="code ~/.zshrc"
-alias ohmyzsh="code ~/.oh-my-zsh"
 
 function code {
     if [[ $# = 0 ]]
@@ -76,7 +70,12 @@ function code {
     fi
 }
 
-#Flutter
+# Others
+alias cppcompile='c++ -std=c++11 -stdlib=libc++'
+alias zshconfig="code ~/.zshrc"
+alias ohmyzsh="code ~/.oh-my-zsh"
+
+# Flutter
 alias fw='flutter packages pub run build_runner watch'
 alias fwdelete='flutter packages pub run build_runner watch --delete-conflicting-outputs'
 alias fri='flutter run --release'
@@ -86,8 +85,7 @@ alias ft='flutter test'
 alias ftc='flutter test --coverage'
 alias ftch='flutter test --coverage && genhtml coverage/lcov.info -o coverage/output/'
 
-
-#Xcode
+# Xcode
 function xc() {
   project_file=$(cat <<EOF | ruby -rfileutils
   files = Dir.glob('**/*.{xcworkspace,xcodeproj}')

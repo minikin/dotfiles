@@ -13,3 +13,7 @@ export PATH=$PATH:/Users/Sascha/flutter/bin
 export PATH=$PATH:$HOME/.pub-cache/bin
 
 if which swiftenv > /dev/null; then eval "$(swiftenv init -)"; fi
+
+export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="/usr/local/opt/node@8/bin:$PATH"
+export PATH="/usr/local/sbin:$PATH"

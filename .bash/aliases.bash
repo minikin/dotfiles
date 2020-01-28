@@ -125,3 +125,6 @@ tab-reset() {
 
 
 alias fw='flutter packages pub run build_runner watch'
+alias fwdelete='flutter packages pub run build_runner watch --delete-conflicting-outputs'
+alias fri='flutter run --release'
+alias fra='flutter build apk --release && flutter install'

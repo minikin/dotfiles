@@ -5,7 +5,9 @@
 export ZSH="/Users/Sascha/.oh-my-zsh"
 
 # See https://github.com/robbyrussell/oh-my-zsh/wiki/Themes
-ZSH_THEME="agnoster"
+# ZSH_THEME="simple"
+
+PROMPT='🚀: '
 
 # Which plugins would you like to load?
 plugins=(
@@ -38,26 +40,16 @@ prompt_context() {
 
 # User configuration
 
-# export MANPATH="/usr/local/man:$MANPATH"
-
 # You may need to manually set your language environment
 export LANG=en_US.UTF-8
 
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
-
-# Compilation flags
-# export ARCHFLAGS="-arch x86_64"
-
 # local bin overrides
 PATH=$PATH:bin:/Applications/Postgres.app/Contents/Versions/9.6/bin
-
 export PATH=$PATH:/Users/Sascha/flutter/bin
 export PATH=$PATH:$HOME/.pub-cache/bin
 export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="/usr/local/opt/node@8/bin:$PATH"
+export ANDROID_HOME=/Users/$USER/Library/Android/sdk
+export PATH=${PATH}:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
 
 if which swiftenv > /dev/null; then eval "$(swiftenv init -)"; fi

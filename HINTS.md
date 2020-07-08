@@ -9,7 +9,10 @@ code ~/.zshrc
 ```
 
 ```sh
-echo "alias lg='lazygit'" >> ~/.bash_profile
+echo "al
+
+```sh
+echo "alias astudio="open -a /Applications/Android\ Studio.app" >>  ~/.zshrc
 ```
 
 edit env.sh

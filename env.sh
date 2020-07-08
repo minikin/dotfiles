@@ -30,6 +30,7 @@ alias gpush='git push origin master'
 alias gc='git commit -v'
 alias gca='git commit -v -a'
 alias gl='git log --oneline'
+alias astudio='open -a /Applications/Android\ Studio.app'
 
 # Pretty-printing
 alias format_json='python -m json.tool'

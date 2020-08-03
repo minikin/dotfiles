@@ -27,6 +27,16 @@ reload zsh
 source ~/.zshrc
 ```
 
+Launching from the command line
+https://code.visualstudio.com/docs/setup/mac#_launching-from-the-command-line
+
+```sh
+cat << EOF >> ~/.bash_profile
+# Add Visual Studio Code (code)
+export PATH="\$PATH:/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
+EOF
+```
+
 ## Bash
 
 open bash profile

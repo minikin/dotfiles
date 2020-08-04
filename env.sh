@@ -35,6 +35,9 @@ alias astudio='open -a /Applications/Android\ Studio.app'
 # Pretty-printing
 alias format_json='python -m json.tool'
 
+# Start Simple Python Server
+alias pserver='python -m SimpleHTTPServer 8000'
+
 # Fetch remote repo and pull from branch
 function gfpull() {
   git fetch && git pull origin $*

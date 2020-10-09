@@ -78,6 +78,7 @@ function code {
 alias cppcompile='c++ -std=c++11 -stdlib=libc++'
 alias zshconfig="code ~/.zshrc"
 alias ohmyzsh="code ~/.oh-my-zsh"
+alias oenv="code ~/env.sh"
 
 # Flutter
 alias fw='flutter packages pub run build_runner watch'
@@ -88,6 +89,9 @@ alias frab='flutter build appbundle --target-platform android-arm,android-arm64 
 alias ft='flutter test'
 alias ftc='flutter test --coverage'
 alias ftch='flutter test --coverage && genhtml coverage/lcov.info -o coverage/output/'
+
+# Android Studio
+alias astudio='open -a /Applications/Android\ Studio.app'
 
 # Xcode
 function xc() {

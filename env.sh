@@ -79,6 +79,8 @@ alias cppcompile='c++ -std=c++11 -stdlib=libc++'
 alias zshconfig="code ~/.zshrc"
 alias ohmyzsh="code ~/.oh-my-zsh"
 alias oenv="code ~/env.sh"
+alias brewu="brew upgrade && brew update"
+alias pswrd="pwgen -Bncy 25"
 
 # Flutter
 alias fw='flutter packages pub run build_runner watch'

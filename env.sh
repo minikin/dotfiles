@@ -50,6 +50,11 @@ function gfmerge() {
   git fetch && git merge origin $*
 }
 
+# 
+function gbranch() {
+  git for-each-ref --count=30 --sort=-committerdate refs/heads/ --format='%(refname:short)'
+}
+
 # Create a new branch & switch to it
 function gcb() {
   git checkout -b $*

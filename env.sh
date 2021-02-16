@@ -102,6 +102,9 @@ alias ft='flutter test'
 alias ftc='flutter test --coverage'
 alias ftch='flutter test --coverage && genhtml coverage/lcov.info -o coverage/output/'
 
+alias fvmw='fvm flutter packages pub run build_runner watch'
+alias fvmd='fvm flutter packages pub run build_runner watch --delete-conflicting-outputs'
+
 # Android Studio
 alias astudio='open -a /Applications/Android\ Studio.app'
 

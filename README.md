@@ -1,4 +1,4 @@
-# Sasha Prokhorenko's new mac setup script
+# New mac setup script
 
 In this repository you'll find Sasha Prokhorenko's dotfiles.
 

@@ -10,7 +10,7 @@ In this repository you'll find Sasha Prokhorenko's dotfiles.
 ## Prerequisites
 
 - Some version of ruby
-- `JAVA` and the `BREW` gems installed locally
+- `BREW` gems installed locally
 
 ## Install software and symlinking  files
 

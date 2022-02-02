@@ -25,6 +25,7 @@ plugins=(
 source $ZSH/oh-my-zsh.sh
 source ~/env.sh
 
+
 # prompt_context() {
 #   if [[ "$USER" != "$DEFAULT_USER" || -n "$SSH_CLIENT" ]]; then
 #     prompt_segment black default "%(!.%{%F{yellow}%}.)$USER"
@@ -44,6 +45,10 @@ prompt_context() {
 export LANG=en_US.UTF-8
 
 # local bin overrides
+export PATH=/opt/homebrew/bin:$PATH
+export PATH="$HOME/.cargo/bin:$PATH"
+export PATH=$PATH:/Users/minikin/flutter/bi
+
 PATH=$PATH:bin:/Applications/Postgres.app/Contents/Versions/9.6/bin
 export PATH=$PATH:/Users/Sascha/flutter/bin
 export PATH=$PATH:$HOME/.pub-cache/bin

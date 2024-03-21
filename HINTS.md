@@ -1,5 +1,12 @@
 # Hints
 
+## Starship
+
+```sh
+code ~/.config/starship.toml
+```
+
+
 ## Zsh
 
 open zsh profile

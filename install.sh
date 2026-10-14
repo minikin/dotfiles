@@ -93,6 +93,7 @@ fi
 
 echo "== identity (local only: ~/.config/jj/conf.d/identity.toml — never in this repo)"
 IDENTITY=$HOME/.config/jj/conf.d/identity.toml
+NAME='' EMAIL=''
 OP_SIGN=/Applications/1Password.app/Contents/MacOS/op-ssh-sign
 toml() { local s=${1//\\/\\\\}; printf '"%s"' "${s//\"/\\\"}"; }
 # key_info <input>: sets KEY (jj signing.key), PROG (signer), PUB (public key text) from a
@@ -103,7 +104,12 @@ key_info() {
     KEY=$in PUB=$in
     if [[ -x $OP_SIGN ]]; then PROG=$OP_SIGN; else PROG=/usr/bin/ssh-keygen; fi
   elif [[ -f $in ]]; then
-    KEY=$in PUB=$(<"$in") PROG=/usr/bin/ssh-keygen
+    PUB=$(<"$in")
+    # A private key path passes -f too, and PUB ends up in allowed_signers.
+    if [[ $PUB == *$'\n'* || ! ( $PUB == ssh-* || $PUB == ecdsa-* || $PUB == sk-* ) ]]; then
+      PUB=''; echo "!! '$1' is not a public key file (expected one 'ssh-...' line, e.g. a .pub file)" >&2; return 1
+    fi
+    KEY=$in PROG=/usr/bin/ssh-keygen
   else
     echo "!! '$1' is neither a public key line nor an existing .pub file" >&2; return 1
   fi
@@ -115,6 +121,7 @@ elif (( DRY )); then
 elif [[ -z ${DOTFILES_NAME:-} && ! -t 0 ]]; then
   mkdir -p "${IDENTITY%/*}"; cp "$REPO/jj/identity.example.toml" "$IDENTITY"; chmod 600 "$IDENTITY"
   echo "!! no terminal: copied the template to $IDENTITY — edit it before committing"
+  echo "   commit signing is off until you fill in and uncomment its [signing] block"
   echo "   (or re-run with DOTFILES_NAME, DOTFILES_EMAIL, DOTFILES_SIGNING_KEY and optionally DOTFILES_PERSONAL_DIR, DOTFILES_PERSONAL_EMAIL, DOTFILES_PERSONAL_KEY set)"
 else
   # Values come from DOTFILES_* env vars (non-interactive, e.g. Claude running SETUP_PROMPT.md)
@@ -125,6 +132,11 @@ else
   [[ -z ${DOTFILES_NAME:-} ]] && echo "Set up your commit identity (stored only on this machine)."
   ask NAME   "Full name: " DOTFILES_NAME
   ask EMAIL  "Email, used in every repo: " DOTFILES_EMAIL
+  if [[ -n ${DOTFILES_NAME:-} && -z $EMAIL ]]; then
+    echo "!! DOTFILES_EMAIL must not be empty when DOTFILES_NAME is set" >&2; exit 2
+  fi
+  while [[ -z $NAME ]]; do read -rp "  Full name: " NAME; done
+  while [[ -z $EMAIL ]]; do read -rp "  Email: " EMAIL; done
   ask KEYIN  "Signing key — public key line or path to .pub (empty = don't sign): " DOTFILES_SIGNING_KEY
   KEY='' PROG='' PUB=''
   while [[ -n $KEYIN ]] && ! key_info "$KEYIN"; do [[ -n ${DOTFILES_NAME:-} ]] && exit 1; read -rp "  Signing key (empty = don't sign): " KEYIN; done
@@ -148,13 +160,17 @@ else
     ask PKEYIN "Signing key for that folder — key line or .pub path (empty = same as above): " DOTFILES_PERSONAL_KEY
     while [[ -n $PKEYIN ]] && ! key_info "$PKEYIN"; do [[ -n ${DOTFILES_NAME:-} ]] && exit 1; read -rp "  Signing key for that folder: " PKEYIN; done
     [[ -n $PKEYIN ]] && PKEY=$KEY PPROG=$PROG PPUB=$PUB
-    [[ -n $KEYIN ]] && key_info "$KEYIN"   # restore default key vars
+    if [[ -n $KEYIN ]]; then key_info "$KEYIN"; else KEY='' PROG='' PUB=''; fi
     # One spelling for jj and git: ~/... inside $HOME (portable), absolute elsewhere.
     PDIR=${PDIR/#\~/$HOME}; PDIR=${PDIR%/}
     [[ $PDIR == /* ]] || { echo "!! folder must be an absolute path or start with ~: $PDIR" >&2; exit 2; }
     mkdir -p "$PDIR"
+    # jj --when.repositories and git includeIf gitdir: compare against the physical repo path,
+    # so a symlinked folder would silently never match.
+    PDIR=$(cd "$PDIR" && pwd -P)
+    HOME_REAL=$(cd "$HOME" && pwd -P)
     PDIR_ABS=$PDIR
-    [[ $PDIR == "$HOME"/* ]] && PDIR="~${PDIR#"$HOME"}"
+    if [[ $PDIR == "$HOME_REAL"/* ]]; then PDIR_ABS=$HOME${PDIR#"$HOME_REAL"}; PDIR="~${PDIR#"$HOME_REAL"}"; fi
   fi
   mkdir -p "${IDENTITY%/*}"
   # NAME and EMAIL are assigned indirectly by ask (printf -v / read).
@@ -191,7 +207,7 @@ else
     git config --global tag.gpgsign true
     echo "ok   git signing (default key)"
   fi
-  mkdir -p "$HOME/.config/git"; touch "$HOME/.config/git/allowed_signers"
+  mkdir -p "$HOME/.config/git"; (umask 077; touch "$HOME/.config/git/allowed_signers"); chmod 600 "$HOME/.config/git/allowed_signers"
   [[ -n $PUB ]]  && ! grep -qsF "$EMAIL "  "$HOME/.config/git/allowed_signers" && echo "$EMAIL namespaces=\"git\" $PUB"  >> "$HOME/.config/git/allowed_signers"
   [[ -n $PPUB ]] && ! grep -qsF "$PEMAIL " "$HOME/.config/git/allowed_signers" && echo "$PEMAIL namespaces=\"git\" $PPUB" >> "$HOME/.config/git/allowed_signers"
   if [[ -n $PEMAIL ]] && ! git config --global --get-all "includeIf.gitdir:$PDIR/.path" >/dev/null 2>&1; then
@@ -235,10 +251,11 @@ if git config --global user.email >/dev/null 2>&1; then
 elif ! command -v jj >/dev/null; then
   echo "skip git identity: jj not installed (run brew bundle) — set it with git config --global user.email" >&2
 else
-  name=$(jj config get user.name 2>/dev/null || true)
-  email=$(jj config get user.email 2>/dev/null || true)
-  # Never copy the template's placeholders (*.example) into git.
-  if [[ $email == *.example || $email == *@example.* || $name == "Your Name" ]]; then
+  # From /, so a --when.repositories scope (the personal folder) can never apply.
+  name=${NAME:-$(cd / && jj config get user.name 2>/dev/null || true)}
+  email=${EMAIL:-$(cd / && jj config get user.email 2>/dev/null || true)}
+  # Never copy jj/identity.example.toml's placeholders into git.
+  if [[ $email == you@work.example || $name == "Your Name" ]]; then
     echo "skip git identity: $IDENTITY still has placeholders — edit it, then re-run" >&2
   else
     [[ -n $name ]]  && run git config --global user.name "$name"

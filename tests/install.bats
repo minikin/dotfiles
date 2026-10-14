@@ -169,14 +169,13 @@ JSON
 }
 
 @test "install: template placeholders are never copied into git identity" {
-  run_install
+  run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL bash "$DOTFILES/install.sh" </dev/null
   [ "$status" -eq 0 ]
+  [[ $output == *"still has placeholders"* ]]
   run git config --global user.email
   [ "$status" -ne 0 ]
   run git config --global user.name
   [ "$status" -ne 0 ]
-  run_install
-  [[ $output == *"still has placeholders"* ]]
 }
 
 @test "install: an existing identity.toml is not touched" {
@@ -235,8 +234,9 @@ JSON
   export DOTFILES_PERSONAL_DIR="$BATS_TEST_TMPDIR/outside/"
   run_install
   [ "$status" -eq 0 ]
-  grep -qF -- "--when.repositories = [\"$BATS_TEST_TMPDIR/outside\"]" "$HOME/.config/jj/conf.d/identity.toml"
-  git config --global --get "includeIf.gitdir:$BATS_TEST_TMPDIR/outside/.path" >/dev/null
+  outside=$(realpath_of "$BATS_TEST_TMPDIR/outside")
+  grep -qF -- "--when.repositories = [\"$outside\"]" "$HOME/.config/jj/conf.d/identity.toml"
+  git config --global --get "includeIf.gitdir:$outside/.path" >/dev/null
 }
 
 @test "install: writes ~/.config/dotfiles/config and keeps it on re-run" {
@@ -255,4 +255,141 @@ JSON
   run_install
   [ "$status" -eq 0 ]
   ! grep -q DOTFILES_PERSONAL_DIR "$HOME/.config/dotfiles/config"
+}
+
+@test "install: a private key file given as the signing key is rejected and never written" {
+  ssh-keygen -q -t ed25519 -N '' -f "$BATS_TEST_TMPDIR/id_test"
+  export DOTFILES_NAME=Test DOTFILES_EMAIL=test@example.com
+  export DOTFILES_SIGNING_KEY="$BATS_TEST_TMPDIR/id_test"
+  run_install
+  [ "$status" -eq 1 ]
+  [[ $output == *"not a public key file"* ]]
+  [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
+  [ ! -e "$HOME/.config/git/allowed_signers" ]
+  ! grep -rqs 'PRIVATE KEY' "$HOME"
+}
+
+@test "install: allowed_signers is created private (mode 600)" {
+  ssh-keygen -q -t ed25519 -N '' -f "$BATS_TEST_TMPDIR/k"
+  export DOTFILES_NAME=Test DOTFILES_EMAIL=test@example.com DOTFILES_SIGNING_KEY="$BATS_TEST_TMPDIR/k.pub"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$HOME/.config/git/allowed_signers")" = 600 ]
+}
+
+@test "install: a personal key without a main key never becomes the main signing key" {
+  ssh-keygen -q -t ed25519 -N '' -C personal -f "$BATS_TEST_TMPDIR/personal_key"
+  export DOTFILES_NAME=Test DOTFILES_EMAIL=work@example.com DOTFILES_SIGNING_KEY=''
+  export DOTFILES_PERSONAL_EMAIL=me@personal.example DOTFILES_PERSONAL_DIR="~/src/mine"
+  export DOTFILES_PERSONAL_KEY="$BATS_TEST_TMPDIR/personal_key.pub"
+  run_install
+  [ "$status" -eq 0 ]
+  id="$HOME/.config/jj/conf.d/identity.toml"
+  ! grep -q '^\[signing\]' "$id"
+  grep -qF '[--scope.signing]' "$id"
+  grep -qF "key = \"$DOTFILES_PERSONAL_KEY\"" "$id"
+  run git config --global user.signingkey
+  [ "$status" -ne 0 ]
+  [ "$(git config -f "$HOME/.config/git/personal.gitconfig" user.signingkey)" = "$DOTFILES_PERSONAL_KEY" ]
+  signers="$HOME/.config/git/allowed_signers"
+  ! grep -q '^work@example.com ' "$signers"
+  grep -qF "me@personal.example namespaces=\"git\" $(cat "$BATS_TEST_TMPDIR/personal_key.pub")" "$signers"
+}
+
+# install.sh runs jj with the caller's cwd, so a run from inside the personal folder would
+# see that folder's --when.repositories scope.
+@test "install: git identity comes from the main identity even when run inside the personal folder" {
+  pdir="$BATS_TEST_TMPDIR/personal"
+  make_jj_repo "$pdir/proj"
+  export DOTFILES_NAME=Main DOTFILES_EMAIL=main@example.com
+  export DOTFILES_PERSONAL_EMAIL=me@example.org DOTFILES_PERSONAL_DIR="$pdir"
+  cd "$pdir/proj"
+  run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL bash "$DOTFILES/install.sh" </dev/null
+  [ "$status" -eq 0 ]
+  [ "$(env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj config get user.email)" = me@example.org ]
+  [ "$(git config --global --no-includes user.email)" = main@example.com ]
+  [ "$(git config --global --no-includes user.name)" = Main ]
+}
+
+@test "install: git identity from an existing identity.toml is read outside any repo" {
+  pdir="$BATS_TEST_TMPDIR/personal"
+  make_jj_repo "$pdir/proj"
+  id="$HOME/.config/jj/conf.d/identity.toml"
+  mkdir -p "${id%/*}"
+  cat > "$id" <<TOML
+[user]
+name = "Main"
+email = "main@example.com"
+
+[[--scope]]
+--when.repositories = ["$(realpath_of "$pdir")"]
+[--scope.user]
+email = "me@example.org"
+TOML
+  cd "$pdir/proj"
+  run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL bash "$DOTFILES/install.sh" </dev/null
+  [ "$status" -eq 0 ]
+  [ "$(env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj config get user.email)" = me@example.org ]
+  [ "$(git config --global --no-includes user.email)" = main@example.com ]
+}
+
+@test "install: the no-terminal template copy leaves signing off so jj keeps working" {
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"signing is off"* ]]
+  run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj config get signing.behavior
+  [ "$output" != own ]
+  run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj config get signing.key
+  [ "$status" -ne 0 ]
+  repo="$BATS_TEST_TMPDIR/r"
+  mkdir -p "$repo"
+  cd "$repo"
+  env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj git init --colocate --quiet
+  printf 'x\n' > f
+  env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj commit -m test
+  env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj st
+}
+
+@test "install: a symlinked personal folder is stored as its physical path" {
+  mkdir -p "$BATS_TEST_TMPDIR/real/personal"
+  ln -s "$BATS_TEST_TMPDIR/real/personal" "$BATS_TEST_TMPDIR/alias"
+  real=$(realpath_of "$BATS_TEST_TMPDIR/real/personal")
+  export DOTFILES_NAME=X DOTFILES_EMAIL=x@example.com DOTFILES_PERSONAL_EMAIL=y@example.org
+  export DOTFILES_PERSONAL_DIR="$BATS_TEST_TMPDIR/alias"
+  run_install
+  [ "$status" -eq 0 ]
+  grep -qF -- "--when.repositories = [\"$real\"]" "$HOME/.config/jj/conf.d/identity.toml"
+  git config --global --get "includeIf.gitdir:$real/.path" >/dev/null
+  ( source "$HOME/.config/dotfiles/config"; [ "$DOTFILES_PERSONAL_DIR" = "$real" ] )
+  make_jj_repo "$real/proj"
+  [ "$(cd "$real/proj" && env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj config get user.email)" = y@example.org ]
+}
+
+@test "install: an empty name or email from env vars is refused" {
+  export DOTFILES_NAME=X DOTFILES_EMAIL=''
+  run_install
+  [ "$status" -eq 2 ]
+  [[ $output == *"DOTFILES_EMAIL"* ]]
+  [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
+  [ ! -e "$HOME/.config/git/allowed_signers" ]
+  export DOTFILES_EMAIL=x@example.com DOTFILES_PERSONAL_DIR="~/src/mine" DOTFILES_PERSONAL_EMAIL=''
+  run_install
+  [ "$status" -eq 2 ]
+  [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
+}
+
+@test "install: after the repo moves, every link is repointed with one backup of each old link" {
+  run_install
+  [ "$status" -eq 0 ]
+  mv "$DOTFILES" "$DOTFILES.moved"
+  DOTFILES="$DOTFILES.moved"
+  run_install
+  [ "$status" -eq 0 ]
+  while IFS=$'\t' read -r src dest; do
+    [[ $dest -ef $DOTFILES/$src ]] || { echo "not repointed: $dest"; return 1; }
+    backups=("$dest".bak-*)
+    [ "${#backups[@]}" -eq 1 ] || { echo "backups for $dest: ${#backups[@]}"; return 1; }
+    [ -L "${backups[0]}" ]
+  done < <(link_pairs)
+  ( source "$HOME/.config/dotfiles/config"; [ "$DOTFILES_DIR" = "$DOTFILES" ] )
 }

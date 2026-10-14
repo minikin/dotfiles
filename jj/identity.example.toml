@@ -5,23 +5,24 @@
 name = "Your Name"
 email = "you@work.example"
 
-# Sign every commit you author (including agent-made ones). Remove this section to disable.
-[signing]
-backend = "ssh"
-behavior = "own"
-# Either an SSH public key line (signed via an agent, e.g. 1Password) ...
-key = "ssh-ed25519 AAAA...your-work-key"
-backends.ssh.program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
-# ... or a path to a .pub file with program "/usr/bin/ssh-keygen".
-backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
+# Sign every commit you author (including agent-made ones). Off until you fill in a real
+# key and uncomment the block: a placeholder key would make every jj command fail.
+# [signing]
+# backend = "ssh"
+# behavior = "own"
+# # Either an SSH public key line (signed via an agent, e.g. 1Password) ...
+# key = "ssh-ed25519 AAAA...your-work-key"
+# backends.ssh.program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+# # ... or a path to a .pub file with program "/usr/bin/ssh-keygen".
+# backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
 
 # Optional: a second identity (e.g. personal) for every repo under one folder of your choice
-# (and its <repo>-ws workspaces). Delete this block if you use one identity everywhere.
-# Override any other repo with `sign-as personal`.
-[[--scope]]
---when.repositories = ["~/path/to/personal-repos"]
-[--scope.user]
-email = "you@personal.example"
-[--scope.signing]
-key = "~/.ssh/id_ed25519_personal.pub"
-backends.ssh.program = "/usr/bin/ssh-keygen"
+# (and its <repo>-ws workspaces). Uncomment it to use it, with the folder's physical path
+# (no symlinks). Override any other repo with `sign-as personal`.
+# [[--scope]]
+# --when.repositories = ["~/path/to/personal-repos"]
+# [--scope.user]
+# email = "you@personal.example"
+# [--scope.signing]
+# key = "~/.ssh/id_ed25519_personal.pub"
+# backends.ssh.program = "/usr/bin/ssh-keygen"

@@ -28,11 +28,11 @@ jw() {
   else
     if [[ -z $rev ]]; then
       rev='trunk()'
-      [[ -z $(jj -R $root log -r 'trunk() & ~root()' --no-graph -T 'x' 2>/dev/null) ]] && rev='@-'
+      [[ -z $(jj -R $root --ignore-working-copy log -r 'trunk() & ~root()' --no-graph -T 'x' 2>/dev/null) ]] && rev='@-'
     fi
     mkdir -p "${dir:h}"
     # Workspace registered but its directory was deleted by hand: forget the stale entry
-    if jj -R $root workspace list -T 'name ++ "\n"' | grep -qx -- "$name"; then
+    if jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -qx -- "$name"; then
       jj -R $root workspace forget "$name" || return 1
       git -C $root worktree prune   # drop git's entry for the missing directory
     fi
@@ -87,7 +87,7 @@ jwl() { jj workspace list; }
 # jws — fuzzy-switch to a workspace
 jws() {
   local dir
-  dir=$(jj workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"' |
+  dir=$(jj --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"' |
     fzf --prompt="workspace> " --with-nth=1 --delimiter='\t' --preview 'jj -R {2} --ignore-working-copy log -r "trunk()::@" --color always' |
     cut -f2)
   [[ -n $dir ]] && cd "$dir"
@@ -102,10 +102,11 @@ jwrm() {
   if (( $# )); then
     names=(${@//\//-})
   else
-    names=(${(f)"$(jj -R $root workspace list -T 'name ++ "\n"' | grep -vx default | fzf -m --prompt="remove> ")"})
+    names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default | fzf -m --prompt="remove> ")"})
   fi
   (( ${#names} )) || return 1
-  [[ $PWD != $root && $PWD == "${root:h}/${root:t}-ws/"* ]] && cd $root
+  # jj reports the physical path, $PWD may be logical (symlinks, /tmp -> /private/tmp)
+  [[ ${PWD:A} != ${root:A} && ${PWD:A} == "${root:A:h}/${root:A:t}-ws/"* ]] && cd $root
   jj -R $root workspace remove $names
 }
 
@@ -113,8 +114,9 @@ jwrm() {
 # Creates the bookmark on first push, moves it forward on later pushes.
 jpush() {
   local name=${1:-} trunk
-  [[ -z $name ]] && name=$(jj log -r @ --no-graph -T 'self.working_copies().map(|w| w.name()).join("")')
-  [[ -z $name || $name == default ]] && { echo "usage: jpush <bookmark>" >&2; return 1; }
+  [[ -z $name ]] && name=$(jj log -r @ --no-graph -T 'self.working_copies().map(|w| w.name()).join(",")')
+  # Several workspaces on @ give "a,b": there is no single default name
+  [[ -z $name || $name == default || ( -z ${1:-} && $name == *,* ) ]] && { echo "usage: jpush <bookmark>" >&2; return 1; }
   # Never push agent work onto trunk (e.g. a workspace named "main") or an immutable bookmark
   trunk=$(jj log -r 'trunk()' --no-graph -T 'remote_bookmarks.map(|b| b.name()).join("\n")' 2>/dev/null)
   if print -r -- "$trunk" | grep -qx -- "$name" ||

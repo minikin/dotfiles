@@ -39,3 +39,34 @@ published_ports() {
   # No long-syntax port entries (host_ip/published) that the grep above would miss
   ! grep -Eq '^[[:space:]]*(published|host_ip|target):' "$COMPOSE"
 }
+
+# infra_args <infra args...>: run the infra function against a docker stub, print what docker got
+infra_args() {
+  local bin="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$bin"
+  printf '#!/bin/sh\nprintf "%%s|" "$@" > "%s/docker.args"\n' "$BATS_TEST_TMPDIR" > "$bin/docker"
+  chmod +x "$bin/docker"
+  rm -f "$BATS_TEST_TMPDIR/docker.args"
+  local args="" a
+  for a in "$@"; do args+=" '$a'"; done
+  PATH="$bin:$PATH" zsh -f -c "source '$REPO_ROOT/zsh/infra.zsh'; infra$args" || return 1
+  cat "$BATS_TEST_TMPDIR/docker.args"
+}
+
+@test "infra: forwards each subcommand to docker compose with the linked compose file" {
+  fake_home
+  dc="compose|-f|$HOME/.config/devinfra/compose.yaml|"
+  run infra_args up redis
+  [ "$status" -eq 0 ]
+  [ "$output" = "${dc}up|-d|--wait|redis|" ]
+  run infra_args down
+  [ "$output" = "${dc}down|" ]
+  run infra_args reset
+  [ "$output" = "${dc}down|-v|" ]
+  run infra_args kafka kafka-topics.sh --bootstrap-server localhost:9092 --list
+  [ "$output" = "${dc}exec|kafka|/opt/kafka/bin/kafka-topics.sh|--bootstrap-server|localhost:9092|--list|" ]
+  run infra_args logs -f "kafka ui"
+  [ "$output" = "${dc}logs|-f|kafka ui|" ]
+  run infra_args
+  [ "$output" = "${dc}ps|" ]
+}

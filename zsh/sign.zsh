@@ -8,20 +8,25 @@ sign-as() {
   fi
   case $mode in
     personal)
+      [[ -f $pfile ]] || { echo "no second identity set up: move ~/.config/jj/conf.d/identity.toml aside, re-run install.sh and answer yes to the second identity" >&2; return 1; }
       email=$(git config -f $pfile user.email)
       key=$(git config -f $pfile user.signingkey)
       prog=$(git config -f $pfile gpg.ssh.program)
       sshcmd=$(git config -f $pfile core.sshCommand)
-      [[ -f $pfile ]] || { echo "no second identity set up: move ~/.config/jj/conf.d/identity.toml aside, re-run install.sh and answer yes to the second identity" >&2; return 1; }
       [[ $email == PERSONAL_EMAIL || -z $email ]] && { echo "fill in $pfile first" >&2; return 1; }
+      # No key of its own means "same as the main key": drop the repo override instead of setting "".
       if jj root >/dev/null 2>&1; then
         jj config set --repo user.email "$email"
-        jj config set --repo signing.key "$key"
-        jj config set --repo signing.backends.ssh.program "$prog"
+        if [[ -n $key ]]; then jj config set --repo signing.key "$key"
+        else jj config unset --repo signing.key 2>/dev/null; fi
+        if [[ -n $prog ]]; then jj config set --repo signing.backends.ssh.program "$prog"
+        else jj config unset --repo signing.backends.ssh.program 2>/dev/null; fi
       fi
       git config --local user.email "$email"
-      git config --local user.signingkey "$key"
-      git config --local gpg.ssh.program "$prog"
+      if [[ -n $key ]]; then git config --local user.signingkey "$key"
+      else git config --local --unset user.signingkey 2>/dev/null; fi
+      if [[ -n $prog ]]; then git config --local gpg.ssh.program "$prog"
+      else git config --local --unset gpg.ssh.program 2>/dev/null; fi
       if [[ -n $sshcmd ]]; then git config --local core.sshCommand "$sshcmd"
       else git config --local --unset core.sshCommand 2>/dev/null; fi
       ;;

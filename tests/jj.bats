@@ -105,6 +105,25 @@ setup() {
   [[ $output == *"agent work"* ]]
 }
 
+@test "jwrm: from inside the workspace reached through a symlink still cds out first" {
+  ln -s "$HOME/src" "$BATS_TEST_TMPDIR/link"
+  run_zsh "cd '$REPO' && jw x >/dev/null 2>&1 && cd '$BATS_TEST_TMPDIR/link/app-ws/x' && jwrm x >/dev/null 2>&1 && pwd -P"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(realpath_of "$REPO")" ]
+  [ ! -e "$WS/x" ]
+}
+
+@test "jw, jws, jwrm: read-only jj queries pass --ignore-working-copy" {
+  run grep -nE "workspace list -T|log -r 'trunk\(\) & ~root\(\)'" "$REPO_ROOT/zsh/jj.zsh"
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -ge 4 ]
+  for l in "${lines[@]}"; do
+    [[ $l == *--ignore-working-copy* ]] || { echo "missing --ignore-working-copy: $l"; return 1; }
+  done
+  run grep -nE 'jpush|workspace add' "$REPO_ROOT/zsh/jj.zsh"
+  [[ $output != *--ignore-working-copy* ]]
+}
+
 @test "jpush: refuses a workspace named after trunk; pushes a normal workspace as its own bookmark" {
   remote="$BATS_TEST_TMPDIR/remote.git"
   add_bare_remote "$REPO" "$remote"
@@ -127,6 +146,30 @@ setup() {
   run_zsh "cd '$REPO' && jpush"
   [ "$status" -ne 0 ]
   [[ $output == *"usage: jpush"* ]]
+}
+
+@test "jpush: a second push moves the existing bookmark forward" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && echo y > f.txt && jj commit -m 'first' >/dev/null 2>&1 && jpush \
+    && echo z > g.txt && jj commit -m 'second' >/dev/null 2>&1 && jpush"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  run git -C "$remote" log -2 --format=%s refs/heads/feat
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = second ]
+  [ "${lines[1]}" = first ]
+}
+
+@test "jpush: refuses when several workspaces share @ instead of joining their names" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && echo y > f.txt && jj describe -m 'shared' >/dev/null 2>&1 \
+    && change=\$(jj log -r @ --no-graph -T change_id) && jw fix >/dev/null 2>&1 && jj edit \$change >/dev/null 2>&1 && jpush"
+  [ "$status" -ne 0 ]
+  [[ $output == *"usage: jpush"* ]]
+  run git -C "$remote" for-each-ref --format='%(refname:short)' refs/heads
+  [ "$output" = main ]
 }
 
 @test "jj tug: in a fresh workspace does not move main" {

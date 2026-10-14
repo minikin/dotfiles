@@ -7,7 +7,8 @@
 #            jaeger http://localhost:16686  OTLP localhost:4317 (gRPC) / :4318 (HTTP)
 infra() {
   local -a dc=(docker compose -f ~/.config/devinfra/compose.yaml)
-  case ${1:-ps} in
+  (( $# )) || set -- ps
+  case $1 in
     up)    shift; $dc up -d --wait "$@" ;;
     reset) $dc down -v ;;
     kafka) shift; $dc exec kafka /opt/kafka/bin/"$@" ;;

@@ -15,6 +15,7 @@ brew "ripgrep"
 brew "jj"
 brew "jjui"
 brew "difftastic"
+brew "gh"                 # GitHub CLI: gh pr create for pushed workspaces
 
 # Tooling
 brew "mise"
@@ -38,3 +39,10 @@ brew "d2"               # diagrams as code
 brew "k9s"
 brew "kubectx"
 brew "stern"
+
+# Repo development (just check: lint, tests, secret scan)
+brew "bats-core"
+brew "shellcheck"
+brew "gitleaks"
+brew "lychee"
+brew "actionlint"

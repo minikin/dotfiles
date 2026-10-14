@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest a tool, command, keybinding or setting for this setup
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first and the tool second. A tool whose version
+        must match a project's CI belongs in that project's `mise.toml`, not
+        in these dotfiles. Global tools are the ones that behave the same in
+        every project.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you were trying to do, and where the setup got in the way
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: The command, config or behaviour you would like. An example session helps.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Ghostty
+        - zsh, prompt or shell commands
+        - jj workspaces or aliases
+        - mise or project tools
+        - local infra
+        - identity and signing
+        - Claude Code integration
+        - install.sh
+        - tests, CI or checks
+        - docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today
+      description: Workarounds, scripts or other tools you use instead

@@ -4,7 +4,7 @@
 input=$(cat)
 dir=$(jq -r '.workspace.current_dir // .cwd // empty' <<<"$input")
 model=$(jq -r '.model.display_name // empty' <<<"$input")
-[[ -n $dir ]] && cd "$dir" 2>/dev/null
+[[ -n $dir ]] && { cd "$dir" 2>/dev/null || true; }
 
 parts=("${PWD/#$HOME/~}")
 if jj --ignore-working-copy root >/dev/null 2>&1; then

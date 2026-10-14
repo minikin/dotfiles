@@ -1,0 +1,43 @@
+# gitleaks config: the default ruleset plus a few rules for personal data that a
+# public dotfiles repo must not carry. scripts/check-secrets.sh does the same for
+# the working tree; this file also covers the full git history in CI.
+title = "dotfiles"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "jj's local metadata (not tracked, never pushed)"
+paths = ['''(^|/)\.jj/''']
+
+[[rules]]
+id = "personal-email"
+description = "Email address outside the reserved example domains"
+regex = '''[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'''
+keywords = ["@"]
+[[rules.allowlists]]
+description = "RFC 2606 example domains (example.com/org/net and *.example, as in jj/identity.example.toml and the docs), GitHub noreply, git@ remotes"
+regexTarget = "match"
+regexes = [
+  '''@(example\.(com|org|net)|[A-Za-z0-9.-]+\.example|users\.noreply\.github\.com)$''',
+  '''^git@(github|gitlab)\.com$''',
+]
+
+[[rules]]
+id = "home-path"
+description = "Absolute home directory path (use ~/ or $HOME)"
+regex = '''/(Users|home)/[A-Za-z0-9._-]+/'''
+keywords = ["/users/", "/home/"]
+
+[[rules]]
+id = "ssh-public-key"
+description = "Full SSH public key body"
+regex = '''(ssh-(ed25519|rsa|dss)|ecdsa-sha2-nistp[0-9]+|sk-ssh-ed25519@openssh\.com) AAAA[A-Za-z0-9+/]{40,}'''
+keywords = ["aaaa"]
+
+[[rules]]
+id = "onepassword-reference"
+description = "1Password secret reference or vault name"
+# Written as op:/{2} and --vaul[t] so scripts/check-secrets.sh does not flag this file.
+regex = '''(op:/{2}|--vaul[t][= ]+["']?[A-Za-z0-9])'''
+keywords = ["op:/", "vault"]

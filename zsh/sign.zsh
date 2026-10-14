@@ -21,7 +21,8 @@ sign-as() {
       git config --local user.email "$email"
       git config --local user.signingkey "$key"
       git config --local gpg.ssh.program "$prog"
-      git config --local core.sshCommand "$sshcmd"
+      if [[ -n $sshcmd ]]; then git config --local core.sshCommand "$sshcmd"
+      else git config --local --unset core.sshCommand 2>/dev/null; fi
       ;;
     work)
       if jj root >/dev/null 2>&1; then

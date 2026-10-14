@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
-# Install my-setup-2026: symlink configs into $HOME (backing up anything in the way),
+# Install the dotfiles: symlink configs into $HOME (backing up anything in the way),
 # merge Claude Code settings, add the mise line to .zprofile, sync git identity from jj.
-# Safe to re-run. Usage: ./install.sh [--dry-run]
+# Safe to re-run. Usage: ./install.sh [--dry-run | --help]
 # Identity: prompts on first run, or set DOTFILES_NAME / DOTFILES_EMAIL / DOTFILES_SIGNING_KEY /
 # DOTFILES_PERSONAL_EMAIL / DOTFILES_PERSONAL_KEY to run without prompts.
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$0")" && pwd)
-DRY=0; [[ ${1:-} == --dry-run ]] && DRY=1
+DRY=0
+case ${1:-} in
+  "") ;;
+  --dry-run) DRY=1 ;;
+  -h|--help) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "unknown argument: $1 (usage: ./install.sh [--dry-run | --help])" >&2; exit 2 ;;
+esac
 STAMP=$(date +%Y%m%d-%H%M%S)
 
 run() { echo "+ $*"; (( DRY )) || "$@"; }
@@ -71,9 +77,14 @@ else
   if [[ -f $SETTINGS ]] && jq -e --slurpfile n "$SETTINGS.tmp" '. == $n[0]' "$SETTINGS" >/dev/null 2>&1; then
     rm -f "$SETTINGS.tmp"; echo "ok   $SETTINGS (unchanged)"
   else
-    [[ -f $SETTINGS ]] && cp "$SETTINGS" "$SETTINGS.bak-$STAMP"
-    mv "$SETTINGS.tmp" "$SETTINGS"
-    echo "ok   $SETTINGS updated${SETTINGS:+ (backup: $SETTINGS.bak-$STAMP)}"
+    if [[ -f $SETTINGS ]]; then
+      cp "$SETTINGS" "$SETTINGS.bak-$STAMP"
+      mv "$SETTINGS.tmp" "$SETTINGS"
+      echo "ok   $SETTINGS updated (backup: $SETTINGS.bak-$STAMP)"
+    else
+      mv "$SETTINGS.tmp" "$SETTINGS"
+      echo "ok   $SETTINGS created"
+    fi
   fi
 fi
 
@@ -105,15 +116,17 @@ elif [[ -z ${DOTFILES_NAME:-} && ! -t 0 ]]; then
 else
   # Values come from DOTFILES_* env vars (non-interactive, e.g. Claude running SETUP_PROMPT.md)
   # or from prompts.
+  # read takes the variable *name* from $var on purpose (indirect assignment).
+  # shellcheck disable=SC2229
   ask() { local var=$1 prompt=$2 env=$3; if [[ -n ${DOTFILES_NAME:-} ]]; then printf -v "$var" '%s' "${!env:-}"; else read -rp "  $prompt" "$var"; fi; }
   [[ -z ${DOTFILES_NAME:-} ]] && echo "Set up your commit identity (stored only on this machine)."
   ask NAME   "Full name: " DOTFILES_NAME
   ask EMAIL  "Default (work) email: " DOTFILES_EMAIL
   ask KEYIN  "Signing key — public key line or path to .pub (empty = don't sign): " DOTFILES_SIGNING_KEY
-  KEY= PROG= PUB=
+  KEY='' PROG='' PUB=''
   while [[ -n $KEYIN ]] && ! key_info "$KEYIN"; do [[ -n ${DOTFILES_NAME:-} ]] && exit 1; read -rp "  Signing key (empty = don't sign): " KEYIN; done
   ask PEMAIL "Personal email for repos under ~/repos/personal (empty = skip): " DOTFILES_PERSONAL_EMAIL
-  PKEY= PPROG= PPUB=
+  PKEY='' PPROG='' PPUB=''
   if [[ -n $PEMAIL ]]; then
     ask PKEYIN "Personal signing key — public key line or .pub path (empty = same as default): " DOTFILES_PERSONAL_KEY
     while [[ -n $PKEYIN ]] && ! key_info "$PKEYIN"; do [[ -n ${DOTFILES_NAME:-} ]] && exit 1; read -rp "  Personal signing key: " PKEYIN; done
@@ -121,6 +134,8 @@ else
     [[ -n $KEYIN ]] && key_info "$KEYIN"   # restore default key vars
   fi
   mkdir -p "${IDENTITY%/*}"
+  # NAME and EMAIL are assigned indirectly by ask (printf -v / read).
+  # shellcheck disable=SC2153
   {
     echo "# Local identity + commit signing (NOT in the dotfiles repo). Template: jj/identity.example.toml"
     echo; echo "[user]"; echo "name = $(toml "$NAME")"; echo "email = $(toml "$EMAIL")"
@@ -146,6 +161,8 @@ else
     git config --global gpg.format ssh
     git config --global user.signingkey "$KEY"
     git config --global gpg.ssh.program "$PROG"
+    # Literal ~ on purpose: git expands it when reading the value, keeping the config portable.
+    # shellcheck disable=SC2088
     git config --global gpg.ssh.allowedSignersFile "~/.config/git/allowed_signers"
     git config --global commit.gpgsign true
     git config --global tag.gpgsign true
@@ -174,8 +191,13 @@ elif ! command -v jj >/dev/null; then
 else
   name=$(jj config get user.name 2>/dev/null || true)
   email=$(jj config get user.email 2>/dev/null || true)
-  [[ -n $name ]]  && run git config --global user.name "$name"
-  [[ -n $email ]] && run git config --global user.email "$email"
+  # Never copy the template's placeholders (*.example) into git.
+  if [[ $email == *.example || $email == *@example.* || $name == "Your Name" ]]; then
+    echo "skip git identity: $IDENTITY still has placeholders — edit it, then re-run" >&2
+  else
+    [[ -n $name ]]  && run git config --global user.name "$name"
+    [[ -n $email ]] && run git config --global user.email "$email"
+  fi
 fi
 command -v difft >/dev/null && run git config --global alias.dft '-c diff.external=difft diff'
 
@@ -184,5 +206,5 @@ if command -v ghostty >/dev/null || [[ -x /Applications/Ghostty.app/Contents/Mac
   G=$(command -v ghostty || echo /Applications/Ghostty.app/Contents/MacOS/ghostty)
   (( DRY )) || { "$G" +validate-config && echo "ok   ghostty config valid"; }
 fi
-rm -f "$HOME"/.zcompdump* 2>/dev/null || true   # pick up new completions on next shell
+(( DRY )) || rm -f "$HOME"/.zcompdump* 2>/dev/null || true   # pick up new completions on next shell
 echo "done — open a new terminal tab (or: exec zsh)"

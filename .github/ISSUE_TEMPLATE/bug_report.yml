@@ -1,0 +1,106 @@
+name: Bug report
+description: install.sh, a shell command or a config did something wrong or failed to run
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Many problems come from a live file that is no longer a link into the
+        repo: an app rewrote it in place, or a copy predates the install.
+        `just drift` shows that in one command; please paste its output.
+        Replace your name, emails, home path and key bodies before you paste
+        anything. This repo is public.
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: Output of `sw_vers -productVersion`
+      placeholder: "26.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: chip
+    attributes:
+      label: Chip
+      description: Output of `uname -m`
+      options: [arm64 (Apple Silicon), x86_64 (Intel)]
+    validations:
+      required: true
+
+  - type: input
+    id: brew-prefix
+    attributes:
+      label: Homebrew prefix
+      description: Output of `brew --prefix`
+      placeholder: /opt/homebrew
+    validations:
+      required: true
+
+  - type: dropdown
+    id: step
+    attributes:
+      label: Step that failed
+      options:
+        - brew bundle
+        - ./install.sh --dry-run
+        - ./install.sh
+        - SETUP_PROMPT.md in Claude Code
+        - a shell command (jw, jwc, jws, jwl, jwrm, jpush, sign-as, infra)
+        - jj aliases or revsets (tug, stack, dft, dshow, work())
+        - Ghostty config or keybindings
+        - Claude Code status line or settings
+        - just check, lint, test or secrets
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran, and the directory you ran it in
+      render: shell
+      placeholder: |
+        cd ~/repos/app
+        jw fix-login
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: stdout and stderr of that command
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead, and why
+    validations:
+      required: true
+
+  - type: textarea
+    id: drift
+    attributes:
+      label: just drift output
+      description: Run `just drift` in the dotfiles checkout
+      render: text
+      placeholder: |
+        linked       ~/.config/ghostty/config
+        DIFFERS      ~/.zshrc
+
+  - type: textarea
+    id: versions
+    attributes:
+      label: Tool versions
+      description: The ones involved, for example `jj --version`, `mise --version`, `ghostty --version`, `zsh --version`, `docker --version`
+      render: text
+      placeholder: |
+        jj 0.46.0
+        mise 2026.10.0 macos-arm64

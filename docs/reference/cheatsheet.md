@@ -1,6 +1,6 @@
 # Cheatsheet
 
-One-page reference for this setup. `<x>` = required, `[x]` = optional.
+One-page reference for this setup. `<x>` = required, `[x]` = optional. The full detail is in [shell commands](shell-commands.md), [keybindings](keybindings.md), [jj configuration](jj-config.md) and [install.sh](install-sh.md).
 
 ## Ghostty
 
@@ -30,7 +30,7 @@ A command that runs longer than 30s in an unfocused split sends a desktop notifi
 
 ## Agent workspaces (`zsh/jj.zsh`)
 
-Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a git worktree.
+Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a git worktree. Workflow: [Run parallel agents](../guides/parallel-agents.md).
 
 | Command | Action |
 |---|---|
@@ -85,7 +85,7 @@ Repo aliases (`jj/config.toml`):
 | `jj dft` / `jj dshow [rev]` | difftastic diff / show |
 | `git dft [args]` | difftastic for git (`-c diff.external=difft diff`) |
 
-difftastic is opt-in. Agents use plain `jj diff --git`.
+difftastic is opt-in. Agents use plain `jj diff --git`. See [Review and land agent work](../guides/review-and-land.md) and [why difftastic is opt-in](../explanation/design.md#why-difftastic-is-opt-in).
 
 ## Signing and identity
 
@@ -95,9 +95,11 @@ difftastic is opt-in. Agents use plain `jj diff --git`.
 | `sign-as personal` | Per-repo override (jj + git) from `~/.config/git/personal.gitconfig`, also updates the author of `@` |
 | `sign-as work` | Remove the per-repo override, back to the global default |
 
-The default identity is work. Repos under `~/repos/personal/` use the personal identity automatically. On first run, `install.sh` prompts for full name, default email, default signing key (SSH public key line or `.pub` path) and optionally a personal email + key, then writes `~/.config/jj/conf.d/identity.toml`. Non-interactive: set `DOTFILES_NAME`, `DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`, `DOTFILES_PERSONAL_EMAIL`, `DOTFILES_PERSONAL_KEY`. With neither a terminal nor those variables, it copies `jj/identity.example.toml` for hand editing (`--dry-run` changes nothing). git gets the same identity and SSH signing if it has none of its own. All commits are SSH-signed.
+The default identity is work. Repos under `~/repos/personal/` use the personal identity automatically. On first run, `install.sh` prompts for full name, default email, default signing key (SSH public key line or `.pub` path) and optionally a personal email + key, then writes `~/.config/jj/conf.d/identity.toml`. Non-interactive: set `DOTFILES_NAME`, `DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`, `DOTFILES_PERSONAL_EMAIL`, `DOTFILES_PERSONAL_KEY`. With neither a terminal nor those variables, it copies `jj/identity.example.toml` for hand editing (`--dry-run` writes no identity). git gets the same identity and SSH signing if it has none of its own. With a signing key, every commit you author is SSH-signed. See [Identity and signing](../guides/identity-and-signing.md).
 
 ## Local infra (`zsh/infra.zsh`)
+
+Guide: [Local infrastructure](../guides/local-infra.md).
 
 | Command | Action |
 |---|---|
@@ -140,7 +142,7 @@ redis-cli monitor                                       # live command stream
 | `mise` | `mise ls`, `mise install`, `mise tasks`, `mise run <task>` |
 | `just` | `just --list`, `just <recipe>` |
 
-Go itself comes from the official installer, and each project's `go.mod` `toolchain` picks the version. CI-pinned tools belong in the project, not globally.
+Go itself comes from the official installer, and each project's `go.mod` `toolchain` picks the version. CI-pinned tools belong in the project, not globally. See [Per-project tools](../guides/project-tools.md).
 
 ## Kubernetes
 
@@ -163,6 +165,8 @@ Go itself comes from the official installer, and each project's `go.mod` `toolch
 | `d2 --watch in.d2 out.svg` | Render diagram with live preview |
 
 ## Claude Code integration (`claude/`)
+
+Guide: [Claude Code](../guides/claude-code.md).
 
 | Item | Detail |
 |---|---|

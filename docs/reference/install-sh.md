@@ -26,14 +26,16 @@ exits 2 without changing anything.
 | Variable                  | Used for                                       | Empty or unset means                     |
 | ------------------------- | ---------------------------------------------- | ---------------------------------------- |
 | `DOTFILES_NAME`           | `user.name`. Also switches off every prompt.   | Prompts, or the template without a TTY.  |
-| `DOTFILES_EMAIL`          | Main `user.email`, used in every repo.         | Empty email.                             |
+| `DOTFILES_EMAIL`          | Main `user.email`, used in every repo.         | Exit 2 when `DOTFILES_NAME` is set.      |
 | `DOTFILES_SIGNING_KEY`    | Main signing key: public key line or `.pub` path. | No signing.                           |
 | `DOTFILES_PERSONAL_DIR`   | Folder for the second identity's repos, for example `~/src/personal`. Absolute or starting with `~`, created if missing. | One identity everywhere. |
 | `DOTFILES_PERSONAL_EMAIL` | Email for repos inside `DOTFILES_PERSONAL_DIR`. | One identity everywhere.                |
 | `DOTFILES_PERSONAL_KEY`   | Signing key for repos inside `DOTFILES_PERSONAL_DIR`. | The main key applies there too.   |
 
 `DOTFILES_NAME` is the switch. With it set, all six values come from the
-environment and a missing one is an empty answer. Without it, the other five
+environment and a missing one is an empty answer. An empty `DOTFILES_EMAIL`
+prints `DOTFILES_EMAIL must not be empty when DOTFILES_NAME is set` and exits
+2 before anything is written. Without it, the other five
 variables are not read at all. The variables only matter when
 `~/.config/jj/conf.d/identity.toml` does not exist yet.
 
@@ -54,7 +56,7 @@ The script prints a `==` header before each step.
 | 3    | `== Claude Code settings`    | Merges `claude/settings.fragment.json` into `~/.claude/settings.json`.                           |
 | 4    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
 | 5    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
-| 6    | `== git identity`            | Copies `user.name` and `user.email` from jj into global git config if git has no email.         |
+| 6    | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
 | 7    | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
 
 ## Linked files
@@ -92,7 +94,8 @@ it is moved to `config.ghostty.bak-<stamp>`. Ghostty reads that file after
 `~/.config/ghostty/config`, so any copy of it overrides the linked config.
 
 `just drift` reads the same `link` lines and reports each destination as
-`linked`, `same (copy)`, `DIFFERS` or `missing`.
+`linked`, `elsewhere` (a symlink that does not resolve to the repo file,
+printed with its target), `same (copy)`, `DIFFERS` or `missing`.
 
 ## What it writes
 
@@ -144,7 +147,7 @@ changed: delete it and run the script again to redo the prompts.
 | -------------------------------------- | -------------------------------------------------------------- |
 | File exists                            | `ok`, nothing else in this step runs.                          |
 | `--dry-run`                            | Prints `+ create ...`.                                         |
-| No `DOTFILES_NAME` and stdin not a TTY | Copies `jj/identity.example.toml`, mode 600, prints a warning. No git config is written. |
+| No `DOTFILES_NAME` and stdin not a TTY | Copies `jj/identity.example.toml`, mode 600, and prints a warning that commit signing is off until you fill in and uncomment its `[signing]` block. No git config is written. |
 | `DOTFILES_NAME` set                    | Values from the `DOTFILES_*` variables.                        |
 | Otherwise                              | Prompts on the terminal.                                       |
 
@@ -161,26 +164,32 @@ The prompts, in order:
 | `Signing key for that folder — key line or .pub path (empty = same as above):` | `DOTFILES_PERSONAL_KEY` |
 
 Any answer to the yes/no question that does not start with `y` or `Y` keeps
-one identity and skips the last three prompts. After `y`, the folder and email
+one identity and skips the last three prompts. An empty name or email is asked
+again with `Full name:` or `Email:`. After `y`, the folder and email
 prompts repeat until they get a non-empty answer.
 
 The folder has its trailing `/` removed and a leading `~` expanded. A folder
 that is still not an absolute path prints
 `folder must be an absolute path or start with ~` and exits 2. Otherwise it
-is created with `mkdir -p`. Inside `$HOME` it is stored as `~/...`, anywhere
-else as the absolute path. That stored form is what goes into
-`--when.repositories` and into git's `includeIf.gitdir:<folder>/`.
+is created with `mkdir -p` and resolved to its physical path with `pwd -P`,
+because jj and git match against the repo's physical path and a symlinked
+folder would never match. Inside the resolved `$HOME` it is stored as
+`~/...`, anywhere else as the resolved absolute path. That stored form is what
+goes into `--when.repositories` and into git's `includeIf.gitdir:<folder>/`.
 
 A signing key is read in one of two forms:
 
 | Input                                                    | `signing.key`              | Signer program                                                                 | Public key for `allowed_signers` |
 | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------ | -------------------------------- |
 | A line starting with `ssh-`, `ecdsa-` or `sk-`           | The line itself            | `/Applications/1Password.app/Contents/MacOS/op-ssh-sign` if executable, else `/usr/bin/ssh-keygen` | The line itself |
-| A path to an existing file (a leading `~` is expanded)   | The expanded path          | `/usr/bin/ssh-keygen`                                                          | The file's contents              |
+| A path to an existing file holding one line that starts with `ssh-`, `ecdsa-` or `sk-` (a leading `~` is expanded) | The expanded path | `/usr/bin/ssh-keygen` | The file's contents |
 
-Anything else prints `'<input>' is neither a public key line nor an existing
-.pub file`. At a terminal the prompt repeats. With `DOTFILES_NAME` set the
-script exits 1 and writes no identity file.
+A file with more than one line, or one that does not start with `ssh-`,
+`ecdsa-` or `sk-` (a private key, for example), prints `'<input>' is not a
+public key file (expected one 'ssh-...' line, e.g. a .pub file)`. Anything
+else prints `'<input>' is neither a public key line nor an existing .pub
+file`. In both cases the prompt repeats at a terminal. With `DOTFILES_NAME`
+set the script exits 1 and writes no identity file and no `allowed_signers`.
 
 The file is written with mode 600. With every value given and
 `~/src/personal` as the example folder, it looks like this (see [jj configuration](jj-config.md#identitytoml) for each key):
@@ -207,7 +216,9 @@ key = "~/.ssh/id_ed25519_personal.pub"
 backends.ssh.program = "/usr/bin/ssh-keygen"
 ```
 
-`[signing]` is left out when the main key is empty. The comment and the
+`[signing]` is left out when the main key is empty, also when the second
+identity has a key: that key goes only into `[--scope.signing]` and
+`personal.gitconfig`, never into `[signing]` or the global git config. The comment and the
 `[[--scope]]` block are left out with one identity. `[--scope.signing]` is
 left out when the second key is empty, so the scope inherits the main
 key. A key given as a path is written with `~` already expanded, so the
@@ -228,7 +239,7 @@ DOTFILES_PERSONAL_DIR=/Users/<you>/src/personal
 | Variable                | Value                                                       | Written when |
 | ----------------------- | ----------------------------------------------------------- | ------------ |
 | `DOTFILES_DIR`          | The directory `install.sh` runs from, wherever the repo was cloned. | always |
-| `DOTFILES_PERSONAL_DIR` | The second identity's folder as an absolute path. Taken from this run's answers, or on later runs from the `--when.repositories` line in `identity.toml`. | there is a second identity |
+| `DOTFILES_PERSONAL_DIR` | The second identity's folder as an absolute path. On this run's answers: `$HOME/...` when the resolved folder is inside the resolved `$HOME`, otherwise the resolved path. On later runs: the `--when.repositories` line in `identity.toml` with `~` expanded to `$HOME`. | there is a second identity |
 
 The template's placeholder folder `~/path/to/personal-repos` is never written
 as `DOTFILES_PERSONAL_DIR`. Values are quoted with `printf %q`. The new
@@ -257,7 +268,8 @@ Written in the same run as `identity.toml`, never on later runs.
 
 ### `~/.config/git/allowed_signers`
 
-Created empty if missing. For the main identity and the second one, if any, a line
+Created empty if missing, then set to mode 600 (also when it already
+existed). For the main identity and the second one, if any, a line
 
 ```text
 <email> namespaces="git" <public key>
@@ -284,8 +296,14 @@ this file if you add it by hand (see [shell commands](shell-commands.md#sign-as)
 ### git identity and alias
 
 If `git config --global user.email` is empty and `jj` is installed, the script
-copies `user.name` and `user.email` from `jj config get` into global git
-config. Without `jj` it prints a `skip` line to stderr and goes on.
+sets global `user.name` and `user.email`. On the run that writes
+`identity.toml`, it uses the name and email given in that run. Otherwise it
+reads them with `jj config get`, run from `/` so that the second identity's
+`--when.repositories` scope never applies, even when `install.sh` runs inside
+that folder. If the email is `you@work.example` or the name is `Your Name`
+(the template's values), it prints `skip git identity: ... still has
+placeholders` to stderr and writes nothing. Without `jj` it prints a `skip`
+line to stderr and goes on.
 
 If `difft` is on `PATH`, it sets the global alias
 `dft = -c diff.external=difft diff` every run.
@@ -314,8 +332,9 @@ The script runs under `set -euo pipefail`.
 | `0`  | Finished. The last line is `done — open a new terminal tab (or: exec zsh)`. |
 | `1`  | `jq` is not installed (not checked under `--dry-run`).                      |
 | `1`  | The settings merge failed. `settings.json` is untouched.                    |
-| `1`  | A bad signing key with `DOTFILES_NAME` set. No identity file is written.    |
+| `1`  | A bad signing key with `DOTFILES_NAME` set, including a file that is not a public key. No identity file is written. |
 | `2`  | An unknown argument.                                                        |
+| `2`  | `DOTFILES_NAME` is set and `DOTFILES_EMAIL` is empty.                       |
 | `2`  | Only one of `DOTFILES_PERSONAL_DIR` and `DOTFILES_PERSONAL_EMAIL` is set.   |
 | `2`  | The second identity's folder is neither absolute nor starts with `~`.       |
 | non-zero | Any other failing command, for example `mkdir`, `mv` or `ln`.           |
@@ -337,7 +356,7 @@ runs only when `ghostty` is on `PATH` or
 | Identity             | `identity.toml` exists.                                                |
 | Machine settings     | `cmp` of the new content and the current file, prints `(unchanged)`.   |
 | Git signing          | Only when git has no `user.signingkey`.                                |
-| `allowed_signers`    | Only when no line starts with the email.                               |
+| `allowed_signers`    | Only when no line contains the email followed by a space. Mode 600 is set again.        |
 | Second git config    | Only when the `includeIf` key is not set.                              |
 | Git identity         | Only when git has no `user.email`.                                     |
 | `git dft` alias      | Set again each run to the same value.                                  |

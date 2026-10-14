@@ -56,6 +56,15 @@ failure, not to work around it, so the fix is always on your side.
 [Identity and signing](guides/identity-and-signing.md) explains which
 identity applies where.
 
+**Commits are not signed at all.** If `install.sh` ran without a terminal and
+without `DOTFILES_NAME`, it copied the template, whose `[signing]` block is
+commented out. Fill in a real key in `~/.config/jj/conf.d/identity.toml` and
+uncomment the block, or delete the file and rerun `./install.sh`.
+
+**`install.sh` says `is not a public key file`.** The signing key path points
+at a file that is not a single `ssh-...`, `ecdsa-...` or `sk-...` line,
+usually the private key. Give the `.pub` file next to it instead.
+
 **`infra up` fails with "port is already allocated" or "address already in
 use".** Something on the host
 already listens on 6379, 9092, 8088, 16686, 4317 or 4318. The usual suspect
@@ -92,7 +101,9 @@ diff ~/.claude/statusline.sh "$DOTFILES_DIR/claude/statusline.sh"
 Copy anything worth keeping into the repo file, then run `./install.sh`. It
 moves the live file to `statusline.sh.bak-<timestamp>` and links it again.
 `same (copy)` means the content matches but the link is gone, and
-`./install.sh` fixes that too.
+`./install.sh` fixes that too. `elsewhere` means the link points into
+another checkout, usually an old clone or a jj workspace, and shows its target.
+Run `./install.sh` from the checkout you want to use.
 
 **`jpush` refuses to push.** The bookmark name is a trunk bookmark such as
 `main` or an immutable one, or you are in the `default` workspace without a

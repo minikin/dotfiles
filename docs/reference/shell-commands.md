@@ -173,6 +173,7 @@ jpush [bookmark]
 | Case                                                              | Message                                  |
 | ----------------------------------------------------------------- | ---------------------------------------- |
 | No argument in the `default` workspace, or no workspace name found | `usage: jpush <bookmark>`               |
+| No argument and `@` is the working copy of more than one workspace | same                                     |
 | The name matches a remote bookmark on `trunk()`, such as `main`   | `jpush: refusing to push to trunk/immutable bookmark '<name>'` |
 | A bookmark with that name points at an immutable change           | same                                     |
 
@@ -201,7 +202,7 @@ sign-as [work|personal|status]
 | Mode               | jj (`--repo` config)                                                 | git (`--local` config)                                                  |
 | ------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `status` (default) | nothing                                                              | nothing                                                                 |
-| `personal`         | sets `user.email`, `signing.key`, `signing.backends.ssh.program`      | sets `user.email`, `user.signingkey`, `gpg.ssh.program`, `core.sshCommand` |
+| `personal`         | sets `user.email`, `signing.key`, `signing.backends.ssh.program` (the key and program are unset instead when the second identity has no key) | sets `user.email`, `user.signingkey`, `gpg.ssh.program`, `core.sshCommand` |
 | `work`             | unsets the same three, back to the main identity                     | unsets the same four                                                    |
 
 `personal` reads its four values from `~/.config/git/personal.gitconfig`
@@ -211,7 +212,9 @@ one identity that file does not exist, and it returns 1 with
 It also returns 1 with `fill in <file> first` when `user.email` there is empty or the
 placeholder `PERSONAL_EMAIL`. `core.sshCommand` is optional: when the file has
 none, `sign-as personal` removes any per-repo `core.sshCommand` and git uses the
-default ssh. `install.sh` never writes it.
+default ssh. `install.sh` never writes it. When the file has no
+`user.signingkey`, the second identity has no key of its own, so `personal`
+unsets the per-repo key and signer in jj and git and the main key signs.
 
 jj per-repo config is shared by every workspace of the repo. The jj half is
 skipped in a git repo without jj. Outside any repo, `sign-as` prints

@@ -9,7 +9,7 @@ jj reads two files from this setup:
 
 jj also loads every `*.toml` in `~/.config/jj/conf.d/`, so the identity
 file needs no include line. Per-repo settings that `sign-as` writes (`jj config set --repo`) override
-both.
+both. jj keeps them outside the repo, in `~/.config/jj/repos/<id>/config.toml`.
 
 ## ui
 
@@ -67,32 +67,40 @@ containing `--tool`, and allow `jj dft`. See
 `~/.config/jj/conf.d/identity.toml` is never in the repo. `install.sh` writes
 it on the first run, mode 600, from prompts or `DOTFILES_*` variables (see
 [install.sh](install-sh.md#configjjconfdidentitytoml)). The template is
-`jj/identity.example.toml`, shown below. Its `[[--scope]]` block is the
-optional second identity: with one identity it is not written, and in the
-template you either set the folder or delete the block.
+`jj/identity.example.toml`, shown below without its two header comment lines.
+Its `[signing]` and `[[--scope]]` blocks are commented out: a placeholder key
+would make every jj command fail, so a copied template leaves commits unsigned
+and jj working until you fill in a real key and uncomment `[signing]`. The
+`[[--scope]]` block is the optional second identity: with one identity
+`install.sh` does not write it, and in the template you uncomment it with the
+folder's physical path (no symlinks) or leave it commented out.
 
 ```toml
 [user]
 name = "Your Name"
 email = "you@work.example"
 
-[signing]
-backend = "ssh"
-behavior = "own"
-key = "ssh-ed25519 AAAA...your-work-key"
-backends.ssh.program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
-backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
+# Sign every commit you author (including agent-made ones). Off until you fill in a real
+# key and uncomment the block: a placeholder key would make every jj command fail.
+# [signing]
+# backend = "ssh"
+# behavior = "own"
+# # Either an SSH public key line (signed via an agent, e.g. 1Password) ...
+# key = "ssh-ed25519 AAAA...your-work-key"
+# backends.ssh.program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+# # ... or a path to a .pub file with program "/usr/bin/ssh-keygen".
+# backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
 
 # Optional: a second identity (e.g. personal) for every repo under one folder of your choice
-# (and its <repo>-ws workspaces). Delete this block if you use one identity everywhere.
-# Override any other repo with `sign-as personal`.
-[[--scope]]
---when.repositories = ["~/path/to/personal-repos"]
-[--scope.user]
-email = "you@personal.example"
-[--scope.signing]
-key = "~/.ssh/id_ed25519_personal.pub"
-backends.ssh.program = "/usr/bin/ssh-keygen"
+# (and its <repo>-ws workspaces). Uncomment it to use it, with the folder's physical path
+# (no symlinks). Override any other repo with `sign-as personal`.
+# [[--scope]]
+# --when.repositories = ["~/path/to/personal-repos"]
+# [--scope.user]
+# email = "you@personal.example"
+# [--scope.signing]
+# key = "~/.ssh/id_ed25519_personal.pub"
+# backends.ssh.program = "/usr/bin/ssh-keygen"
 ```
 
 | Key                                       | Section             | Value from `install.sh`                                     | Required |
@@ -104,7 +112,7 @@ backends.ssh.program = "/usr/bin/ssh-keygen"
 | `signing.key`                             | `[signing]`         | Public key line, or path to a `.pub` file                   | with signing |
 | `signing.backends.ssh.program`            | `[signing]`         | `op-ssh-sign` for a key line when 1Password is installed, else `/usr/bin/ssh-keygen` | with signing |
 | `signing.backends.ssh.allowed-signers`    | `[signing]`         | `"~/.config/git/allowed_signers"`                           | with signing |
-| `--when.repositories`                     | `[[--scope]]`       | The folder you chose, for example `["~/src/personal"]`. `~/...` inside `$HOME`, absolute elsewhere | with a second identity |
+| `--when.repositories`                     | `[[--scope]]`       | The folder you chose, resolved to its physical path, for example `["~/src/personal"]`. `~/...` inside `$HOME`, absolute elsewhere | with a second identity |
 | `user.email`                              | `[--scope.user]`    | Email for that folder                                       | with a second identity |
 | `signing.key`                             | `[--scope.signing]` | Signing key for that folder                                 | with a second key |
 | `signing.backends.ssh.program`            | `[--scope.signing]` | Signer for the second key                                   | with a second key |

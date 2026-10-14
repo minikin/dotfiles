@@ -119,7 +119,7 @@ An app that saves its config by writing a new
 file and renaming it over the old path replaces the link with a regular file,
 and from then on edits go nowhere near the repo. Nothing announces it.
 `just drift` reads the same `link` lines `install.sh` uses and reports each
-destination as `linked`, `same (copy)`, `DIFFERS` or `missing`, without
+destination as `linked`, `elsewhere`, `same (copy)`, `DIFFERS` or `missing`, without
 changing anything. Running `install.sh` again backs the stray file up and
 restores the link.
 

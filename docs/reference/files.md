@@ -19,7 +19,7 @@ file edits the repo. `just drift` reports the state of each linked file.
 | `infra/compose.yaml`            | linked: `~/.config/devinfra/compose.yaml`   | Compose project `devinfra`: Redis 8, Apache Kafka 4.1.0 (KRaft, one node), kafka-ui, Jaeger. Loopback ports only. |
 | `starship/starship.toml`        | linked: `~/.config/starship.toml`           | Catppuccin Mocha prompt. `custom.jj` shows change ID, bookmarks, conflict and empty markers and the description. `git_branch` shows only on an attached HEAD. |
 | `jj/config.toml`                | linked: `~/.config/jj/config.toml`          | `ui.default-command`, `work()`, `closest_bookmark()`, `tug`, `stack`, `dft`, `dshow`, the `difft` tool. See [jj configuration](jj-config.md). |
-| `jj/identity.example.toml`      | template for `~/.config/jj/conf.d/identity.toml` | Placeholder identity and signing. Copied only when `install.sh` has no terminal and no `DOTFILES_NAME`. |
+| `jj/identity.example.toml`      | template for `~/.config/jj/conf.d/identity.toml` | Placeholder identity, with the `[signing]` and second-identity `[[--scope]]` blocks commented out. Copied only when `install.sh` has no terminal and no `DOTFILES_NAME`. |
 | `mise/config.toml`              | linked: `~/.config/mise/config.toml`        | Global tools: `node` LTS, `pnpm` latest, `gopls`, `dlv`, `gotestsum`, `govulncheck` (all `latest`). |
 | `claude/CLAUDE.md`              | linked: `~/.claude/CLAUDE.md`               | Rules for every Claude Code session: English only, jj instead of git writes, always `-m`, just and mise tasks, local infra only, authorship and signing. |
 | `claude/statusline.sh`          | linked: `~/.claude/statusline.sh`           | Claude Code status line: `dir · [workspace] change bookmarks description · model`, or `git:<branch>` outside jj. |
@@ -33,7 +33,7 @@ None of these are in the repo. See [install.sh](install-sh.md#what-it-writes).
 | -------------------------------------- | ----------------------------------------------------- |
 | `~/.config/jj/conf.d/identity.toml`    | Name, emails, signing keys. Mode 600.                 |
 | `~/.config/dotfiles/config`            | Machine settings, rewritten on every run and sourced by `zshrc`: `DOTFILES_DIR` (where the repo is cloned) and, with a second identity, `DOTFILES_PERSONAL_DIR` (its folder, absolute). |
-| `~/.config/git/allowed_signers`        | `<email> namespaces="git" <public key>` lines.        |
+| `~/.config/git/allowed_signers`        | `<email> namespaces="git" <public key>` lines. Mode 600. |
 | `~/.config/git/personal.gitconfig`     | Only with a second identity: its `user.email`, and its key and signer if given. |
 | `~/.gitconfig`                         | Signing keys, `includeIf` for the second identity's folder if any, `alias.dft`, and `user.name` and `user.email` copied from jj. |
 | `*.bak-<YYYYmmdd-HHMMSS>`              | Anything the script replaced.                         |
@@ -55,9 +55,11 @@ These stay in the repo and are not installed.
 | `scripts/check-secrets.sh` | Scans tracked and untracked, non-ignored files for email addresses outside example domains, absolute home paths, private key headers, full SSH public keys, 1Password references and entries from the local denylist. Exits 1 on any hit. |
 | `.gitleaks.toml`           | gitleaks default rules plus `personal-email`, `home-path`, `ssh-public-key` and `onepassword-reference`. Ignores `.jj/`. |
 | `tests/helpers.bash`       | Shared bats helpers: fake `HOME`, a copy of the repo to install into, throwaway jj repos.      |
-| `tests/install.bats`       | `install.sh`: dry run, links, second run, backups, settings merge, identity from env and template, one identity only, the second identity's folder and email set together, a folder outside `$HOME`, `~/.config/dotfiles/config`, the template's placeholder folder. |
+| `tests/install.bats`       | `install.sh`: dry run, links, second run, backups, settings merge, identity from env and template, one identity only, the second identity's folder and email set together, a folder outside `$HOME`, `~/.config/dotfiles/config`, the template's placeholder folder, a private key file rejected, `allowed_signers` mode 600, a second key without a main key, the git identity read outside the personal folder, the template copy leaving signing off, a symlinked folder stored as its physical path, an empty name or email refused, links repointed after the repo moves. |
 | `tests/jj.bats`            | `jw`, `jwrm`, `jpush` and `jj tug` in temporary jj repos.                                     |
 | `tests/statusline.bats`    | `claude/statusline.sh` inside and outside jj, empty input, no op log writes.                  |
+| `tests/sign.bats`          | `sign-as personal`, `sign-as work` and `sign-as status` in a temporary jj repo, and failures without `personal.gitconfig` or outside a repo. |
+| `tests/drift.bats`         | `just drift`: `linked`, `elsewhere` for a link into another clone or a dangling link, `same (copy)`, `DIFFERS` and `missing`, and nothing in `HOME` changes. |
 | `tests/infra.bats`         | `infra/compose.yaml` is valid and every port binds to `127.0.0.1` or `[::1]`.                 |
 | `tests/navi.bats`          | `navi/*.cheat` and `zsh/navi.zsh`: every entry renders, unique descriptions, no zsh functions or working-copy snapshots in pickers, the `[LOCAL ONLY]` and `[PERSONAL]` labels, column-1 insertion, and the `.navi/` trust rules, with and without `DOTFILES_PERSONAL_DIR`. |
 | `.github/workflows/ci.yml` | CI. Job `check` on `macos-latest` runs `just check`. Job `history-secrets` on `ubuntu-latest` runs gitleaks 8.30.1 over the full git history. |

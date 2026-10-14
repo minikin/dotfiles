@@ -50,7 +50,7 @@ itself:
 cd "$DOTFILES_DIR"
 jj st
 jj diff --git
-jj commit -m "ghostty: bump font size"
+jj commit -m "feat(ghostty): bump font size"
 just check
 jj bookmark set main -r @-
 jj git push -b main
@@ -87,6 +87,7 @@ live file:
 | Status | Meaning |
 |---|---|
 | `linked` | the live path resolves to the repo file |
+| `elsewhere` | a symlink into another checkout, or a dangling one, printed with its target |
 | `same (copy)` | a regular file with the same content |
 | `DIFFERS` | a file with other content |
 | `missing` | nothing at that path |

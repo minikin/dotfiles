@@ -48,8 +48,9 @@ just check       # lint, tests and the secret scan, the same as CI
 
 CI runs two jobs on every push to `main` and every pull request:
 
-- `check` on `macos-latest`: installs `just bats-core shellcheck jj jq lychee
-  gitleaks mise` with Homebrew and runs `just check`.
+- `check` on `macos-latest`: installs `git just bats-core shellcheck jq
+  lychee gitleaks mise navi` with Homebrew, installs jj 0.46.0 from its GitHub
+  release with a pinned checksum, and runs `just check`.
 - `history-secrets` on `ubuntu-latest`: downloads gitleaks 8.30.1, verifies
   its checksum, and scans every commit reachable from the checked-out ref.
   A secret removed in a later commit still fails it, so rewrite the history
@@ -61,7 +62,8 @@ not.
 ## Tests
 
 The tests are bats suites in `tests/`, one per area: `install.bats`,
-`jj.bats`, `statusline.bats`, `infra.bats`, `navi.bats`. Each test calls the helpers in
+`jj.bats`, `sign.bats`, `drift.bats`, `statusline.bats`, `infra.bats`,
+`navi.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 
@@ -151,12 +153,18 @@ The repo is colocated jj and git. Use jj for every write: no `git commit`,
 ```sh
 jj st
 jj diff --git
-jj commit -m "ghostty: bump font size"
+jj commit -m "feat(ghostty): bump font size"
 ```
 
-Prefix the message with the area it touches (`ghostty:`, `zsh:`, `jj:`,
-`install:`, `infra:`, `claude:`, `docs:`, `ci:`, `tests:`), then say what
-changed in the imperative. One change per area per commit.
+Messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+`<type>(<scope>): <summary>`, with the summary in the imperative and in
+lower case. The type is one of `feat`, `fix`, `docs`, `test`, `ci`,
+`refactor`, `chore` or `perf`. The scope is the area the change touches:
+`ghostty`, `zsh`, `jj`, `install`, `infra`, `claude`, `navi`, `mise`,
+`starship`, `scripts` or `just`. Leave the scope out when the type already names the
+area (`docs:`, `ci:`, `test:`). Mark a change that breaks an existing setup
+with `!` after the scope and a `BREAKING CHANGE:` footer that says what to
+do. One change per scope per commit.
 
 Every commit must be signed. Never pass `--no-gpg-sign` or `-c commit.gpgsign=false`, and do not
 change `signing.*` to get a commit through. If signing fails, fix the key or

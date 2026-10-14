@@ -101,3 +101,8 @@ name. Pass one: `jpush <bookmark>`.
 **Something went wrong in jj.** `jj undo` reverts the last operation. For
 anything older, `jj op log` lists every operation, and
 `jj op restore <op-id>` puts the whole repo back to that point.
+
+**`git status` fails inside a workspace.** The git on `PATH` is older than 2.48
+and does not understand `extensions.relativeWorktrees`, which jj sets for
+workspace worktrees. Check with `git --version`, then `brew install git` and
+make sure `/opt/homebrew/bin` comes before `/usr/bin` on `PATH`.

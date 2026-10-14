@@ -22,6 +22,9 @@ Kafka. It assumes:
   `claude/CLAUDE.md` are written for it.
 - jj colocated with git in every repo you use with agents. Git, your IDE and
   CI keep working, and agents write history through jj.
+- git 2.48 or newer. Each jj workspace is a git worktree with relative paths
+  (`extensions.relativeWorktrees`), which older git cannot open. The Brewfile
+  installs a current git, and so does recent Xcode.
 - Docker or OrbStack, only if you want the local Redis, Kafka and Jaeger.
 
 ## The pieces

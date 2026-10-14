@@ -12,6 +12,7 @@ brew "jq"
 brew "ripgrep"
 
 # VCS + review
+brew "git"               # 2.48+: jj workspaces are git worktrees with relative paths
 brew "jj"
 brew "jjui"
 brew "difftastic"

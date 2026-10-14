@@ -36,7 +36,7 @@ How `install.sh` works:
 | `zsh/sign.zsh` | `~/.config/zsh/sign.zsh` | `sign-as work\|personal\|status`: per-repo commit identity and signing key |
 | `zsh/infra.zsh` | `~/.config/zsh/infra.zsh` | `infra` command for the local stack |
 | `zsh/zprofile.snippet` | appended to `~/.zprofile` | Homebrew PATH and mise shims for non-interactive shells |
-| `infra/compose.yaml` | `~/.config/devinfra/compose.yaml` | Redis 8, Apache Kafka 4.1 (KRaft, single node), kafka-ui, Jaeger; loopback-only ports |
+| `infra/compose.yaml` | `~/.config/devinfra/compose.yaml` | Redis 8, Apache Kafka 4.1 (KRaft, single node), kafka-ui, Jaeger, published on loopback only |
 | `mise/config.toml` | `~/.config/mise/config.toml` | global node (LTS), pnpm, gopls, delve, gotestsum, govulncheck |
 | `starship/starship.toml` | `~/.config/starship.toml` | Catppuccin prompt with a jj segment (`custom.jj`) |
 | `jj/config.toml` | `~/.config/jj/config.toml` | aliases `tug` `stack` `dft` `dshow`, `work()` revset, difftastic tool (no identity or signing: see `jj/identity.example.toml`) |
@@ -48,7 +48,7 @@ How `install.sh` works:
 
 ## At a glance
 
-The full workflow is in [docs/GUIDE.md](docs/GUIDE.md) and every command is in [CHEATSHEET.md](CHEATSHEET.md). The core loop:
+The core loop, with each step covered in [docs/GUIDE.md](docs/GUIDE.md):
 
 ```sh
 jwc fix-login        # new jj workspace at <repo>-ws/fix-login, copy .env*, run setup, start claude
@@ -62,7 +62,7 @@ A new workspace runs `just setup`, or else `mise run setup`, or else `mise insta
 
 ### Local infra
 
-Runs on Docker or OrbStack. Ports bind to loopback only.
+Runs on Docker or OrbStack.
 
 | Command | |
 |---|---|
@@ -83,15 +83,17 @@ MCP servers for Redis or Kafka belong in each project's `.mcp.json`, pointed at 
 
 The repo contains no identity. Your name, emails and signing settings live in `~/.config/jj/conf.d/identity.toml`, which jj loads automatically and which stays on your machine (mode 600). With a signing key configured, every commit you author is SSH-signed (`signing.behavior = "own"`), including agent-made ones.
 
-On first run, if that file is missing, `install.sh`:
+On first run, if that file is missing, `install.sh` fills it from the first source available:
 
-- **asks** (interactive terminal) for your full name, default (work) email, default signing key (an SSH public key line, e.g. from the 1Password SSH agent, or a path to a `.pub` file), and optionally a personal email + key that apply to every repo under `~/repos/personal`;
-- **or reads** the same values from `DOTFILES_NAME`, `DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`, `DOTFILES_PERSONAL_EMAIL`, `DOTFILES_PERSONAL_KEY` (how Claude runs it from `SETUP_PROMPT.md`);
-- **or**, with neither a terminal nor those variables, copies `jj/identity.example.toml` there for you to edit. `--dry-run` only reports what it would do.
+- **Environment variables:** with `DOTFILES_NAME` set, it reads your values from `DOTFILES_NAME`, `DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`, `DOTFILES_PERSONAL_EMAIL`, `DOTFILES_PERSONAL_KEY`. Claude runs it this way from `SETUP_PROMPT.md`.
+- **Interactive terminal:** it asks for your full name, default (work) email, default signing key (an SSH public key line, e.g. from the 1Password SSH agent, or a path to a `.pub` file), and optionally a personal email and key that apply to every repo under `~/repos/personal`.
+- **Neither:** it copies `jj/identity.example.toml` there for you to edit.
+
+`--dry-run` only reports what it would do.
 
 It then mirrors the identity into git where git has none: user/email, SSH signing (`gpg.format ssh`, `commit.gpgsign`, `tag.gpgsign`), `~/.config/git/allowed_signers`, and `~/.config/git/personal.gitconfig` with an `includeIf` for `~/repos/personal/`.
 
-Still manual: add your public key(s) on GitHub as **Signing keys**. Run `sign-as status` in a repo to see which email and key it will use; `sign-as personal|work` overrides a single repo.
+Still manual: add your public key(s) on GitHub as **Signing keys**. In a repo, `sign-as status` shows which email and key it will use, and `sign-as personal|work` overrides that one repo.
 
 ## Gotchas
 

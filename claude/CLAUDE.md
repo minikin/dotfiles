@@ -1,28 +1,28 @@
 # Language
 
-Always respond in English, even when I write or dictate in Russian or Ukrainian. Never reply in Russian or Ukrainian. All code, docs and commit messages are in English too.
+Always respond in English, even when I write or dictate in Russian or Ukrainian. Never reply in Russian or Ukrainian. Write all code, docs and commit messages in English too.
 
 # Version control: jj (Jujutsu)
 
-Repos with a `.jj/` directory are managed with jj (colocated with git). In those repos:
+Repos with a `.jj/` directory are managed with jj, colocated with git. In those repos:
 
 - Use `jj` for all VCS writes. Do NOT run `git commit`, `git add`, `git checkout`, `git switch`, `git rebase`, `git stash`, `git reset` or `git branch`.
 - Read-only git commands (`git status`, `git diff`, `git log`, `git blame`) are fine. A detached HEAD is normal.
-- There is no staging area: file edits are recorded in the working-copy change (`@`) automatically.
+- There is no staging area. jj records file edits in the working-copy change (`@`) automatically.
 - Always pass `-m` to commands that take a message (`jj describe -m`, `jj commit -m`, `jj split -m`). Never run commands that open an editor or interactive UI (`jj describe` without `-m`, `jj split` without paths, `-i`/`--interactive`, `jj resolve`).
 - Workflow:
   - `jj st`, `jj diff --git`, `jj log` to inspect
   - `jj describe -m "..."` to describe the current change
   - `jj commit -m "..."` to finish the current change and start a new empty one on top
   - `jj new` to start a new change without describing the current one
-- If you make a mistake, `jj undo` reverts the last jj operation.
-- Never push (`jj git push`) or move/delete bookmarks unless explicitly asked.
+- After a mistake, run `jj undo`: it reverts the last jj operation.
+- Never push (`jj git push`), move or delete bookmarks unless explicitly asked.
 - Each agent usually runs in its own jj workspace (`<repo>-ws/<name>`). Stay inside your workspace directory.
 
 # Project tasks
 
-- If a project has a `justfile`, prefer its recipes (`just --list`) for build/test/lint/run.
-- If it has `mise.toml` tasks, use `mise run <task>` (`mise tasks` to list). Tool versions come from mise; don't install global toolchains.
+- If a project has a `justfile`, prefer its recipes (`just --list`) to build, test, lint and run.
+- If it has `mise.toml` tasks, use `mise run <task>` (`mise tasks` lists them). Tool versions come from mise. Don't install global toolchains.
 
 # Local infrastructure and inspection tools
 
@@ -32,9 +32,9 @@ Repos with a `.jj/` directory are managed with jj (colocated with git). In those
 
 # Commits: authorship and signing
 
-Applies to every repo (work, personal, anything else).
+These rules apply to every repo: work, personal, anything else.
 
-- The author is always the user, taken from git/jj config. Never pass `--author`, `--reset-author` to someone else, or set `user.name`/`user.email` yourself.
-- Never add `Co-Authored-By:` or other attribution trailers (including Claude) to commit messages or PR descriptions.
-- Every commit must be signed. Never use `--no-gpg-sign`, `-c commit.gpgsign=false`, or change `signing.*` in jj config. If signing fails, stop and report it; do not work around it.
-- Identity is picked automatically (work by default, personal under `~/repos/personal/`); switch only via the user's `sign-as` command, and only when asked.
+- The author is always the user, taken from git or jj config. Never pass `--author` or `--reset-author` to make someone else the author, and never set `user.name`/`user.email` yourself.
+- Never add `Co-Authored-By:` or any other attribution trailer, Claude included, to commit messages or PR descriptions.
+- Every commit must be signed. Never use `--no-gpg-sign` or `-c commit.gpgsign=false`, and never change `signing.*` in jj config. If signing fails, stop and report it. Do not work around it.
+- Identity is picked automatically: work by default, personal under `~/repos/personal/`. Switch it only with the user's `sign-as` command, and only when asked.

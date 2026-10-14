@@ -5,7 +5,7 @@ Step-by-step workflows for this setup: installing it, running parallel Claude Co
 - [README.md](../README.md) is the overview: what each file is and where it is installed.
 - [CHEATSHEET.md](../CHEATSHEET.md) is the one-page command reference.
 
-This guide explains how the pieces fit together. It assumes macOS on Apple Silicon (Homebrew at `/opt/homebrew`).
+This guide assumes macOS on Apple Silicon (Homebrew at `/opt/homebrew`).
 
 ## Contents
 
@@ -50,7 +50,7 @@ exec zsh
 What `install.sh` does (safe to re-run):
 
 1. Symlinks the configs into `$HOME` (`~/.zshrc`, `~/.config/ghostty/config`, `~/.config/jj/config.toml`, `~/.config/mise/config.toml`, `~/.config/starship.toml`, `~/.config/zsh/*.zsh`, `~/.config/devinfra/compose.yaml`, `~/.claude/CLAUDE.md`, `~/.claude/statusline.sh`). Anything in the way is moved to `<file>.bak-<timestamp>`.
-2. Moves aside `~/Library/Application Support/com.mitchellh.ghostty/config.ghostty`, which Ghostty would otherwise read after the XDG config and which silently overrides it.
+2. Moves aside `~/Library/Application Support/com.mitchellh.ghostty/config.ghostty`. Ghostty reads that file after the XDG config, so it would silently override it.
 3. Appends the mise shims line (`zsh/zprofile.snippet`) to `~/.zprofile` if missing, so non-interactive shells (scripts, IDE tasks) also see mise tools.
 4. Merges `claude/settings.fragment.json` into `~/.claude/settings.json`: keys from the fragment win (`env.JJ_EDITOR`, `statusLine`), permission `allow`/`deny` lists are unioned, everything else is kept. The old file is backed up first.
 5. Sets up your commit identity (next step).
@@ -67,9 +67,9 @@ On the first interactive run, if that file is missing, `install.sh` asks for:
 |---|---|
 | Full name | `Jane Doe` |
 | Default (work) email | `jane@work.example` |
-| Signing key | an SSH public key line (`ssh-ed25519 AAAA...`, signed through an agent) or a path to a `.pub` file (signed with `ssh-keygen`); empty means no signing |
-| Personal email (optional) | `jane@personal.example`; empty skips the personal identity |
-| Personal signing key (optional) | public key line or `.pub` path; empty means same key as the default |
+| Signing key | an SSH public key line (`ssh-ed25519 AAAA...`, signed through an agent) or a path to a `.pub` file (signed with `ssh-keygen`). Empty means no signing |
+| Personal email (optional) | `jane@personal.example`. Empty skips the personal identity |
+| Personal signing key (optional) | public key line or `.pub` path. Empty means the same key as the default |
 
 It then writes `conf.d/identity.toml` (mode 600). The personal email and key, if given, apply automatically to every repo under `~/repos/personal` (including its `<repo>-ws/` workspaces). A public key line uses the 1Password SSH agent's `op-ssh-sign` if 1Password is installed, otherwise `/usr/bin/ssh-keygen`.
 
@@ -143,7 +143,7 @@ cd ~/repos/my-service
 jj git init --colocate
 ```
 
-This adds a `.jj/` directory next to `.git/`. Both stay in sync: git tools, your IDE, CI, and `gh` keep working, and jj becomes the way you (and agents) write history. `git status` shows a detached HEAD from now on. That is normal.
+This adds a `.jj/` directory next to `.git/`. Both stay in sync: git tools, your IDE, CI, and `gh` keep working, and jj becomes the way you (and agents) write history. `git status` now shows a detached HEAD, which is normal.
 
 If you run `jw` in a plain git repo, it tells you to run `jj git init --colocate` first.
 
@@ -186,7 +186,7 @@ Always pass `-m`. Commands that open an editor will fail for agents on purpose (
 
 ## 3. Run parallel agents
 
-One agent equals one jj workspace. A workspace is a separate working directory with its own `@`, sharing the same repo (and it is a real git worktree, so git-based tools work inside it). Agents never trip over each other's files, and all their changes are visible from every workspace.
+Each agent gets its own jj workspace. A workspace is a separate working directory with its own `@`, sharing the same repo (and it is a real git worktree, so git-based tools work inside it). Agents never trip over each other's files, and all their changes are visible from every workspace.
 
 ### Layout
 
@@ -210,7 +210,7 @@ Slashes in names become dashes (`jw feat/login` creates `my-service-ws/feat-logi
 | `jw <name> [rev]` | Create the workspace (or reuse it if it exists) and `cd` into it |
 | `jws` | fzf picker over workspaces, with a log preview, then `cd` |
 | `jwl` | List workspaces (`jj workspace list`) |
-| `jwrm [name...]` | Remove workspaces; without arguments, an fzf multi-picker. `cd`s you back to the main checkout if you are inside one |
+| `jwrm [name...]` | Remove workspaces. Without arguments, opens an fzf multi-picker. `cd`s you back to the main checkout if you are inside one |
 | `jpush [bookmark]` | Push `work()` as a bookmark named after the workspace (see [section 4](#4-review-and-land-agent-work)) |
 
 `rev` defaults to `trunk()` (for example `main@origin`). If the repo has no remote trunk, it uses `@-` instead. Start from somewhere else with, for example, `jw hotfix release-1.4@origin` or `jw followup fix-retry@` (on top of another agent's working copy).
@@ -241,7 +241,10 @@ and drops you into Claude Code running in that directory.
 
 `_jw_setup` makes a fresh workspace runnable. It never blocks: a failing step prints a warning and continues.
 
-1. **Copy local env files** from the main checkout if they are not already present (untracked files are not in the new working copy): `.env*`, `mise.local.toml`, `.mise.local.toml` at the root; `.env*` and `mise.local.toml` one level down; `.env*` two levels down (monorepo packages). `node_modules` is skipped.
+1. **Copy local env files** from the main checkout if they are not already present (untracked files are not in the new working copy). `node_modules` is skipped.
+   - At the root: `.env*`, `mise.local.toml`, `.mise.local.toml`
+   - One level down: `.env*`, `mise.local.toml`
+   - Two levels down (monorepo packages): `.env*`
 2. **Run the project's setup**, first match wins:
    1. `just setup` if there is a `justfile` with a `setup` recipe.
    2. `mise run setup` if there is a `mise.toml` with a `setup` task.
@@ -249,7 +252,7 @@ and drops you into Claude Code running in that directory.
       - `pnpm install --frozen-lockfile`, `bun install --frozen-lockfile`, `yarn install --frozen-lockfile` or `npm ci` (first lockfile found)
       - `uv sync` (`uv.lock`), `poetry install` (`poetry.lock`), `go mod download` (`go.mod`), `bundle install` (`Gemfile.lock`)
 
-Projects with special needs should define a `setup` recipe or task; it replaces the automatic steps entirely:
+A project with special needs defines a `setup` recipe or task, which replaces the automatic steps entirely:
 
 ```just
 # justfile
@@ -317,7 +320,7 @@ jjui                           # interactive TUI: browse, diff, describe, squash
 
 `git dft` is the git equivalent (`git dft main...HEAD`).
 
-difftastic is opt-in on purpose: without colour (as agents read it) its side-by-side output has no `+`/`-` markers. Agents use `jj diff --git`; you use `jj dft`.
+difftastic is opt-in because agents read diffs without colour, and without colour its side-by-side output has no `+`/`-` markers. Agents use `jj diff --git`, you use `jj dft`.
 
 ### Tidy up before pushing
 
@@ -497,7 +500,7 @@ Agents may use these only against local or dev endpoints, and never run destruct
 
 ### The rule
 
-- **Global** (`Brewfile`, `mise/config.toml`): tools that behave the same in every project. These are inspection and debugging tools, `node` (LTS), `pnpm`, `gopls`, `dlv`, `gotestsum` and `govulncheck`.
+- **Global** (`Brewfile`, `mise/config.toml`): tools that behave the same in every project, such as inspection and debugging tools, `node` (LTS), `pnpm`, `gopls`, `dlv`, `gotestsum` and `govulncheck`.
 - **Per project**: anything whose version must match CI, such as linters, formatters, compilers and code generators. Put them in the project's `mise.toml`, `package.json`, or the `tool` directive in `go.mod`. Agents in that project then use exactly the version CI uses.
 - **Go** comes from the official installer. Each `go.mod` `toolchain` line selects the version.
 
@@ -562,10 +565,15 @@ Or let Claude Code write it: `claude mcp add --scope project <name> -- <command>
 
 Symlinked from `claude/CLAUDE.md`. It tells every agent to:
 
-- Use jj for all writes in repos with `.jj/` and only read-only git commands; always pass `-m`; never open editors or interactive UIs; use `jj undo` after a mistake; never push or move bookmarks unless asked; stay inside its workspace.
+- In repos with `.jj/`:
+  - use jj for all writes and only read-only git commands
+  - always pass `-m`, never open editors or interactive UIs
+  - use `jj undo` after a mistake
+  - never push or move bookmarks unless asked
+  - stay inside its workspace
 - Prefer `just` recipes and `mise run` tasks, and not install global toolchains.
 - Use the local infrastructure and inspection tools only against local or dev endpoints, with no destructive commands unless asked.
-- Never change authorship, add attribution trailers, or bypass signing; stop and report if signing fails; switch identity only via `sign-as` when asked.
+- Never change authorship, add attribution trailers, or bypass signing. Stop and report if signing fails. Switch identity only via `sign-as`, and only when asked.
 
 Project-specific rules go in the project's own `CLAUDE.md`.
 
@@ -589,7 +597,7 @@ Set in Claude Code's `env`. A jj command that would open an editor (`jj describe
 
 ### Launch from the project directory
 
-Claude Code inherits `PATH` from the shell that starts it, and mise sets `PATH` per directory. Always `cd` into the project first (`jwc` does this for you); the tool versions are then fixed for that session.
+Claude Code inherits `PATH` from the shell that starts it, and mise sets `PATH` per directory. Always `cd` into the project first (`jwc` does this for you). The tool versions stay fixed for that session.
 
 ---
 
@@ -644,16 +652,16 @@ New packages in the `Brewfile` need `brew bundle`. New global mise tools need `m
 jj workspace update-stale
 ```
 
-**Workspace directory deleted by hand.** Run `jw <name>` again; it forgets the stale entry, prunes the git worktree and recreates the workspace. To drop it entirely: `jj workspace forget <name>`, then `git worktree prune`.
+**Workspace directory deleted by hand.** Run `jw <name>` again. It forgets the stale entry, prunes the git worktree and recreates the workspace. To drop it entirely: `jj workspace forget <name>`, then `git worktree prune`.
 
 **`jw`: "git repo without jj"**. Run `jj git init --colocate` in the main checkout.
 
-**Setup failed in a new workspace.** Warnings start with `setup step failed:`; the workspace is still created. Fix the cause and run `just setup` / `mise run setup` / the install command in the workspace yourself.
+**Setup failed in a new workspace.** Warnings start with `setup step failed:`, and the workspace is still created. Fix the cause, then run `just setup`, `mise run setup` or the install command in the workspace yourself.
 
 **Ghostty ignores config changes.**
 
 1. `ghostty +validate-config` to find typos.
-2. Check that `~/Library/Application Support/com.mitchellh.ghostty/config.ghostty` does not exist (it overrides the XDG config; `install.sh` moves it aside).
+2. Check that `~/Library/Application Support/com.mitchellh.ghostty/config.ghostty` does not exist (it overrides the XDG config, and `install.sh` moves it aside).
 3. Reload with `cmd+shift+,`, or restart Ghostty. Some settings, such as `macos-option-as-alt`, only apply to new windows.
 4. The quick terminal needs Accessibility permission.
 

@@ -40,8 +40,9 @@ pickers() {
         envs+=("$var=V_$var")
         expected=${expected//<$var>/V_$var}
       done
-      out=$(env "${envs[@]}" perl -e 'alarm 10; exec @ARGV' navi --path "$CHEATS" --print --best-match --query "${desc:0:30}" </dev/null 2>&1) || {
-        echo "navi failed for '$desc' in ${file##*/}: $out"; return 1; }
+      # stdout only: without a terminal navi warns on stderr (stty), which is noise here.
+      out=$(env "${envs[@]}" perl -e 'alarm 10; exec @ARGV' navi --path "$CHEATS" --print --best-match --query "${desc:0:30}" </dev/null 2>"$BATS_TEST_TMPDIR/navi.err") || {
+        echo "navi failed for '$desc' in ${file##*/}: $(cat "$BATS_TEST_TMPDIR/navi.err")"; return 1; }
       [ "$out" = "$expected" ] || {
         echo "${file##*/}: '$desc'"; echo "expected: $expected"; echo "got:      $out"; return 1; }
     done < <(entries "$file")

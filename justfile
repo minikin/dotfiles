@@ -51,12 +51,15 @@ drift:
     grep '^link ' install.sh | while read -r _ src dest _; do
       dest=${dest//\"/}
       dest=${dest/\$HOME/$HOME}
+      target=""
       if [[ $dest -ef $src ]]; then status=linked
+      # Checked before cmp: a link into another clone or jj workspace has the same content.
+      elif [[ -L $dest ]]; then status=elsewhere; target=" -> $(readlink "$dest")"
       elif [[ -f $dest ]] && cmp -s "$dest" "$src"; then status="same (copy)"
-      elif [[ -e $dest || -L $dest ]]; then status=DIFFERS
+      elif [[ -e $dest ]]; then status=DIFFERS
       else status=missing
       fi
-      printf '%-12s %s\n' "$status" "${dest/#$HOME/~}"
+      printf '%-12s %s%s\n' "$status" "${dest/#$HOME/~}" "$target"
     done
 
 # Start the local Redis / Kafka / Jaeger stack and wait until healthy

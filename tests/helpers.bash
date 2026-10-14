@@ -31,6 +31,10 @@ fake_home() {
   export DOCKER_CONFIG="$HOME/.docker"
   unset DOTFILES_NAME DOTFILES_EMAIL DOTFILES_SIGNING_KEY DOTFILES_PERSONAL_EMAIL DOTFILES_PERSONAL_KEY DOTFILES_PERSONAL_DIR DOTFILES_DIR
   unset JW_NO_SETUP
+  # mise shims resolve tool versions from configs found via cwd (this repo's mise/config.toml)
+  # and may hit the network, printing warnings into captured output.
+  PATH=$(tr ':' '\n' <<<"$PATH" | grep -v '/mise/shims$' | paste -sd: -)
+  export PATH
 }
 
 # copy_repo: copy the dotfiles tree (without VCS dirs) to $BATS_TEST_TMPDIR/dotfiles and set

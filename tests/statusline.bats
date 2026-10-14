@@ -64,3 +64,23 @@ op_count() { jj -R "$1" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' 
   [ "$status" -eq 0 ]
   [[ $output == *"· Opus" ]]
 }
+
+@test "statusline: plain git repo (no jj) shows git:<branch>" {
+  plain="$HOME/src/plain"
+  git init --quiet -b feature-x "$plain"
+  git -C "$plain" commit --quiet --allow-empty -m init
+  statusline "$plain"
+  [ "$status" -eq 0 ]
+  echo "output: $output"
+  [ "$output" = "~/src/plain · git:feature-x · Opus" ]
+}
+
+@test "statusline: plain git repo on a detached HEAD prints no git segment" {
+  plain="$HOME/src/plain"
+  git init --quiet -b main "$plain"
+  git -C "$plain" commit --quiet --allow-empty -m init
+  git -C "$plain" checkout --quiet --detach
+  statusline "$plain"
+  [ "$status" -eq 0 ]
+  [ "$output" = "~/src/plain · Opus" ]
+}

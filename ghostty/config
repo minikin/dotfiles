@@ -1,0 +1,48 @@
+# ~/.config/ghostty/config
+
+# --- Look ---
+font-family = JetBrainsMono Nerd Font Mono
+font-size = 13
+theme = dark:Catppuccin Mocha,light:Catppuccin Latte
+window-padding-x = 8
+window-padding-y = 6
+window-padding-balance = true
+unfocused-split-opacity = 0.6
+
+# --- Agent output: long sessions, big diffs ---
+scrollback-limit = 100000000
+
+# --- Know when an agent needs you ---
+desktop-notifications = true
+bell-features = system,attention,title,border
+notify-on-command-finish = unfocused
+notify-on-command-finish-after = 30s
+notify-on-command-finish-action = notify,bell
+
+# --- Keyboard: left Option as Meta for agent TUIs ---
+macos-option-as-alt = left
+
+# --- Shell integration ---
+shell-integration-features = cursor,sudo,title,ssh-env,ssh-terminfo,path
+
+# --- Sessions ---
+window-save-state = always
+confirm-close-surface = true
+mouse-hide-while-typing = true
+
+# --- Quick terminal ---
+keybind = global:cmd+grave_accent=toggle_quick_terminal
+quick-terminal-position = top
+
+# --- Splits for parallel agents ---
+keybind = cmd+d=new_split:right
+keybind = cmd+shift+d=new_split:down
+keybind = cmd+alt+h=goto_split:left
+keybind = cmd+alt+l=goto_split:right
+keybind = cmd+alt+k=goto_split:up
+keybind = cmd+alt+j=goto_split:down
+keybind = cmd+shift+enter=toggle_split_zoom
+keybind = cmd+shift+e=equalize_splits
+
+# --- Dump screen to a file and paste its path (hand output to an agent) ---
+keybind = cmd+shift+s=write_screen_file:paste,plain

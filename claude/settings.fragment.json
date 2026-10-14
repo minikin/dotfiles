@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(jj st)",
+      "Bash(jj st *)",
+      "Bash(jj status)",
+      "Bash(jj status *)",
+      "Bash(jj log)",
+      "Bash(jj log *)",
+      "Bash(jj diff)",
+      "Bash(jj diff *)",
+      "Bash(jj show)",
+      "Bash(jj show *)",
+      "Bash(jj op log)",
+      "Bash(jj op log *)",
+      "Bash(jj evolog)",
+      "Bash(jj evolog *)",
+      "Bash(jj workspace list)",
+      "Bash(jj workspace list *)",
+      "Bash(jj bookmark list)",
+      "Bash(jj bookmark list *)",
+      "Bash(jj dft)",
+      "Bash(jj dft *)"
+    ],
+    "deny": [
+      "Bash(jj *--tool*)",
+      "Bash(jj *--config*)"
+    ]
+  },
+  "env": {
+    "JJ_EDITOR": "false"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh"
+  }
+}

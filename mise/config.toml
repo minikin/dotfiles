@@ -1,0 +1,13 @@
+# Global mise tools: inspection/dev tools that behave the same in every project.
+# Project-specific tools that must match CI (golangci-lint, biome, typescript, buf...)
+# belong in each project's mise.toml / package.json / go.mod `tool` directive instead.
+# Go itself is NOT managed here: it comes from the official installer (/usr/local/go),
+# and each project's go.mod `toolchain` line picks the version.
+
+[tools]
+node = "lts"
+pnpm = "latest"
+"go:golang.org/x/tools/gopls" = "latest"
+"go:github.com/go-delve/delve/cmd/dlv" = "latest"
+"go:gotest.tools/gotestsum" = "latest"
+"go:golang.org/x/vuln/cmd/govulncheck" = "latest"

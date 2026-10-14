@@ -1,0 +1,26 @@
+#:schema https://docs.jj-vcs.dev/latest/config-schema.json
+
+[ui]
+default-command = "log"      # bare `jj` shows the log
+
+[revset-aliases]
+# mutable() so a fresh workspace never "tugs" trunk (main) onto agent work
+"closest_bookmark(to)" = "heads(::to & bookmarks() & mutable())"
+# Latest non-empty change in your stack (where an agent's work actually is)
+"work()" = "heads(::@ & mutable() & ~empty())"
+
+[aliases]
+# Move the nearest bookmark up to your latest work (before pushing)
+tug = ["bookmark", "move", "--from", "closest_bookmark(@)", "--to", "work()"]
+# Compact log of just your stack on top of trunk
+stack = ["log", "-r", "trunk()::@ | @::"]
+dft = ["diff", "--tool", "difft"]
+dshow = ["show", "--tool", "difft"]
+
+# difftastic: structural diffs for humans. Opt-in (`jj dft`, `jj dshow`) so agents
+# keep getting normal diffs — difft's side-by-side output is ambiguous without color.
+[merge-tools.difft]
+diff-args = ["--color=always", "$left", "$right"]
+
+# Identity and commit signing live in ~/.config/jj/conf.d/identity.toml (local, not in this repo).
+# install.sh creates it interactively; template: jj/identity.example.toml

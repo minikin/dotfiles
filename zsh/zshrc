@@ -1,0 +1,33 @@
+ZSH_THEME=""
+
+# Hardcoded instead of $(brew --prefix) to keep new shells/splits fast
+HOMEBREW_PREFIX=/opt/homebrew
+typeset -U path
+path=($HOMEBREW_PREFIX/bin $HOMEBREW_PREFIX/sbin $path)
+
+# Completions (brew-installed + jj dynamic completion for bookmarks/revisions)
+FPATH=$HOMEBREW_PREFIX/share/zsh/site-functions:$FPATH
+autoload -Uz compinit && compinit -C
+source <(COMPLETE=zsh jj)
+
+source $HOMEBREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+
+# fzf: Ctrl-T files, Ctrl-R history, Alt-C cd into dir
+export FZF_DEFAULT_OPTS="--height 40% --layout reverse --border"
+source <(fzf --zsh)
+
+eval "$(starship init zsh)"
+
+# zoxide: `z <dir>` to jump, `zi` for interactive picker (uses fzf)
+eval "$(zoxide init zsh)"
+
+# mise: per-directory tool versions + env vars (mise.toml).
+# Claude Code inherits PATH from the shell that launches it, so `cd` (or jwc) first.
+eval "$(mise activate zsh)"
+
+source ~/.config/zsh/jj.zsh
+source ~/.config/zsh/sign.zsh
+source ~/.config/zsh/infra.zsh
+
+# Must be sourced last
+source $HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh

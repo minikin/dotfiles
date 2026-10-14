@@ -1,0 +1,5 @@
+# mise shims for non-interactive login shells (scripts, IDE tasks);
+# interactive shells get full `mise activate` from .zshrc
+typeset -U path
+path=(/opt/homebrew/bin /opt/homebrew/sbin $path)
+eval "$(/opt/homebrew/bin/mise activate zsh --shims)"

@@ -1,0 +1,26 @@
+# Local identity + commit signing for jj. Copy to ~/.config/jj/conf.d/identity.toml
+# (install.sh does this interactively). This file is NOT tracked in the repo.
+
+[user]
+name = "Your Name"
+email = "you@work.example"
+
+# Sign every commit you author (including agent-made ones). Remove this section to disable.
+[signing]
+backend = "ssh"
+behavior = "own"
+# Either an SSH public key line (signed via an agent, e.g. 1Password) ...
+key = "ssh-ed25519 AAAA...your-work-key"
+backends.ssh.program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+# ... or a path to a .pub file with program "/usr/bin/ssh-keygen".
+backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
+
+# Optional: personal identity for every repo under ~/repos/personal (and its <repo>-ws workspaces).
+# Override any other repo with `sign-as personal`.
+[[--scope]]
+--when.repositories = ["~/repos/personal"]
+[--scope.user]
+email = "you@personal.example"
+[--scope.signing]
+key = "~/.ssh/id_ed25519_personal.pub"
+backends.ssh.program = "/usr/bin/ssh-keygen"

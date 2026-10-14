@@ -7,12 +7,13 @@ macOS (Apple Silicon) dotfiles for running several AI coding agents in parallel,
 ## Commands
 
 ```sh
-just check                       # lint + test + secrets, the same as CI. Run before every commit
+just check                       # lint + test + secrets + commits, the same as CI. Run before every commit
 just lint                        # shellcheck, zsh -n, docker compose config, lychee --offline on all *.md
 just test                        # bats tests
 bats tests/jj.bats               # one suite
 bats tests/jj.bats -f 'jpush'    # tests whose name matches a regex
 just secrets                     # scripts/check-secrets.sh + gitleaks
+just commits                     # Conventional Commits check on origin/main..HEAD
 just drift                       # read-only: live files vs repo copies
 ./install.sh --dry-run           # never run install.sh for real unless asked: it writes to the real $HOME
 ```

@@ -84,15 +84,21 @@ Ghostty split.
 - **`SETUP_PROMPT.md`**, a prompt that has Claude Code install and verify
   the setup on a new Mac.
 - **justfile**. `just check` runs lint (shellcheck, `zsh -n`,
-  `docker compose config`, an offline link check), the bats tests and the
-  secret scan. `just drift` compares each live file with the repo copy.
-- **Tests** (`tests/`). 49 bats tests for `install.sh` (including one
-  identity only, a folder outside `$HOME` and the machine settings file), the
-  workspace commands, the status line, the navi workflows and their trust
-  rules, and the Compose file, each in a fake `HOME`
+  `docker compose config`, an offline link check), the bats tests, the
+  secret scan and a Conventional Commits check of the commits on top of
+  `origin/main`. `just drift` compares each live file with the repo copy and
+  reports a link into another checkout as `elsewhere`, with its target.
+- **Tests** (`tests/`). 81 bats tests for `install.sh` (including one
+  identity only, a folder outside `$HOME`, a symlinked folder, rejected keys
+  and the machine settings file), the workspace commands, `sign-as`, `infra`,
+  `just drift`, the commit check, the status line, the navi workflows and
+  their trust rules, and the Compose file, each in a fake `HOME`
   with jj and git reading only test config.
-- **CI** (`.github/workflows/ci.yml`). `just check` on macOS, and a gitleaks
-  scan of the full git history on Linux.
+- **CI** (`.github/workflows/ci.yml`). `just check` on macOS, with the commit
+  check limited to the pushed or pull request commits, and a gitleaks scan of
+  the full git history on Linux.
+- `CLAUDE.md` with the commands, architecture and rules for Claude Code
+  sessions in this repo.
 - Documentation in `docs/`: introduction, install, getting started,
   guides, reference, explanation and troubleshooting. `CONTRIBUTING.md` and
   issue forms for bugs and feature requests.
@@ -102,6 +108,11 @@ Ghostty split.
 - The command cheatsheet moved from `CHEATSHEET.md` to
   [docs/reference/cheatsheet.md](docs/reference/cheatsheet.md), and the
   usage guide in `docs/GUIDE.md` is split into the pages under `docs/`.
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/),
+  with the area as the scope, such as `fix(install):`.
+- `jj/identity.example.toml` ships with its `[signing]` and second-identity
+  blocks commented out. Copied as is, it sets only a placeholder `[user]`,
+  so jj keeps working until you fill it in.
 
 ### Fixed
 
@@ -120,8 +131,32 @@ Ghostty split.
 - `jpush` refuses to push to a trunk bookmark or an immutable one, and
   `closest_bookmark()` considers only mutable bookmarks, so `jj tug` never
   moves `main` onto agent work.
+- `install.sh` sets git's global identity from the answers of the same run,
+  or from jj outside any repo, so a clone inside the second identity's folder
+  no longer writes that identity into `~/.gitconfig`.
+- `install.sh` stores the second identity's folder as its physical path, so
+  jj and git apply it when the folder is a symlink.
+- `install.sh` refuses an empty email given through `DOTFILES_EMAIL` and asks
+  again for an empty name or email at the prompt.
+- `sign-as personal` unsets the per-repo key and signer when the second
+  identity has no key of its own, instead of setting them to empty strings,
+  which broke signing in that repo.
+- `jwrm` compares physical paths, so run from inside the workspace through a
+  symlink it moves out before removing the directory.
+- `jpush` refuses when `@` is the working copy of several workspaces, instead
+  of pushing their names joined, such as `featfix`.
+- `jw`, `jws` and `jwrm` query jj with `--ignore-working-copy`.
+- `infra` with no arguments runs `ps`, as documented.
 
 ### Security
+
+- `install.sh` accepts only a single public-key line as a signing key, so a
+  private key file can never be copied into `allowed_signers`, and creates
+  that file with mode 600.
+- With no main signing key, a second identity's key no longer becomes the
+  main key for every repo.
+- `.gitignore` keeps local agent and tool state (`.claude/`, `.wiz/`,
+  `.codex/`, `.mdkb/`) and `*.bak-*` backups out of the public repo.
 
 - No identity in the repo. Names, emails and signing keys live in
   `~/.config/jj/conf.d/identity.toml` (mode 600) and the local git config.

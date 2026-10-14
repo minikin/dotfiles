@@ -43,14 +43,16 @@ just check       # lint, tests and the secret scan, the same as CI
 | `just lint`    | `shellcheck` on `install.sh`, `claude/statusline.sh` and `scripts/*.sh`, `zsh -n` on every zsh file, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, and `lychee --offline` on every Markdown file in the repo. |
 | `just test`    | `bats tests`.                                                                             |
 | `just secrets` | `scripts/check-secrets.sh`, then `gitleaks dir . --config .gitleaks.toml` when gitleaks is installed. |
-| `just check`   | All three.                                                                                |
+| `just commits` | `scripts/check-commits.sh`: every non-merge commit subject in `origin/main..HEAD` (or the range given, `just commits <range>`) follows Conventional Commits. |
+| `just check`   | All four.                                                                                 |
 | `just drift`   | Read-only: compares each file `install.sh` links with the repo copy. Not part of `check`. |
 
 CI runs two jobs on every push to `main` and every pull request:
 
 - `check` on `macos-latest`: installs `git just bats-core shellcheck jq
   lychee gitleaks mise navi` with Homebrew, installs jj 0.46.0 from its GitHub
-  release with a pinned checksum, and runs `just check`.
+  release with a pinned checksum, and runs `just check`. The commit check
+  covers the pull request's commits, or the commits a push added.
 - `history-secrets` on `ubuntu-latest`: downloads gitleaks 8.30.1, verifies
   its checksum, and scans every commit reachable from the checked-out ref.
   A secret removed in a later commit still fails it, so rewrite the history
@@ -63,7 +65,7 @@ not.
 
 The tests are bats suites in `tests/`, one per area: `install.bats`,
 `jj.bats`, `sign.bats`, `drift.bats`, `statusline.bats`, `infra.bats`,
-`navi.bats`. Each test calls the helpers in
+`navi.bats`, `commits.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 
@@ -202,6 +204,7 @@ committed.
 | `Brewfile`                 | Every package, including the tools the checks need            |
 | `justfile`                 | Every check, local and CI                                     |
 | `scripts/check-secrets.sh` | The personal-data scan                                        |
+| `scripts/check-commits.sh` | The Conventional Commits check                                |
 | `.gitleaks.toml`           | The same rules for gitleaks and the history scan              |
 | `tests/`                   | bats suites and `helpers.bash`                                |
 | `docs/`                    | The book: guides, reference, explanation                      |

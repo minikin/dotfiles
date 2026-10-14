@@ -133,8 +133,9 @@ The `justfile` holds the checks, and `brew bundle` installs what they need
 (bats-core, shellcheck, gitleaks, lychee, actionlint). `just lint` runs
 shellcheck, `zsh -n`, `docker compose config` when Docker is installed and an
 offline link check. `just test` runs the bats tests in `tests/`, and
-`just secrets` scans for secrets and personal data. `just check` runs all
-three, and CI runs it on every push to `main` and every pull request.
+`just secrets` scans for secrets and personal data, and `just commits` checks
+that commit messages follow Conventional Commits. `just check` runs all four,
+and CI runs them on every push to `main` and every pull request.
 
 `just drift` compares each file `install.sh` links with the repo copy and
 changes nothing:

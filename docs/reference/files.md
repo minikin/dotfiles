@@ -52,6 +52,7 @@ These stay in the repo and are not installed.
 | -------------------------- | ---------------------------------------------------------------------------------------------- |
 | `install.sh`               | The installer. See [install.sh](install-sh.md).                                               |
 | `justfile`                 | Recipes: `install`, `lint`, `test`, `secrets`, `check` (lint, test and secrets), `drift`, `infra-up`, `infra-down`. |
+| `scripts/check-commits.sh` | Checks that every non-merge commit subject in a git range (default `origin/main..HEAD`) follows Conventional Commits with the types in `CONTRIBUTING.md`. Run by `just commits`. |
 | `scripts/check-secrets.sh` | Scans tracked and untracked, non-ignored files for email addresses outside example domains, absolute home paths, private key headers, full SSH public keys, 1Password references and entries from the local denylist. Exits 1 on any hit. |
 | `.gitleaks.toml`           | gitleaks default rules plus `personal-email`, `home-path`, `ssh-public-key` and `onepassword-reference`. Ignores `.jj/`. |
 | `tests/helpers.bash`       | Shared bats helpers: fake `HOME`, a copy of the repo to install into, throwaway jj repos.      |
@@ -59,10 +60,11 @@ These stay in the repo and are not installed.
 | `tests/jj.bats`            | `jw`, `jwrm`, `jpush` and `jj tug` in temporary jj repos.                                     |
 | `tests/statusline.bats`    | `claude/statusline.sh` inside and outside jj, empty input, no op log writes.                  |
 | `tests/sign.bats`          | `sign-as personal`, `sign-as work` and `sign-as status` in a temporary jj repo, and failures without `personal.gitconfig` or outside a repo. |
+| `tests/commits.bats`       | `scripts/check-commits.sh`: conventional subjects pass, other subjects fail and are named, commits before the range and merge commits are skipped. |
 | `tests/drift.bats`         | `just drift`: `linked`, `elsewhere` for a link into another clone or a dangling link, `same (copy)`, `DIFFERS` and `missing`, and nothing in `HOME` changes. |
 | `tests/infra.bats`         | `infra/compose.yaml` is valid and every port binds to `127.0.0.1` or `[::1]`.                 |
 | `tests/navi.bats`          | `navi/*.cheat` and `zsh/navi.zsh`: every entry renders, unique descriptions, no zsh functions or working-copy snapshots in pickers, the `[LOCAL ONLY]` and `[PERSONAL]` labels, column-1 insertion, and the `.navi/` trust rules, with and without `DOTFILES_PERSONAL_DIR`. |
-| `.github/workflows/ci.yml` | CI. Job `check` on `macos-latest` runs `just check`. Job `history-secrets` on `ubuntu-latest` runs gitleaks 8.30.1 over the full git history. |
+| `.github/workflows/ci.yml` | CI. Job `check` on `macos-latest` runs `just check`, with the commit check limited to the pushed or pull request commits. Job `history-secrets` on `ubuntu-latest` runs gitleaks 8.30.1 over the full git history. |
 | `.github/ISSUE_TEMPLATE/bug_report.yml` | Bug report form.                                                                  |
 | `.github/ISSUE_TEMPLATE/feature_request.yml` | Feature request form.                                                        |
 

@@ -62,7 +62,7 @@ lives: the main one, or the second one if the clone is inside the second
 identity's folder. Run `sign-as status` to check, or `sign-as personal` once
 to switch this repo.
 
-`just check` runs `just lint`, `just test` and `just secrets`, the same steps
+`just check` runs `just lint`, `just test`, `just secrets` and `just commits`, the same steps
 as the `check` job in CI:
 
 - `lint`: `shellcheck` on `install.sh`, `claude/statusline.sh` and
@@ -72,6 +72,8 @@ as the `check` job in CI:
 - `test`: `bats tests`
 - `secrets`: `scripts/check-secrets.sh`, then `gitleaks dir .` when gitleaks
   is installed
+- `commits`: `scripts/check-commits.sh`, which checks that every commit in
+  `origin/main..HEAD` follows Conventional Commits
 
 Everything it needs is in the `Brewfile`.
 

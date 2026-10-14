@@ -30,8 +30,9 @@ jobs:
         run: |
           bash --version | head -1
           for t in git just bats shellcheck jj jq lychee gitleaks mise zsh; do
-            printf '%-10s %s\n' "$t" "$("$t" --version 2>&1 | head -1)"
+            printf '%-10s %s (%s)\n' "$t" "$("$t" --version 2>&1 | head -1)" "$(command -v "$t")"
           done
+          echo "::notice title=versions::$(git --version) at $(command -v git), $(jj --version)"
 
       # `just check` = lint + test + secrets. Separate steps so a failure names
       # its stage, and failing output becomes annotations readable without login.
@@ -45,8 +46,10 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          bats --formatter tap tests 2>&1 | tee test.log || {
-            grep -A12 '^not ok' test.log | head -60 | sed 's/^/::error title=bats::/'
+          bats --print-output-on-failure --formatter tap tests 2>&1 | tee test.log || {
+            # One annotation (GitHub keeps at most 10 per step), newlines as %0A.
+            msg=$(sed -n '/^not ok/,/^ok /p' test.log | head -120 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=bats failures::${msg}"
             exit 1
           }
 

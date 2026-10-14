@@ -29,5 +29,8 @@ source ~/.config/zsh/jj.zsh
 source ~/.config/zsh/sign.zsh
 source ~/.config/zsh/infra.zsh
 
+# navi: Ctrl-G opens saved workflows (navi/*.cheat)
+source ~/.config/zsh/navi.zsh
+
 # Must be sourced last
 source $HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh

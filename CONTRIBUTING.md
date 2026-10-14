@@ -61,7 +61,7 @@ not.
 ## Tests
 
 The tests are bats suites in `tests/`, one per area: `install.bats`,
-`jj.bats`, `statusline.bats`, `infra.bats`. Each test calls the helpers in
+`jj.bats`, `statusline.bats`, `infra.bats`, `navi.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 
@@ -92,6 +92,35 @@ The rules for a new test:
 
 Try a shell function by hand the same way: in a `mktemp -d` directory with a
 throwaway `jj git init --colocate` repo, never in a real one.
+
+## Adding a workflow
+
+A saved workflow is an entry in one of the `navi/*.cheat` files: a
+`# description` line, the command, and a `$ name:` picker line for each
+`<name>` argument that should offer choices. [Saved
+workflows](docs/guides/workflows.md#write-your-own) has the format.
+`tests/navi.bats` enforces these rules:
+
+- The description is unique across all cheats. Keep it short, with the
+  words you would search for first.
+- Pickers run in bash, so they never call `jw`, `jwc`, `jws`, `jwl`, `jwrm`,
+  `jpush`, `infra`, `sign-as`, `z` or `zi`. The command line may.
+- Every `jj` picker passes `--ignore-working-copy`.
+- An infra entry that deletes topics, flushes Redis or runs `infra reset`
+  starts with `[LOCAL ONLY]`, and every `kcat`, `redis-cli` and Kafka
+  command targets `localhost`.
+- An entry that pushes straight to main starts with `[PERSONAL]`.
+
+Run the suite before you push:
+
+```sh
+bats tests/navi.bats
+```
+
+The suite skips when `navi` is not installed, and the column test also
+needs `expect`. Pickers
+that call Docker, `kubectl`, `gh`, `go list` or `redis-cli` are skipped, so
+try those by hand once.
 
 ## Docs
 
@@ -161,7 +190,7 @@ committed.
 | Path                       | What it is                                                    |
 | -------------------------- | ------------------------------------------------------------- |
 | `install.sh`               | The installer: links, settings merge, identity                |
-| `ghostty/`, `zsh/`, `starship/`, `jj/`, `mise/`, `claude/`, `infra/` | The configs it installs |
+| `ghostty/`, `zsh/`, `starship/`, `jj/`, `mise/`, `claude/`, `infra/`, `navi/` | The configs it installs |
 | `Brewfile`                 | Every package, including the tools the checks need            |
 | `justfile`                 | Every check, local and CI                                     |
 | `scripts/check-secrets.sh` | The personal-data scan                                        |

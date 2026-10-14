@@ -1,0 +1,24 @@
+% agents, workspaces
+
+# Create N agent workspaces (agent-1..N) and stay where you are
+for n in $(seq 1 <count>); do (jw "agent-$n"); done
+
+# Start Claude Code in a new workspace
+jwc <name>
+
+# Switch to an agent workspace
+cd <workspace_dir>
+
+# Push the current workspace as a bookmark and open a pull request
+jpush <bookmark> && gh pr create --head <bookmark> --fill
+
+# Remove an agent workspace (its changes stay in the repo)
+jwrm <workspace>
+
+# List workspaces with their working-copy change
+jj --ignore-working-copy workspace list
+
+$ count: printf '2\n3\n4\n5\n'
+$ workspace: jj --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default
+$ workspace_dir: jj --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"' --- --column 2 --delimiter '\t'
+$ bookmark: jj --ignore-working-copy log --no-graph -r @ -T 'self.working_copies().map(|w| w.name()).join("") ++ "\n"' | grep -vx default

@@ -8,6 +8,7 @@ brew "zsh-autosuggestions"
 brew "zsh-syntax-highlighting"
 brew "fzf"
 brew "zoxide"
+brew "navi"               # Ctrl-G: saved workflows from navi/*.cheat
 brew "jq"
 brew "ripgrep"
 

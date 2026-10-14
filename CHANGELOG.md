@@ -44,6 +44,15 @@ Ghostty split.
 - **Local infrastructure** (`infra/compose.yaml`, `zsh/infra.zsh`). Redis 8,
   Apache Kafka 4.1.0 in KRaft mode, kafka-ui and Jaeger with OTLP, driven by
   `infra up`, `down`, `reset`, `ps`, `logs` and `infra kafka <script>`.
+- **Saved workflows** (`navi/`, `zsh/navi.zsh`). `Ctrl-G` opens a navi
+  palette of saved commands for agent workspaces, jj, local infra,
+  Kubernetes, Go and TypeScript, and the dotfiles themselves. Arguments
+  come from live pickers, and the command is inserted into the prompt, not
+  run. Destructive infra entries are labelled `[LOCAL ONLY]` and a direct
+  push to main `[PERSONAL]`. A repo's own `.navi/` folder loads only when the
+  repo is under `~/repos/personal` or trusted with `navi-trust`.
+  `tests/navi.bats` checks every entry. See
+  [Saved workflows](docs/guides/workflows.md).
 - **Commit identity** (`install.sh`, `zsh/sign.zsh`). On the first run
   `install.sh` asks for a name, a work email and signing key, and an
   optional personal email and key for every repo under `~/repos/personal`.

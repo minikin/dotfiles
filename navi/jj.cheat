@@ -1,0 +1,43 @@
+% jj
+
+# Show my stack on top of trunk
+jj stack
+
+# Show a change as a structural diff (difftastic)
+jj dshow <change>
+
+# Describe a change
+jj describe -r <change> -m "<message>"
+
+# Rebase my stack onto the latest trunk
+jj git fetch && jj rebase -b @ -o 'trunk()'
+
+# Squash the working copy into its parent
+jj squash
+
+# Move the nearest bookmark up to my latest work
+jj tug
+
+# Abandon a change
+jj abandon <change>
+
+# Undo the last jj operation
+jj undo
+
+# Show the last 20 operations
+jj op log --limit 20
+
+# Restore the repo to an earlier operation
+jj op restore <operation>
+
+# Check which identity and signing key this repo uses
+sign-as status
+
+# Show the signature status of a change
+jj --ignore-working-copy log --no-graph -r <change> -T 'if(signature, signature.status() ++ " " ++ signature.display(), "unsigned") ++ "\n"'
+
+# [PERSONAL] Land a change on main and push it directly, no pull request
+jj bookmark set main -r <change> && jj git push -b main
+
+$ change: jj --ignore-working-copy log --no-graph -r 'mutable()' -T 'change_id.shortest(8) ++ "\t" ++ coalesce(description.first_line(), "(no description)") ++ "\n"' --- --column 1 --delimiter '\t'
+$ operation: jj --ignore-working-copy op log --no-graph --limit 30 -T 'id.short() ++ "\t" ++ description ++ "\n"' --- --column 1 --delimiter '\t'

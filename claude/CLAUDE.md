@@ -2,6 +2,12 @@
 
 Always respond in English, even when I write or dictate in Russian or Ukrainian. Never reply in Russian or Ukrainian. Write all code, docs and commit messages in English too.
 
+# Code comments
+
+- Add a comment only when it says something the code cannot: why a non-obvious choice was made, a constraint or spec it follows, or a pitfall a reader would otherwise reintroduce.
+- Never add comments that restate what the code does, repeat a function or test name, or narrate the change. Remove such comments when you notice you added them.
+- Project-mandated records (changelog entries, ledger lines, required doc headers) are not code comments; keep following the project's convention for them.
+
 # Version control: jj (Jujutsu)
 
 Repos with a `.jj/` directory are managed with jj, colocated with git. In those repos:

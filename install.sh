@@ -38,6 +38,8 @@ link zsh/zshrc                "$HOME/.zshrc"
 link zsh/jj.zsh               "$HOME/.config/zsh/jj.zsh"
 link zsh/sign.zsh             "$HOME/.config/zsh/sign.zsh"
 link zsh/infra.zsh            "$HOME/.config/zsh/infra.zsh"
+link zsh/navi.zsh             "$HOME/.config/zsh/navi.zsh"
+link navi                     "$HOME/.local/share/navi/cheats/dotfiles"
 link infra/compose.yaml       "$HOME/.config/devinfra/compose.yaml"
 link starship/starship.toml   "$HOME/.config/starship.toml"
 link jj/config.toml           "$HOME/.config/jj/config.toml"   # identity lives in conf.d/identity.toml (below)

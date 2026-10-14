@@ -144,3 +144,34 @@ host and `kafka:19092` inside the Compose network, so `kcat` on the host and
 kafka-ui in a container both reach it. Agents get the same endpoints, and
 `claude/CLAUDE.md` limits their tools to local or dev endpoints and rules out
 `infra reset`, `FLUSHALL` and topic deletion unless you ask.
+
+## Why navi for saved workflows
+
+The commands worth saving are the ones you run once a week and get wrong:
+a Kafka consumer-lag query, a port-forward, a signature check on one
+change. A shell alias hides the command, and history search finds it only
+if you ran it recently with the same arguments. navi keeps each command
+readable in a plain `.cheat` file, turns its arguments into fzf pickers fed
+by live data, and its zsh widget writes the result into the prompt. It is
+one Homebrew formula and needs no app or account.
+
+`Ctrl-G` inserts the command and never runs it. You see the namespace, the
+topic or the change ID before pressing Enter, which matters most for the
+`[LOCAL ONLY]` and `[PERSONAL]` entries. Inserting into the prompt also
+puts the command in your zsh, where `jw`, `jpush`, `infra` and `sign-as`
+exist.
+
+The pickers are another matter. navi runs every `$ var:` line in bash, which
+has none of those zsh functions, so the pickers call `jj`, `kubectl`, `gh`
+and `docker compose ... exec -T` directly. Every `jj` picker passes
+`--ignore-working-copy`. Without it, opening the palette in a workspace
+would snapshot the working copy, write an op log entry and, with signing
+on, could ask 1Password for a signature, all to list some change IDs.
+
+A repo's own `.navi/` folder is code that runs as soon as you open the
+palette in it, because navi evaluates the pickers to build the lists. A
+cloned repo could put anything there. So `zsh/navi.zsh` loads it only for a
+trusted repo, the same deal as `mise trust` and `direnv allow`: your own
+repos under `~/repos/personal` are trusted, and any other repo needs one
+`navi-trust`. Trust is recorded for the main checkout, so new jj workspaces
+inherit it, as they do for mise.

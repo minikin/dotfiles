@@ -58,6 +58,10 @@ when it ends.
 | `Ctrl-T`       | Pick files or directories with fzf and insert their paths at the cursor. |
 | `Alt-C`        | Pick a directory with fzf and `cd` into it. Needs left Option as Alt.  |
 | `**<Tab>`      | fzf completion for the word before it: `vim **<Tab>` picks files, `cd **<Tab>` directories, `kill -9 **<Tab>` processes, `ssh **<Tab>` hosts. |
+| `Ctrl-G`       | Open the navi palette of saved workflows, fill the arguments and insert the command at the prompt without running it. Loaded by `zsh/navi.zsh`. See [saved workflows](../guides/workflows.md). |
+
+Ghostty has no binding for `Ctrl-G`'s palette: in a split where Claude Code
+runs, keys go to Claude Code, not zsh.
 
 `zsh-autosuggestions` shows a grey suggestion from history as you type. The
 `→` key (or `End`) accepts it.

@@ -1,0 +1,26 @@
+% dev, go, typescript, github
+
+# Run Go tests with readable output
+gotestsum --format testname -- ./...
+
+# Check Go dependencies for known vulnerabilities
+govulncheck ./...
+
+# Debug one Go test with delve
+dlv test <package> -- -test.run '<test>'
+
+# Install JS dependencies exactly as locked
+pnpm install --frozen-lockfile
+
+# Open a pull request for a pushed bookmark
+gh pr create --head <bookmark> --fill
+
+# Show CI checks of the current pull request
+gh pr checks
+
+# Review a pull request in its own workspace
+jj git fetch && jw review-<pr_branch> '<pr_branch>@origin'
+
+$ package: go list ./...
+$ bookmark: jj --ignore-working-copy bookmark list -T 'name ++ "\n"'
+$ pr_branch: gh pr list --json headRefName,title --template '{{range .}}{{.headRefName}}{{"\t"}}{{.title}}{{"\n"}}{{end}}' --- --column 1 --delimiter '\t'

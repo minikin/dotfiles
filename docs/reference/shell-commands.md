@@ -13,12 +13,16 @@ sets up. `<x>` is required, `[x]` is optional.
 | `jpush`            | `zsh/jj.zsh`     | `[bookmark]`         | Push `work()` as a bookmark named after the workspace.        |
 | `sign-as`          | `zsh/sign.zsh`   | `[work\|personal\|status]` | Show or override this repo's commit identity.           |
 | `infra`            | `zsh/infra.zsh`  | `[subcommand] [args...]` | Drive the local Docker stack.                             |
+| `navi-trust`       | `zsh/navi.zsh`   | none                 | Load this repo's `.navi/` workflows from now on.              |
+| `navi-untrust`     | `zsh/navi.zsh`   | none                 | Stop loading this repo's `.navi/` workflows.                  |
 | `z`                | zoxide           | `<query...>` or `-`  | Jump to the best-matching directory you visited.              |
 | `zi`               | zoxide           | `[query...]`         | Pick a directory with fzf.                                    |
 
 | Variable      | Read by | Effect                                                         |
 | ------------- | ------- | -------------------------------------------------------------- |
 | `JW_NO_SETUP` | `jw`, `jwc` | Any non-empty value skips the env-file copy and project setup on a new workspace. |
+| `NAVI_DEFAULT_PATH` | `zsh/navi.zsh` | navi's default cheats folder, first in `NAVI_PATH`. Default `~/.local/share/navi/cheats`. |
+| `NAVI_TRUST_FILE` | `zsh/navi.zsh` | The trusted-repos list. Default `~/.config/navi/trusted-repos`. |
 
 ## Workspace layout
 
@@ -248,6 +252,37 @@ Every port is published on `127.0.0.1` and `[::1]` only. Redis data lives in
 the `redis-data` volume and Kafka data in `kafka-data`. `infra down` keeps
 them, `infra reset` removes them. Kafka creates new topics with 3 partitions.
 `kafka-ui` starts once Kafka's health check passes.
+
+## navi-trust and navi-untrust
+
+```sh
+navi-trust
+navi-untrust
+```
+
+Both act on the main checkout of the current repo, the parent of
+`git rev-parse --git-common-dir`, so every jj workspace of a repo shares one
+entry. Outside a git or jj repo they print `not in a git or jj repo` and
+return 1.
+
+| Command        | Does                                                                                   | Prints               |
+| -------------- | -------------------------------------------------------------------------------------- | -------------------- |
+| `navi-trust`   | Creates `~/.config/navi/` if needed and appends the main checkout's path to `trusted-repos`, unless the line is already there. | `trusted: <path>`    |
+| `navi-untrust` | Removes that exact line from `trusted-repos`, if the file exists.                      | `untrusted: <path>`  |
+
+Both then update `NAVI_PATH` at once. `zsh/navi.zsh` sets it on every `cd`
+through a `chpwd` hook and once when it is sourced:
+
+| Situation                                                        | `NAVI_PATH`                                          |
+| ---------------------------------------------------------------- | ---------------------------------------------------- |
+| In a trusted repo whose top level has a `.navi/` folder          | `$NAVI_DEFAULT_PATH:<top level>/.navi`               |
+| Anywhere else                                                    | unset, so navi reads only its default folder          |
+
+A repo is trusted when its main checkout is under `~/repos/personal/` or its
+path is a line of `trusted-repos`. Repos under `~/repos/personal/` need no
+entry, and `navi-untrust` does not stop them loading. `zsh/navi.zsh` returns
+without defining anything when `navi` is not installed. See
+[saved workflows](../guides/workflows.md#per-project-workflows).
 
 ## z and zi
 

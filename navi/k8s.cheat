@@ -1,0 +1,29 @@
+% k8s
+
+# Switch kubectl context
+kubectx <context>
+
+# Switch the default namespace
+kubens <namespace>
+
+# Tail the logs of every pod with an app label
+stern -n <namespace> -l app=<app>
+
+# Tail the logs of one pod
+stern -n <namespace> <pod>
+
+# Describe a pod
+kubectl -n <namespace> describe pod <pod>
+
+# Port-forward a service to localhost
+kubectl -n <namespace> port-forward svc/<service> <local_port>:<remote_port>
+
+# Open k9s in a namespace
+k9s -n <namespace>
+
+$ context: kubectl config get-contexts -o name
+$ namespace: kubectl get namespaces -o name | sed 's|^namespace/||'
+$ pod: kubectl -n "$namespace" get pods -o name | sed 's|^pod/||'
+$ app: kubectl -n "$namespace" get pods -o jsonpath='{range .items[*]}{.metadata.labels.app}{"\n"}{end}' | sort -u
+$ service: kubectl -n "$namespace" get services -o name | sed 's|^service/||'
+$ remote_port: kubectl -n "$namespace" get service "$service" -o jsonpath='{range .spec.ports[*]}{.port}{"\n"}{end}'

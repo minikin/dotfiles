@@ -84,6 +84,11 @@ jj git fetch
 jwrm feat-x
 ```
 
+For the commands you do not type every day, press `Ctrl-G`: it opens a
+palette of saved workflows, fills their arguments from live pickers (jj
+changes, Kafka topics, pods) and inserts the command into the prompt without
+running it. See [Saved workflows](docs/guides/workflows.md).
+
 [Getting started](docs/getting-started.md) walks through a first session
 with two agents, including what the Claude Code status line shows.
 
@@ -105,6 +110,7 @@ has the Kafka and Redis commands.
   [identity and commit signing](docs/guides/identity-and-signing.md),
   [local infra](docs/guides/local-infra.md),
   [per-project tools and MCP servers](docs/guides/project-tools.md),
+  [saved workflows with navi](docs/guides/workflows.md),
   [Claude Code integration](docs/guides/claude-code.md),
   [updating the dotfiles](docs/guides/updating.md).
 - Reference: [install.sh](docs/reference/install-sh.md),

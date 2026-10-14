@@ -28,6 +28,16 @@ A command that runs longer than 30s in an unfocused split sends a desktop notifi
 | `z -` | Back to previous dir |
 | `zi [query]` | Interactive dir picker (fzf) |
 
+## Workflows (`zsh/navi.zsh`)
+
+Guide: [Saved workflows](../guides/workflows.md).
+
+| Command / key | Action |
+|---|---|
+| `Ctrl-G` | Open the navi palette, fill the arguments, insert the command at the prompt (never runs it) |
+| `navi-trust` | Load this repo's `.navi/` workflows (repos under `~/repos/personal/` are trusted already) |
+| `navi-untrust` | Stop loading this repo's `.navi/` workflows |
+
 ## Agent workspaces (`zsh/jj.zsh`)
 
 Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a git worktree. Workflow: [Run parallel agents](../guides/parallel-agents.md).

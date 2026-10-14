@@ -22,6 +22,8 @@ Kafka. It assumes:
   `claude/CLAUDE.md` are written for it.
 - jj colocated with git in every repo you use with agents. Git, your IDE and
   CI keep working, and agents write history through jj.
+- jj 0.46 or newer. From 0.46 `jj workspace add` creates a real git worktree
+  for each workspace, which `jw` relies on.
 - git 2.48 or newer. Each jj workspace is a git worktree with relative paths
   (`extensions.relativeWorktrees`), which older git cannot open. The Brewfile
   installs a current git, and so does recent Xcode.

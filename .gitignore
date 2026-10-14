@@ -1,0 +1,7 @@
+# Local agent and tool state: never part of the public repo.
+.claude/
+.wiz/
+.codex/
+.mdkb/
+# install.sh backups
+*.bak-*

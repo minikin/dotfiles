@@ -67,7 +67,9 @@ containing `--tool`, and allow `jj dft`. See
 `~/.config/jj/conf.d/identity.toml` is never in the repo. `install.sh` writes
 it on the first run, mode 600, from prompts or `DOTFILES_*` variables (see
 [install.sh](install-sh.md#configjjconfdidentitytoml)). The template is
-`jj/identity.example.toml`.
+`jj/identity.example.toml`, shown below. Its `[[--scope]]` block is the
+optional second identity: with one identity it is not written, and in the
+template you either set the folder or delete the block.
 
 ```toml
 [user]
@@ -81,8 +83,11 @@ key = "ssh-ed25519 AAAA...your-work-key"
 backends.ssh.program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
 backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
 
+# Optional: a second identity (e.g. personal) for every repo under one folder of your choice
+# (and its <repo>-ws workspaces). Delete this block if you use one identity everywhere.
+# Override any other repo with `sign-as personal`.
 [[--scope]]
---when.repositories = ["~/repos/personal"]
+--when.repositories = ["~/path/to/personal-repos"]
 [--scope.user]
 email = "you@personal.example"
 [--scope.signing]
@@ -93,23 +98,23 @@ backends.ssh.program = "/usr/bin/ssh-keygen"
 | Key                                       | Section             | Value from `install.sh`                                     | Required |
 | ----------------------------------------- | ------------------- | ----------------------------------------------------------- | -------- |
 | `user.name`                               | `[user]`            | Full name                                                   | yes      |
-| `user.email`                              | `[user]`            | Default (work) email                                        | yes      |
+| `user.email`                              | `[user]`            | Main email, used in every repo                              | yes      |
 | `signing.backend`                         | `[signing]`         | `"ssh"`                                                     | with signing |
 | `signing.behavior`                        | `[signing]`         | `"own"`: sign every commit whose author is you              | with signing |
 | `signing.key`                             | `[signing]`         | Public key line, or path to a `.pub` file                   | with signing |
 | `signing.backends.ssh.program`            | `[signing]`         | `op-ssh-sign` for a key line when 1Password is installed, else `/usr/bin/ssh-keygen` | with signing |
 | `signing.backends.ssh.allowed-signers`    | `[signing]`         | `"~/.config/git/allowed_signers"`                           | with signing |
-| `--when.repositories`                     | `[[--scope]]`       | `["~/repos/personal"]`                                      | with a personal email |
-| `user.email`                              | `[--scope.user]`    | Personal email                                              | with a personal email |
-| `signing.key`                             | `[--scope.signing]` | Personal key                                                | with a personal key |
-| `signing.backends.ssh.program`            | `[--scope.signing]` | Signer for the personal key                                 | with a personal key |
+| `--when.repositories`                     | `[[--scope]]`       | The folder you chose, for example `["~/src/personal"]`. `~/...` inside `$HOME`, absolute elsewhere | with a second identity |
+| `user.email`                              | `[--scope.user]`    | Email for that folder                                       | with a second identity |
+| `signing.key`                             | `[--scope.signing]` | Signing key for that folder                                 | with a second key |
+| `signing.backends.ssh.program`            | `[--scope.signing]` | Signer for the second key                                   | with a second key |
 
 Without `[signing]`, commits are not signed. Without `[--scope.signing]`, the
-personal scope signs with the default key.
+second identity signs with the main key.
 
 `--when.repositories` matches a repo by its path prefix, so the scope also
-covers jj workspaces of personal repos, which live in
-`~/repos/personal/<repo>-ws/`.
+covers jj workspaces of the repos in that folder, which live next to them in
+`<folder>/<repo>-ws/`.
 
 `signing.behavior = "own"` signs every commit you author when jj writes it,
 including working-copy snapshots and commits an agent makes in your name.

@@ -15,10 +15,11 @@ backends.ssh.program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
 # ... or a path to a .pub file with program "/usr/bin/ssh-keygen".
 backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
 
-# Optional: personal identity for every repo under ~/repos/personal (and its <repo>-ws workspaces).
+# Optional: a second identity (e.g. personal) for every repo under one folder of your choice
+# (and its <repo>-ws workspaces). Delete this block if you use one identity everywhere.
 # Override any other repo with `sign-as personal`.
 [[--scope]]
---when.repositories = ["~/repos/personal"]
+--when.repositories = ["~/path/to/personal-repos"]
 [--scope.user]
 email = "you@personal.example"
 [--scope.signing]

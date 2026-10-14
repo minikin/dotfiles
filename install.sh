@@ -2,8 +2,9 @@
 # Install the dotfiles: symlink configs into $HOME (backing up anything in the way),
 # merge Claude Code settings, add the mise line to .zprofile, sync git identity from jj.
 # Safe to re-run. Usage: ./install.sh [--dry-run | --help]
-# Identity: prompts on first run, or set DOTFILES_NAME / DOTFILES_EMAIL / DOTFILES_SIGNING_KEY /
-# DOTFILES_PERSONAL_EMAIL / DOTFILES_PERSONAL_KEY to run without prompts.
+# Identity: prompts on first run, or set DOTFILES_NAME / DOTFILES_EMAIL / DOTFILES_SIGNING_KEY,
+# plus DOTFILES_PERSONAL_DIR / DOTFILES_PERSONAL_EMAIL / DOTFILES_PERSONAL_KEY for an optional
+# second identity used in one folder, to run without prompts.
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$0")" && pwd)
@@ -11,7 +12,7 @@ DRY=0
 case ${1:-} in
   "") ;;
   --dry-run) DRY=1 ;;
-  -h|--help) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  -h|--help) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "unknown argument: $1 (usage: ./install.sh [--dry-run | --help])" >&2; exit 2 ;;
 esac
 STAMP=$(date +%Y%m%d-%H%M%S)
@@ -114,7 +115,7 @@ elif (( DRY )); then
 elif [[ -z ${DOTFILES_NAME:-} && ! -t 0 ]]; then
   mkdir -p "${IDENTITY%/*}"; cp "$REPO/jj/identity.example.toml" "$IDENTITY"; chmod 600 "$IDENTITY"
   echo "!! no terminal: copied the template to $IDENTITY — edit it before committing"
-  echo "   (or re-run with DOTFILES_NAME, DOTFILES_EMAIL, DOTFILES_SIGNING_KEY, DOTFILES_PERSONAL_EMAIL, DOTFILES_PERSONAL_KEY set)"
+  echo "   (or re-run with DOTFILES_NAME, DOTFILES_EMAIL, DOTFILES_SIGNING_KEY and optionally DOTFILES_PERSONAL_DIR, DOTFILES_PERSONAL_EMAIL, DOTFILES_PERSONAL_KEY set)"
 else
   # Values come from DOTFILES_* env vars (non-interactive, e.g. Claude running SETUP_PROMPT.md)
   # or from prompts.
@@ -123,17 +124,37 @@ else
   ask() { local var=$1 prompt=$2 env=$3; if [[ -n ${DOTFILES_NAME:-} ]]; then printf -v "$var" '%s' "${!env:-}"; else read -rp "  $prompt" "$var"; fi; }
   [[ -z ${DOTFILES_NAME:-} ]] && echo "Set up your commit identity (stored only on this machine)."
   ask NAME   "Full name: " DOTFILES_NAME
-  ask EMAIL  "Default (work) email: " DOTFILES_EMAIL
+  ask EMAIL  "Email, used in every repo: " DOTFILES_EMAIL
   ask KEYIN  "Signing key — public key line or path to .pub (empty = don't sign): " DOTFILES_SIGNING_KEY
   KEY='' PROG='' PUB=''
   while [[ -n $KEYIN ]] && ! key_info "$KEYIN"; do [[ -n ${DOTFILES_NAME:-} ]] && exit 1; read -rp "  Signing key (empty = don't sign): " KEYIN; done
-  ask PEMAIL "Personal email for repos under ~/repos/personal (empty = skip): " DOTFILES_PERSONAL_EMAIL
-  PKEY='' PPROG='' PPUB=''
+
+  # Optional second identity (e.g. personal next to a work account) for every repo in
+  # one folder of your choice.
+  PEMAIL='' PDIR='' PKEY='' PPROG='' PPUB=''
+  if [[ -n ${DOTFILES_NAME:-} ]]; then
+    PEMAIL=${DOTFILES_PERSONAL_EMAIL:-} PDIR=${DOTFILES_PERSONAL_DIR:-}
+    if [[ -n $PEMAIL && -z $PDIR || -z $PEMAIL && -n $PDIR ]]; then
+      echo "!! set DOTFILES_PERSONAL_EMAIL and DOTFILES_PERSONAL_DIR together, or neither" >&2; exit 2
+    fi
+  else
+    read -rp "  Use a second identity for the repos in one folder (e.g. personal projects)? [y/N] " yn
+    if [[ $yn == [yY]* ]]; then
+      while [[ -z $PDIR ]]; do read -rp "  Folder for those repos (e.g. ~/src/personal): " PDIR; done
+      while [[ -z $PEMAIL ]]; do read -rp "  Email for that folder: " PEMAIL; done
+    fi
+  fi
   if [[ -n $PEMAIL ]]; then
-    ask PKEYIN "Personal signing key — public key line or .pub path (empty = same as default): " DOTFILES_PERSONAL_KEY
-    while [[ -n $PKEYIN ]] && ! key_info "$PKEYIN"; do [[ -n ${DOTFILES_NAME:-} ]] && exit 1; read -rp "  Personal signing key: " PKEYIN; done
+    ask PKEYIN "Signing key for that folder — key line or .pub path (empty = same as above): " DOTFILES_PERSONAL_KEY
+    while [[ -n $PKEYIN ]] && ! key_info "$PKEYIN"; do [[ -n ${DOTFILES_NAME:-} ]] && exit 1; read -rp "  Signing key for that folder: " PKEYIN; done
     [[ -n $PKEYIN ]] && PKEY=$KEY PPROG=$PROG PPUB=$PUB
     [[ -n $KEYIN ]] && key_info "$KEYIN"   # restore default key vars
+    # One spelling for jj and git: ~/... inside $HOME (portable), absolute elsewhere.
+    PDIR=${PDIR/#\~/$HOME}; PDIR=${PDIR%/}
+    [[ $PDIR == /* ]] || { echo "!! folder must be an absolute path or start with ~: $PDIR" >&2; exit 2; }
+    mkdir -p "$PDIR"
+    PDIR_ABS=$PDIR
+    [[ $PDIR == "$HOME"/* ]] && PDIR="~${PDIR#"$HOME"}"
   fi
   mkdir -p "${IDENTITY%/*}"
   # NAME and EMAIL are assigned indirectly by ask (printf -v / read).
@@ -147,8 +168,8 @@ else
       echo 'backends.ssh.allowed-signers = "~/.config/git/allowed_signers"'
     fi
     if [[ -n $PEMAIL ]]; then
-      echo; echo "# Personal identity for repos under ~/repos/personal (override elsewhere: sign-as personal)"
-      echo '[[--scope]]'; echo '--when.repositories = ["~/repos/personal"]'
+      echo; echo "# Second identity for every repo under $PDIR (override elsewhere: sign-as personal)"
+      echo '[[--scope]]'; echo "--when.repositories = [$(toml "$PDIR")]"
       echo '[--scope.user]'; echo "email = $(toml "$PEMAIL")"
       if [[ -n $PKEY ]]; then
         echo '[--scope.signing]'; echo "key = $(toml "$PKEY")"; echo "backends.ssh.program = $(toml "$PPROG")"
@@ -173,16 +194,39 @@ else
   mkdir -p "$HOME/.config/git"; touch "$HOME/.config/git/allowed_signers"
   [[ -n $PUB ]]  && ! grep -qsF "$EMAIL "  "$HOME/.config/git/allowed_signers" && echo "$EMAIL namespaces=\"git\" $PUB"  >> "$HOME/.config/git/allowed_signers"
   [[ -n $PPUB ]] && ! grep -qsF "$PEMAIL " "$HOME/.config/git/allowed_signers" && echo "$PEMAIL namespaces=\"git\" $PPUB" >> "$HOME/.config/git/allowed_signers"
-  if [[ -n $PEMAIL ]] && ! git config --global --get-all includeIf.gitdir:~/repos/personal/.path >/dev/null 2>&1; then
+  if [[ -n $PEMAIL ]] && ! git config --global --get-all "includeIf.gitdir:$PDIR/.path" >/dev/null 2>&1; then
     PGIT=$HOME/.config/git/personal.gitconfig
     git config -f "$PGIT" user.email "$PEMAIL"
     if [[ -n $PKEY ]]; then
       git config -f "$PGIT" user.signingkey "$PKEY"
       git config -f "$PGIT" gpg.ssh.program "$PPROG"
     fi
-    git config --global includeIf.gitdir:~/repos/personal/.path "$PGIT"
-    echo "ok   git personal identity for ~/repos/personal ($PGIT)"
+    git config --global "includeIf.gitdir:$PDIR/.path" "$PGIT"
+    echo "ok   git second identity for $PDIR ($PGIT)"
   fi
+fi
+
+# ~/.config/dotfiles/config: machine settings read by zshrc. DOTFILES_DIR is where this repo
+# lives. DOTFILES_PERSONAL_DIR is the second identity's folder, taken from this run's answers
+# or from an existing identity.toml.
+echo "== machine settings (~/.config/dotfiles/config)"
+CONF=$HOME/.config/dotfiles/config
+if [[ -z ${PDIR_ABS:-} && -f $IDENTITY ]]; then
+  PDIR_ABS=$(sed -n 's/^--when\.repositories = \["\(.*\)"\]$/\1/p' "$IDENTITY" | head -1)
+  PDIR_ABS=${PDIR_ABS/#\~/$HOME}
+  [[ $PDIR_ABS == */path/to/* ]] && PDIR_ABS=''   # still the template placeholder
+fi
+if (( DRY )); then
+  echo "+ write $CONF (DOTFILES_DIR=$REPO${PDIR_ABS:+, DOTFILES_PERSONAL_DIR=$PDIR_ABS})"
+else
+  mkdir -p "${CONF%/*}"
+  {
+    echo "# Written by install.sh, read by zshrc. Re-run install.sh to update."
+    printf 'DOTFILES_DIR=%q\n' "$REPO"
+    [[ -n ${PDIR_ABS:-} ]] && printf 'DOTFILES_PERSONAL_DIR=%q\n' "$PDIR_ABS"
+  } > "$CONF.tmp"
+  if cmp -s "$CONF.tmp" "$CONF"; then rm -f "$CONF.tmp"; echo "ok   $CONF (unchanged)"
+  else mv "$CONF.tmp" "$CONF"; echo "ok   wrote $CONF"; fi
 fi
 
 echo "== git identity (copy from jj config if git has none)"

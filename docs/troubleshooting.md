@@ -86,7 +86,7 @@ Usually an app wrote its config in place and replaced the symlink with a
 plain file. Compare the two before you decide which one wins:
 
 ```bash
-diff ~/.claude/statusline.sh ~/repos/personal/dotfiles/claude/statusline.sh
+diff ~/.claude/statusline.sh "$DOTFILES_DIR/claude/statusline.sh"
 ```
 
 Copy anything worth keeping into the repo file, then run `./install.sh`. It

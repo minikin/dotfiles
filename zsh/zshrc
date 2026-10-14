@@ -21,6 +21,9 @@ eval "$(starship init zsh)"
 # zoxide: `z <dir>` to jump, `zi` for interactive picker (uses fzf)
 eval "$(zoxide init zsh)"
 
+# Machine settings written by install.sh: DOTFILES_DIR, DOTFILES_PERSONAL_DIR (optional)
+[[ -f ~/.config/dotfiles/config ]] && { set -a; source ~/.config/dotfiles/config; set +a; }
+
 # mise: per-directory tool versions + env vars (mise.toml).
 # Claude Code inherits PATH from the shell that launches it, so `cd` (or jwc) first.
 eval "$(mise activate zsh)"

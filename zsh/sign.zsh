@@ -1,5 +1,5 @@
 # sign-as [work|personal|status] — commit identity + signing key for the current repo.
-# Default everywhere is work (global config); ~/repos/personal/** is personal automatically.
+# Default everywhere is the main identity; repos under $DOTFILES_PERSONAL_DIR (chosen in install.sh) use the second one.
 # This sets a per-repo override for jj (shared by all its workspaces) and git.
 sign-as() {
   local mode=${1:-status} pfile=~/.config/git/personal.gitconfig email key prog sshcmd
@@ -12,6 +12,7 @@ sign-as() {
       key=$(git config -f $pfile user.signingkey)
       prog=$(git config -f $pfile gpg.ssh.program)
       sshcmd=$(git config -f $pfile core.sshCommand)
+      [[ -f $pfile ]] || { echo "no second identity set up: move ~/.config/jj/conf.d/identity.toml aside, re-run install.sh and answer yes to the second identity" >&2; return 1; }
       [[ $email == PERSONAL_EMAIL || -z $email ]] && { echo "fill in $pfile first" >&2; return 1; }
       if jj root >/dev/null 2>&1; then
         jj config set --repo user.email "$email"

@@ -50,19 +50,25 @@ Ghostty split.
   come from live pickers, and the command is inserted into the prompt, not
   run. Destructive infra entries are labelled `[LOCAL ONLY]` and a direct
   push to main `[PERSONAL]`. A repo's own `.navi/` folder loads only when the
-  repo is under `~/repos/personal` or trusted with `navi-trust`.
+  repo is inside the second identity's folder (`$DOTFILES_PERSONAL_DIR`) or
+  trusted with `navi-trust`.
   `tests/navi.bats` checks every entry. See
   [Saved workflows](docs/guides/workflows.md).
 - **Commit identity** (`install.sh`, `zsh/sign.zsh`). On the first run
-  `install.sh` asks for a name, a work email and signing key, and an
-  optional personal email and key for every repo under `~/repos/personal`.
-  It takes the same values from `DOTFILES_NAME`, `DOTFILES_EMAIL`,
-  `DOTFILES_SIGNING_KEY`, `DOTFILES_PERSONAL_EMAIL` and
-  `DOTFILES_PERSONAL_KEY` when there is no terminal. Every commit you author
-  is SSH-signed, through 1Password's `op-ssh-sign` for a key line or
+  `install.sh` asks for a name, an email used in every repo and a signing
+  key. One identity everywhere is the default. On request it adds a second
+  identity, with its own email and optional key, for every repo inside a
+  folder you choose, such as `~/src/personal`. It takes the same values from
+  `DOTFILES_NAME`, `DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`,
+  `DOTFILES_PERSONAL_DIR`, `DOTFILES_PERSONAL_EMAIL` and
+  `DOTFILES_PERSONAL_KEY` when there is no terminal, and exits 2 when only
+  one of the folder and its email is set. Every commit you author is
+  SSH-signed, through 1Password's `op-ssh-sign` for a key line or
   `ssh-keygen` for a `.pub` file. git gets the same identity, signing,
-  `allowed_signers` and an `includeIf` for the personal directory. `sign-as
-  work|personal|status` overrides one repo.
+  `allowed_signers` and, with a second identity, an `includeIf` for its
+  folder. `sign-as work|personal|status` switches one repo between the main
+  and the second identity, and `sign-as personal` refuses when there is no
+  second identity.
 - **Claude Code integration** (`claude/`). Global rules in `CLAUDE.md` (jj
   instead of git writes, always `-m`, local infra only, never change
   authorship or bypass signing), a status line with the workspace, change and
@@ -70,15 +76,20 @@ Ghostty split.
   `--tool` and `--config`, and sets `JJ_EDITOR=false`.
 - **install.sh**. Symlinks every config, backs up what it replaces as
   `<file>.bak-<timestamp>`, appends the mise line to `~/.zprofile` and merges
-  the Claude Code settings. `--dry-run` prints every step. See
+  the Claude Code settings. The repo can be cloned anywhere: every run writes
+  `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second
+  identity, `DOTFILES_PERSONAL_DIR`, and `zshrc` sources it. `--dry-run`
+  prints every step. See
   [install.sh](docs/reference/install-sh.md).
 - **`SETUP_PROMPT.md`**, a prompt that has Claude Code install and verify
   the setup on a new Mac.
 - **justfile**. `just check` runs lint (shellcheck, `zsh -n`,
   `docker compose config`, an offline link check), the bats tests and the
   secret scan. `just drift` compares each live file with the repo copy.
-- **Tests** (`tests/`). bats suites for `install.sh`, the workspace
-  commands, the status line and the Compose file, each in a fake `HOME`
+- **Tests** (`tests/`). 49 bats tests for `install.sh` (including one
+  identity only, a folder outside `$HOME` and the machine settings file), the
+  workspace commands, the status line, the navi workflows and their trust
+  rules, and the Compose file, each in a fake `HOME`
   with jj and git reading only test config.
 - **CI** (`.github/workflows/ci.yml`). `just check` on macOS, and a gitleaks
   scan of the full git history on Linux.

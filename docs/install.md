@@ -15,9 +15,13 @@ installer, not from Homebrew or mise.
 
 ## By hand
 
+Clone the repo anywhere you like. `~/src/dotfiles` below is only an example.
+`install.sh` records the location as `DOTFILES_DIR` in
+`~/.config/dotfiles/config`, and the shell reads it from there.
+
 ```bash
-git clone https://github.com/minikin/dotfiles ~/repos/personal/dotfiles
-cd ~/repos/personal/dotfiles
+git clone https://github.com/minikin/dotfiles ~/src/dotfiles
+cd ~/src/dotfiles
 brew bundle
 ./install.sh --dry-run
 ./install.sh
@@ -33,8 +37,9 @@ what the repo's own checks need.
 and a link that is already in place as `ok`. Read the `mv` lines: those are
 the files it would back up. Then run it for real. In order, it symlinks the
 configs into `$HOME`, moves the macOS Ghostty config aside, appends the mise
-line to `~/.zprofile`, merges the Claude Code settings, writes your identity
-and mirrors it into git, and validates the Ghostty config.
+line to `~/.zprofile`, merges the Claude Code settings, writes your identity,
+writes the machine settings file `~/.config/dotfiles/config`, mirrors the
+identity into git, and validates the Ghostty config.
 [install.sh](reference/install-sh.md) describes each step.
 
 The live configs end up as symlinks into the repo, so editing `~/.zshrc`
@@ -44,14 +49,15 @@ edits and pulling them on another machine.
 ## With Claude Code
 
 ```bash
-git clone https://github.com/minikin/dotfiles ~/repos/personal/dotfiles
-cd ~/repos/personal/dotfiles
+git clone https://github.com/minikin/dotfiles ~/src/dotfiles
+cd ~/src/dotfiles
 claude
 ```
 
 Paste everything below the line in [SETUP_PROMPT.md](../SETUP_PROMPT.md).
 Claude checks for macOS, Apple Silicon and Homebrew, runs `brew bundle`, asks
-you for your identity values, shows you the `./install.sh --dry-run` output
+you for your identity values, including whether you want one identity or
+two, shows you the `./install.sh --dry-run` output
 and waits for your OK. It then runs `install.sh` with your answers in
 environment variables, runs the checks from [Verify](#verify), and tries
 `jw` end to end in a `mktemp -d` repo, never a real one. It stops on the
@@ -66,27 +72,36 @@ them:
 ```text
 Set up your commit identity (stored only on this machine).
   Full name: Jane Doe
-  Default (work) email: jane@work.example
+  Email, used in every repo: jane@work.example
   Signing key — public key line or path to .pub (empty = don't sign): ~/.ssh/id_ed25519_work.pub
-  Personal email for repos under ~/repos/personal (empty = skip): jane@personal.example
-  Personal signing key — public key line or .pub path (empty = same as default): ~/.ssh/id_ed25519_personal.pub
+  Use a second identity for the repos in one folder (e.g. personal projects)? [y/N] y
+  Folder for those repos (e.g. ~/src/personal): ~/src/personal
+  Email for that folder: jane@personal.example
+  Signing key for that folder — key line or .pub path (empty = same as above): ~/.ssh/id_ed25519_personal.pub
 ```
 
 The signing key is either an SSH public key line, such as the one the
-1Password SSH agent shows, or a path to a `.pub` file. The personal email
-and key apply to every repo under `~/repos/personal`. `install.sh` writes
-the answers to `identity.toml` with mode 600, and sets up git signing,
-`~/.config/git/allowed_signers` and `~/.config/git/personal.gitconfig` where
-git has nothing configured yet.
+1Password SSH agent shows, or a path to a `.pub` file. One identity for
+every repo is the default: answer `N` (or press Enter) at the second-identity
+question and you are done. With `y`, the second email and key apply to every
+repo inside the folder you name, `~/src/personal` in this example. The folder
+can be any path and is created if missing. `install.sh` writes the answers to
+`identity.toml` with mode 600, and sets up git signing,
+`~/.config/git/allowed_signers` and, for a second identity,
+`~/.config/git/personal.gitconfig` where git has nothing configured yet.
 
 Without a terminal, it reads the same values from `DOTFILES_NAME`,
-`DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`, `DOTFILES_PERSONAL_EMAIL` and
-`DOTFILES_PERSONAL_KEY`. `DOTFILES_NAME` switches this on. This is how
-Claude runs it:
+`DOTFILES_EMAIL` and `DOTFILES_SIGNING_KEY`, plus `DOTFILES_PERSONAL_DIR`,
+`DOTFILES_PERSONAL_EMAIL` and `DOTFILES_PERSONAL_KEY` for a second identity.
+`DOTFILES_NAME` switches this on. `DOTFILES_PERSONAL_DIR` and
+`DOTFILES_PERSONAL_EMAIL` must be set together, otherwise `install.sh` exits
+2. This is how Claude runs it for two identities. Drop the last three
+variables for one:
 
 ```bash
 DOTFILES_NAME="Jane Doe" DOTFILES_EMAIL=jane@work.example \
 DOTFILES_SIGNING_KEY=~/.ssh/id_ed25519_work.pub \
+DOTFILES_PERSONAL_DIR=~/src/personal \
 DOTFILES_PERSONAL_EMAIL=jane@personal.example \
 DOTFILES_PERSONAL_KEY=~/.ssh/id_ed25519_personal.pub \
 ./install.sh
@@ -128,8 +143,8 @@ echo '{"workspace":{"current_dir":"'$PWD'"},"model":{"display_name":"test"}}' | 
 ```
 
 `ghostty +validate-config` prints nothing when the config is valid. Shell
-startup should take about 150 ms or less. Both emails should be the default
-(work) email you entered, unless git already had one, which `install.sh`
+startup should take about 150 ms or less. Both emails should be the main
+email you entered, unless git already had one, which `install.sh`
 leaves alone. The status line should print the directory, the change and
 `test`, separated by `·`.
 
@@ -161,13 +176,13 @@ hand:
 - the mise block at the end of `~/.zprofile`
 - `~/.claude/settings.json`, restored from its `.bak-*` copy or edited to
   drop `statusLine`, `env.JJ_EDITOR` and the jj permission entries
-- `~/.config/jj/conf.d/identity.toml`, `~/.config/git/allowed_signers` and
-  `~/.config/git/personal.gitconfig`
+- `~/.config/jj/conf.d/identity.toml`, `~/.config/dotfiles/config`,
+  `~/.config/git/allowed_signers` and `~/.config/git/personal.gitconfig`
 - the global git keys it set: `user.name` and `user.email` when git had
   none, `gpg.format`, `user.signingkey`,
   `gpg.ssh.program`, `gpg.ssh.allowedSignersFile`, `commit.gpgsign`,
-  `tag.gpgsign`, `alias.dft` and the `includeIf.gitdir:~/repos/personal/.path`
-  entry
+  `tag.gpgsign`, `alias.dft` and, with a second identity, the
+  `includeIf.gitdir:<folder>/.path` entry
 
 Homebrew packages stay installed. Remove the ones you no longer want with
 `brew uninstall`.

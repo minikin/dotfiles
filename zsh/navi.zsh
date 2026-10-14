@@ -6,8 +6,9 @@ eval "$(navi widget zsh)"
 
 # Per-project workflows: a repo's .navi/ folder is loaded only when the repo is
 # trusted, because opening the palette runs the picker commands in those files.
-# Trusted: the main checkout lives under ~/repos/personal, or its path is listed
-# in ~/.config/navi/trusted-repos (one per line, managed by navi-trust).
+# Trusted: the main checkout lives under $DOTFILES_PERSONAL_DIR (the second identity's
+# folder chosen in install.sh, if any), or its path is listed in
+# ~/.config/navi/trusted-repos (one per line, managed by navi-trust).
 # NAVI_PATH replaces navi's default folder, so it always lists that folder first.
 : "${NAVI_DEFAULT_PATH:=$HOME/.local/share/navi/cheats}"
 NAVI_TRUST_FILE=${NAVI_TRUST_FILE:-$HOME/.config/navi/trusted-repos}
@@ -21,8 +22,9 @@ _navi_main_root() {
 
 _navi_trusted() {
   local main=$1
+  local own=${DOTFILES_PERSONAL_DIR:-}
   # :A resolves symlinks, since git reports the physical path
-  [[ $main == $HOME/repos/personal/* || $main == ${HOME:A}/repos/personal/* ]] && return 0
+  [[ -n $own && ( $main == $own/* || $main == ${own:A}/* ) ]] && return 0
   [[ -f $NAVI_TRUST_FILE ]] && grep -qxF -- "$main" "$NAVI_TRUST_FILE"
 }
 

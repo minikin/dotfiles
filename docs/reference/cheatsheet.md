@@ -35,7 +35,7 @@ Guide: [Saved workflows](../guides/workflows.md).
 | Command / key | Action |
 |---|---|
 | `Ctrl-G` | Open the navi palette, fill the arguments, insert the command at the prompt (never runs it) |
-| `navi-trust` | Load this repo's `.navi/` workflows (repos under `~/repos/personal/` are trusted already) |
+| `navi-trust` | Load this repo's `.navi/` workflows (repos under `$DOTFILES_PERSONAL_DIR`, the second identity's folder, are trusted already) |
 | `navi-untrust` | Stop loading this repo's `.navi/` workflows |
 
 ## Agent workspaces (`zsh/jj.zsh`)
@@ -102,10 +102,10 @@ difftastic is opt-in. Agents use plain `jj diff --git`. See [Review and land age
 | Command | Action |
 |---|---|
 | `sign-as` / `sign-as status` | Show current jj + git email and key suffix |
-| `sign-as personal` | Per-repo override (jj + git) from `~/.config/git/personal.gitconfig`, also updates the author of `@` |
-| `sign-as work` | Remove the per-repo override, back to the global default |
+| `sign-as personal` | Switch this repo (jj + git) to the second identity from `~/.config/git/personal.gitconfig`, also updates the author of `@`. Refuses when there is no second identity |
+| `sign-as work` | Remove the per-repo override, back to the main identity |
 
-The default identity is work. Repos under `~/repos/personal/` use the personal identity automatically. On first run, `install.sh` prompts for full name, default email, default signing key (SSH public key line or `.pub` path) and optionally a personal email + key, then writes `~/.config/jj/conf.d/identity.toml`. Non-interactive: set `DOTFILES_NAME`, `DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`, `DOTFILES_PERSONAL_EMAIL`, `DOTFILES_PERSONAL_KEY`. With neither a terminal nor those variables, it copies `jj/identity.example.toml` for hand editing (`--dry-run` writes no identity). git gets the same identity and SSH signing if it has none of its own. With a signing key, every commit you author is SSH-signed. See [Identity and signing](../guides/identity-and-signing.md).
+The main identity applies everywhere. An optional second identity applies to every repo inside one folder you pick during install (`$DOTFILES_PERSONAL_DIR`, for example `~/src/personal`). On first run, `install.sh` prompts for full name, the email used in every repo and a signing key (SSH public key line or `.pub` path), then asks whether to use a second identity and, on yes, for its folder, email and key. It writes `~/.config/jj/conf.d/identity.toml`. Non-interactive: set `DOTFILES_NAME`, `DOTFILES_EMAIL`, `DOTFILES_SIGNING_KEY`, and for a second identity `DOTFILES_PERSONAL_DIR` and `DOTFILES_PERSONAL_EMAIL` (together, or it exits 2) plus optionally `DOTFILES_PERSONAL_KEY`. With neither a terminal nor those variables, it copies `jj/identity.example.toml` for hand editing (`--dry-run` writes no identity). git gets the same identity and SSH signing if it has none of its own. With a signing key, every commit you author is SSH-signed. See [Identity and signing](../guides/identity-and-signing.md).
 
 ## Local infra (`zsh/infra.zsh`)
 

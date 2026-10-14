@@ -132,14 +132,21 @@ navi_zsh() {
   [ "$output" = "path=unset" ]
 }
 
-@test "navi.zsh: repos under ~/repos/personal are trusted, default folder first" {
-  make_jj_repo "$HOME/repos/personal/app"
-  mkdir -p "$HOME/repos/personal/app/.navi"
-  top=$(realpath_of "$HOME/repos/personal/app")
-  navi_zsh "$HOME/repos/personal/app" 'print -r -- "$NAVI_PATH"'
+@test "navi.zsh: repos under DOTFILES_PERSONAL_DIR are trusted, default folder first" {
+  make_jj_repo "$HOME/src/mine/app"
+  mkdir -p "$HOME/src/mine/app/.navi"
+  export DOTFILES_PERSONAL_DIR="$HOME/src/mine"
+  navi_zsh "$HOME/src/mine/app" 'print -r -- "$NAVI_PATH"'
   [ "$status" -eq 0 ]
-  [ "$output" = "$HOME/.local/share/navi/cheats:$top/.navi" ] ||
-  [ "$output" = "$HOME/.local/share/navi/cheats:$HOME/repos/personal/app/.navi" ]
+  [[ $output == "$HOME/.local/share/navi/cheats:"*"/src/mine/app/.navi" ]]
+}
+
+@test "navi.zsh: without DOTFILES_PERSONAL_DIR nothing is trusted automatically" {
+  make_jj_repo "$HOME/src/mine/app"
+  mkdir -p "$HOME/src/mine/app/.navi"
+  unset DOTFILES_PERSONAL_DIR
+  navi_zsh "$HOME/src/mine/app" 'print -r -- "path=${NAVI_PATH-unset}"'
+  [ "$output" = "path=unset" ]
 }
 
 @test "navi.zsh: navi-trust and navi-untrust toggle a work repo" {

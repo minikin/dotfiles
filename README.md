@@ -24,12 +24,15 @@ they live in a local file that `install.sh` writes on the first run.
 
 On an Apple Silicon Mac with [Homebrew](https://brew.sh):
 
+Clone it anywhere you like. `~/src/dotfiles` is only an example. `install.sh`
+records the location as `DOTFILES_DIR`.
+
 ```bash
-git clone https://github.com/minikin/dotfiles ~/repos/personal/dotfiles
-cd ~/repos/personal/dotfiles
+git clone https://github.com/minikin/dotfiles ~/src/dotfiles
+cd ~/src/dotfiles
 brew bundle              # everything in the Brewfile
 ./install.sh --dry-run   # what it would link, and what it would back up
-./install.sh             # link, merge Claude settings, ask for your identity
+./install.sh             # link, merge Claude settings, ask for one identity or two
 exec zsh
 ```
 

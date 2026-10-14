@@ -128,6 +128,7 @@ JSON
   export DOTFILES_EMAIL=work@example.com
   export DOTFILES_SIGNING_KEY="$BATS_TEST_TMPDIR/work_key.pub"
   export DOTFILES_PERSONAL_EMAIL=me@personal.example
+  export DOTFILES_PERSONAL_DIR="~/src/mine"
   export DOTFILES_PERSONAL_KEY="$BATS_TEST_TMPDIR/personal_key.pub"
   run_install
   [ "$status" -eq 0 ]
@@ -142,14 +143,15 @@ JSON
   [ "$(JJ_CONFIG="$id" jj config get signing.backend)" = ssh ]
   [ "$(JJ_CONFIG="$id" jj config get signing.backends.ssh.program)" = /usr/bin/ssh-keygen ]
   grep -qF 'email = "work@example.com"' "$id"
-  grep -qF -- '--when.repositories = ["~/repos/personal"]' "$id"
+  grep -qF -- '--when.repositories = ["~/src/mine"]' "$id"
+  [ -d "$HOME/src/mine" ]
   grep -qF 'email = "me@personal.example"' "$id"
   grep -qF "key = \"$DOTFILES_PERSONAL_KEY\"" "$id"
 
   [ "$(git config --global gpg.format)" = ssh ]
   [ "$(git config --global commit.gpgsign)" = true ]
   [ "$(git config --global user.signingkey)" = "$DOTFILES_SIGNING_KEY" ]
-  [ "$(git config --global --get 'includeIf.gitdir:~/repos/personal/.path')" = "$HOME/.config/git/personal.gitconfig" ]
+  [ "$(git config --global --get 'includeIf.gitdir:~/src/mine/.path')" = "$HOME/.config/git/personal.gitconfig" ]
   [ "$(git config -f "$HOME/.config/git/personal.gitconfig" user.email)" = me@personal.example ]
 
   signers="$HOME/.config/git/allowed_signers"
@@ -202,4 +204,55 @@ JSON
   [ "$status" -eq 0 ]
   [ -z "$(find "$HOME/.claude" -name 'settings.json.bak-*')" ]
   [[ $output != *"(backup:"* ]]
+}
+
+@test "install: one identity only writes no second scope and no includeIf" {
+  ssh-keygen -q -t ed25519 -N '' -f "$BATS_TEST_TMPDIR/k"
+  export DOTFILES_NAME=Solo DOTFILES_EMAIL=solo@example.com DOTFILES_SIGNING_KEY="$BATS_TEST_TMPDIR/k.pub"
+  run_install
+  [ "$status" -eq 0 ]
+  ! grep -q -- '--scope' "$HOME/.config/jj/conf.d/identity.toml"
+  run git config --global --get-regexp '^includeif\.'
+  [ -z "$output" ]
+  [ ! -e "$HOME/.config/git/personal.gitconfig" ]
+  ! grep -q DOTFILES_PERSONAL_DIR "$HOME/.config/dotfiles/config"
+}
+
+@test "install: a second email without its folder (or the reverse) is refused" {
+  export DOTFILES_NAME=X DOTFILES_EMAIL=x@example.com DOTFILES_PERSONAL_EMAIL=y@example.org
+  run_install
+  [ "$status" -eq 2 ]
+  [[ $output == *"together"* ]]
+  [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
+  unset DOTFILES_PERSONAL_EMAIL
+  export DOTFILES_PERSONAL_DIR="~/src/mine"
+  run_install
+  [ "$status" -eq 2 ]
+}
+
+@test "install: a folder outside HOME is stored as an absolute path" {
+  export DOTFILES_NAME=X DOTFILES_EMAIL=x@example.com DOTFILES_PERSONAL_EMAIL=y@example.org
+  export DOTFILES_PERSONAL_DIR="$BATS_TEST_TMPDIR/outside/"
+  run_install
+  [ "$status" -eq 0 ]
+  grep -qF -- "--when.repositories = [\"$BATS_TEST_TMPDIR/outside\"]" "$HOME/.config/jj/conf.d/identity.toml"
+  git config --global --get "includeIf.gitdir:$BATS_TEST_TMPDIR/outside/.path" >/dev/null
+}
+
+@test "install: writes ~/.config/dotfiles/config and keeps it on re-run" {
+  export DOTFILES_NAME=X DOTFILES_EMAIL=x@example.com DOTFILES_PERSONAL_EMAIL=y@example.org DOTFILES_PERSONAL_DIR="~/src/mine"
+  run_install
+  [ "$status" -eq 0 ]
+  conf="$HOME/.config/dotfiles/config"
+  ( set -a; source "$conf"; [ "$DOTFILES_DIR" = "$DOTFILES" ] && [ "$DOTFILES_PERSONAL_DIR" = "$HOME/src/mine" ] )
+  unset DOTFILES_NAME DOTFILES_EMAIL DOTFILES_PERSONAL_EMAIL DOTFILES_PERSONAL_DIR
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"$conf (unchanged)"* ]]
+}
+
+@test "install: the template's placeholder folder never becomes DOTFILES_PERSONAL_DIR" {
+  run_install
+  [ "$status" -eq 0 ]
+  ! grep -q DOTFILES_PERSONAL_DIR "$HOME/.config/dotfiles/config"
 }

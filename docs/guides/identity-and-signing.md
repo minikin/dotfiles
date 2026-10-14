@@ -3,16 +3,25 @@
 Identity and signing keys are not in the repo. They live in
 `~/.config/jj/conf.d/identity.toml`, which jj loads on top of the linked
 `~/.config/jj/config.toml`. `install.sh` writes it on the first run, along
-with matching git config. Work is the default identity, repos under
-`~/repos/personal` use the personal one, and `sign-as` overrides either per
-repo. The install steps around it are in [Install](../install.md), the
-script itself in [install.sh](../reference/install-sh.md).
+with matching git config. The install steps around it are in
+[Install](../install.md), the script itself in
+[install.sh](../reference/install-sh.md).
+
+You pick one of two setups during install:
+
+- **One identity.** One name, email and key for every repo, for example only
+  a personal account or only a work account. This is the default answer and
+  needs nothing else.
+- **Two identities.** A main identity everywhere, plus a second one for every
+  repo inside one folder you choose, for example work everywhere and a
+  personal account in `~/src/personal`. That folder is `$DOTFILES_PERSONAL_DIR`
+  in the shell.
 
 | Where the repo is | Identity | Source |
 |---|---|---|
-| Anywhere | Work | `[user]` and `[signing]` in `identity.toml` |
-| Under `~/repos/personal`, including its `<repo>-ws` workspaces | Personal | the `--when.repositories = ["~/repos/personal"]` scope in `identity.toml` |
-| A repo where you ran `sign-as personal` | Personal | per-repo jj config and local git config |
+| Anywhere | Main | `[user]` and `[signing]` in `identity.toml` |
+| Inside the second identity's folder, including its `<repo>-ws` workspaces | Second | the `--when.repositories` scope in `identity.toml`, only with two identities |
+| A repo where you ran `sign-as personal` | Second | per-repo jj config and local git config |
 
 `signing.behavior = "own"` signs every commit you author, including the ones
 agents make in your name and working-copy snapshots.
@@ -24,10 +33,12 @@ On an interactive run, if the file is missing, `./install.sh` asks:
 | Prompt | What to enter |
 |---|---|
 | `Full name:` | `Jane Doe` |
-| `Default (work) email:` | `jane@work.example` |
+| `Email, used in every repo:` | `jane@work.example` |
 | `Signing key` | a public key line (`ssh-ed25519 AAAA...`) or a path to a `.pub` file. Empty means no `[signing]` section |
-| `Personal email for repos under ~/repos/personal` | `jane@personal.example`. Empty skips the personal scope and the next prompt |
-| `Personal signing key` | a public key line or a `.pub` path. Empty means the scope inherits the default key |
+| `Use a second identity for the repos in one folder (e.g. personal projects)? [y/N]` | Enter or `n` for one identity. `y` asks the next three |
+| `Folder for those repos (e.g. ~/src/personal):` | any absolute path or path starting with `~`. It is created if missing |
+| `Email for that folder:` | `jane@personal.example` |
+| `Signing key for that folder` | a public key line or a `.pub` path. Empty means the folder uses the key above |
 
 The key input decides the signer:
 
@@ -38,8 +49,13 @@ The key input decides the signer:
   is expanded, and the absolute path goes into the file.
 
 Anything else prints `is neither a public key line nor an existing .pub file`
-and asks again. The file is written with mode 600. With two `.pub` keys, it
-looks like this:
+and asks again. A folder that is neither absolute nor starts with `~` stops
+the script with exit code 2. A folder inside `$HOME` is stored as `~/...`,
+any other folder as its absolute path.
+
+The file is written with mode 600. With one identity it holds only `[user]`
+and `[signing]`. With two identities and two `.pub` keys, it looks like this
+(`~/src/personal` is an example folder):
 
 ```toml
 [user]
@@ -53,9 +69,9 @@ key = "/Users/<you>/.ssh/id_ed25519_work.pub"
 backends.ssh.program = "/usr/bin/ssh-keygen"
 backends.ssh.allowed-signers = "~/.config/git/allowed_signers"
 
-# Personal identity for repos under ~/repos/personal (override elsewhere: sign-as personal)
+# Second identity for every repo under ~/src/personal (override elsewhere: sign-as personal)
 [[--scope]]
---when.repositories = ["~/repos/personal"]
+--when.repositories = ["~/src/personal"]
 [--scope.user]
 email = "jane@personal.example"
 [--scope.signing]
@@ -65,37 +81,52 @@ backends.ssh.program = "/usr/bin/ssh-keygen"
 
 `./install.sh --dry-run` only prints that it would create the file. An
 existing file is left alone and reported as `ok`. To answer the prompts
-again, delete it and rerun `./install.sh`.
+again, for example to add or drop the second identity, delete it and rerun
+`./install.sh`.
 
 ## Run without prompts
 
 Setting `DOTFILES_NAME` switches `install.sh` to environment variables for
 every answer. This is how Claude Code runs it from
-[SETUP_PROMPT.md](../../SETUP_PROMPT.md):
+[SETUP_PROMPT.md](../../SETUP_PROMPT.md). One identity:
+
+```sh
+DOTFILES_NAME="Jane Doe" \
+DOTFILES_EMAIL=jane@example.com \
+DOTFILES_SIGNING_KEY=~/.ssh/id_ed25519.pub \
+./install.sh
+```
+
+Two identities, with `~/src/personal` as the example folder:
 
 ```sh
 DOTFILES_NAME="Jane Doe" \
 DOTFILES_EMAIL=jane@work.example \
 DOTFILES_SIGNING_KEY=~/.ssh/id_ed25519_work.pub \
+DOTFILES_PERSONAL_DIR=~/src/personal \
 DOTFILES_PERSONAL_EMAIL=jane@personal.example \
 DOTFILES_PERSONAL_KEY=~/.ssh/id_ed25519_personal.pub \
 ./install.sh
 ```
 
-In this mode a key that is neither a key line nor a `.pub` file makes
-`install.sh` exit 1 instead of asking again. Leave `DOTFILES_SIGNING_KEY` or
-`DOTFILES_PERSONAL_EMAIL` unset to skip signing or the personal identity.
+`DOTFILES_PERSONAL_DIR` and `DOTFILES_PERSONAL_EMAIL` go together: setting
+only one of them makes `install.sh` exit 2 with
+`set DOTFILES_PERSONAL_EMAIL and DOTFILES_PERSONAL_DIR together, or neither`.
+A key that is neither a key line nor a `.pub` file makes it exit 1 instead of
+asking again. Leave `DOTFILES_SIGNING_KEY` unset to skip signing.
 
 With no terminal and no `DOTFILES_NAME`, `install.sh` copies
 `jj/identity.example.toml` into place and prints a warning. Replace its
-placeholders before you commit anything:
+placeholders before you commit anything, and either set the folder in the
+`[[--scope]]` block or delete that block for one identity:
 
 ```sh
 $EDITOR ~/.config/jj/conf.d/identity.toml
 ```
 
 While the placeholders are there, `install.sh` does not copy the name and
-email into git and prints `skip git identity`.
+email into git and prints `skip git identity`. The template's
+`~/path/to/personal-repos` folder never becomes `DOTFILES_PERSONAL_DIR`.
 
 ## The git side
 
@@ -109,10 +140,10 @@ overwriting anything git already has:
 - It appends each public key to `~/.config/git/allowed_signers` as
   `<email> namespaces="git" <key>`, unless that email already has a line, so
   signatures verify locally.
-- If you gave a personal email and there is no `includeIf` for it yet, it
-  writes `user.email`, plus `user.signingkey` and `gpg.ssh.program` when you
-  gave a personal key, to `~/.config/git/personal.gitconfig`, and adds
-  `includeIf "gitdir:~/repos/personal/".path` pointing at it.
+- With a second identity and no `includeIf` for its folder yet, it writes
+  `user.email`, plus `user.signingkey` and `gpg.ssh.program` when you gave
+  that folder a key, to `~/.config/git/personal.gitconfig`, and adds
+  `includeIf "gitdir:<folder>/".path` pointing at it.
 - If git has no global `user.email`, it copies `user.name` and `user.email`
   from jj.
 
@@ -126,8 +157,8 @@ cat ~/.config/git/allowed_signers
 ## Keys on each machine
 
 The config refers to keys that are never in the repo. Each machine needs the
-work key, either in an SSH agent such as the 1Password SSH agent or as a key
-file on disk, and the personal key if you use one, for example
+main key, either in an SSH agent such as the 1Password SSH agent or as a key
+file on disk, and the second key if you use one, for example
 `~/.ssh/id_ed25519_personal`.
 
 For GitHub to mark commits as verified, add each public key under
@@ -140,18 +171,24 @@ section from `identity.toml`, and add it later.
 
 ## Override per repo with `sign-as`
 
-For a personal project outside `~/repos/personal`, or a work repo inside it:
+`sign-as personal` switches one repo to the second identity, and `sign-as work`
+returns it to the main identity. Use it for a repo outside the second
+identity's folder that belongs to that identity, or for a main-identity repo
+inside the folder:
 
 ```sh
-cd ~/repos/side-project
+cd ~/src/side-project
 sign-as status       # current jj and git email, last 12 characters of each key
-sign-as personal     # use the personal identity in this repo
-sign-as work         # remove the override, back to the default
+sign-as personal     # use the second identity in this repo
+sign-as work         # remove the override, back to the main identity
 ```
 
 `sign-as personal` reads `user.email`, `user.signingkey`, `gpg.ssh.program`
-and `core.sshCommand` from `~/.config/git/personal.gitconfig`. It refuses,
-asking you to fill in that file first, while it has no `user.email`. Then it sets `user.email`, `signing.key` and
+and `core.sshCommand` from `~/.config/git/personal.gitconfig`. With one
+identity that file does not exist, and it refuses with
+`no second identity set up: move ~/.config/jj/conf.d/identity.toml aside, re-run install.sh and answer yes to the second identity`.
+It also refuses, asking you to fill in the file first, while it has no
+`user.email`. Then it sets `user.email`, `signing.key` and
 `signing.backends.ssh.program` with `jj config set --repo`, which every
 workspace of the repo shares, and the matching keys with
 `git config --local`. `sign-as work` unsets all of them.

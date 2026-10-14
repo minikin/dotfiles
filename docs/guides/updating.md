@@ -10,8 +10,13 @@ others.
 
 ```sh
 ls -l ~/.zshrc
-# ~/.zshrc -> ~/repos/personal/dotfiles/zsh/zshrc
+# ~/.zshrc -> ~/src/dotfiles/zsh/zshrc
 ```
+
+The target is wherever you cloned the repo, `~/src/dotfiles` in this example.
+`install.sh` records that location as `DOTFILES_DIR` in
+`~/.config/dotfiles/config`, and the shell exports it, so `cd "$DOTFILES_DIR"`
+works from anywhere.
 
 Edit `~/.zshrc`, `~/.config/ghostty/config`, `~/.config/jj/config.toml` or
 any other linked file in place, or edit the file in the repo. Both are the
@@ -25,7 +30,7 @@ ghostty +validate-config     # ghostty/config, then cmd+shift+, to reload
 Some Ghostty settings, such as `macos-option-as-alt`, apply only to new
 windows.
 
-Three files are not links, and an edit in the repo does not reach them by
+Four files are not links, and an edit in the repo does not reach them by
 itself:
 
 - `~/.claude/settings.json` is merged from `claude/settings.fragment.json`.
@@ -35,11 +40,14 @@ itself:
   fix `~/.zprofile` by hand.
 - `~/.config/jj/conf.d/identity.toml` is local to the machine and never in
   the repo, see [Identity and signing](identity-and-signing.md).
+- `~/.config/dotfiles/config` is rewritten by every `./install.sh` run. After
+  moving the clone, run `./install.sh` from the new location to update
+  `DOTFILES_DIR` and the links.
 
 ## Commit and push
 
 ```sh
-cd ~/repos/personal/dotfiles
+cd "$DOTFILES_DIR"
 jj st
 jj diff --git
 jj commit -m "ghostty: bump font size"
@@ -49,8 +57,10 @@ jj git push -b main
 ```
 
 `@-` is the change you just committed, below the empty `@` that
-`jj commit` leaves on top. The repo is under `~/repos/personal`, so these
-commits use the personal identity and key without `sign-as`.
+`jj commit` leaves on top. The commits use the identity of wherever the clone
+lives: the main one, or the second one if the clone is inside the second
+identity's folder. Run `sign-as status` to check, or `sign-as personal` once
+to switch this repo.
 
 `just check` runs `just lint`, `just test` and `just secrets`, the same steps
 as the `check` job in CI:
@@ -89,7 +99,7 @@ and run `./install.sh` to put the link back. It moves the live file aside as
 ## Pull updates on another machine
 
 ```sh
-cd ~/repos/personal/dotfiles
+cd "$DOTFILES_DIR"
 jj git fetch
 jj new 'trunk()'
 ./install.sh               # links new files, existing links print "ok"

@@ -95,10 +95,13 @@ mode 600, and never links it. Each machine gets its own, which also fits the
 keys: one machine signs through the 1Password agent, another with a `.pub`
 file and `ssh-keygen`.
 
-The work and personal split lives in the same local file as a
-`--when.repositories` scope on `~/repos/personal`, mirrored for git with an
-`includeIf`. Placing a repo under that directory is the whole switch, and
-`sign-as` covers the exceptions.
+Many people commit with one identity, so that is the default. The optional
+second identity, for example personal projects next to a work account, lives
+in the same local file as a `--when.repositories` scope on a folder you pick
+during install, mirrored for git with an `includeIf`. Placing a repo in that
+folder is the whole switch, and `sign-as` covers the exceptions. The folder is
+a setup answer, not a path in the repo, because every machine and every owner
+keeps repos somewhere else.
 
 Two scanners keep it that way. `scripts/check-secrets.sh` runs in
 `just check` on the working tree, with a local denylist for your own name
@@ -171,7 +174,8 @@ on, could ask 1Password for a signature, all to list some change IDs.
 A repo's own `.navi/` folder is code that runs as soon as you open the
 palette in it, because navi evaluates the pickers to build the lists. A
 cloned repo could put anything there. So `zsh/navi.zsh` loads it only for a
-trusted repo, the same deal as `mise trust` and `direnv allow`: your own
-repos under `~/repos/personal` are trusted, and any other repo needs one
-`navi-trust`. Trust is recorded for the main checkout, so new jj workspaces
+trusted repo, the same deal as `mise trust` and `direnv allow`. Repos in the
+second identity's folder (`$DOTFILES_PERSONAL_DIR`) are your own and trusted
+without asking. Any other repo needs one `navi-trust`, and with one identity
+that means every repo. Trust is recorded for the main checkout, so new jj workspaces
 inherit it, as they do for mise.

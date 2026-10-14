@@ -60,8 +60,10 @@ pnpm and gopls. Tools that must match CI belong in each project's
 has to start from the project directory to see them.
 
 Your name, emails and signing keys stay in
-`~/.config/jj/conf.d/identity.toml` on your machine, with a second identity
-for repos under `~/repos/personal`.
+`~/.config/jj/conf.d/identity.toml` on your machine. One identity for every
+repo is the default. Optionally, a second identity covers every repo in one
+folder you choose during install, such as personal projects next to a work
+account.
 [Identity and signing](guides/identity-and-signing.md) covers both and the
 `sign-as` override.
 

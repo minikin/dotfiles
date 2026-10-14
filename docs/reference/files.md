@@ -9,7 +9,7 @@ file edits the repo. `just drift` reports the state of each linked file.
 | Repo file                       | Installed as                                | Configures                                                                                     |
 | ------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `ghostty/config`                | linked: `~/.config/ghostty/config`          | Ghostty: JetBrainsMono Nerd Font Mono 13, Catppuccin Mocha and Latte, 100 MB scrollback, bell and finish notifications, left Option as Alt, quick terminal, split keys. See [keybindings](keybindings.md). |
-| `zsh/zshrc`                     | linked: `~/.zshrc`                          | Homebrew `PATH`, completions (including jj's dynamic ones), autosuggestions, fzf, starship, zoxide, `mise activate zsh`, the four files below, syntax highlighting last. |
+| `zsh/zshrc`                     | linked: `~/.zshrc`                          | Homebrew `PATH`, completions (including jj's dynamic ones), autosuggestions, fzf, starship, zoxide, `mise activate zsh`, the machine settings in `~/.config/dotfiles/config`, the four files below, syntax highlighting last. |
 | `zsh/jj.zsh`                    | linked: `~/.config/zsh/jj.zsh`              | `jw`, `jwc`, `jws`, `jwl`, `jwrm`, `jpush`. See [shell commands](shell-commands.md).           |
 | `zsh/sign.zsh`                  | linked: `~/.config/zsh/sign.zsh`            | `sign-as`.                                                                                     |
 | `zsh/infra.zsh`                 | linked: `~/.config/zsh/infra.zsh`           | `infra`.                                                                                       |
@@ -32,9 +32,10 @@ None of these are in the repo. See [install.sh](install-sh.md#what-it-writes).
 | File                                   | Holds                                                 |
 | -------------------------------------- | ----------------------------------------------------- |
 | `~/.config/jj/conf.d/identity.toml`    | Name, emails, signing keys. Mode 600.                 |
+| `~/.config/dotfiles/config`            | Machine settings, rewritten on every run and sourced by `zshrc`: `DOTFILES_DIR` (where the repo is cloned) and, with a second identity, `DOTFILES_PERSONAL_DIR` (its folder, absolute). |
 | `~/.config/git/allowed_signers`        | `<email> namespaces="git" <public key>` lines.        |
-| `~/.config/git/personal.gitconfig`     | Personal `user.email`, and its key and signer if given. |
-| `~/.gitconfig`                         | Signing keys, `includeIf` for `~/repos/personal/`, `alias.dft`, and `user.name` and `user.email` copied from jj. |
+| `~/.config/git/personal.gitconfig`     | Only with a second identity: its `user.email`, and its key and signer if given. |
+| `~/.gitconfig`                         | Signing keys, `includeIf` for the second identity's folder if any, `alias.dft`, and `user.name` and `user.email` copied from jj. |
 | `*.bak-<YYYYmmdd-HHMMSS>`              | Anything the script replaced.                         |
 
 ## Packages
@@ -54,11 +55,11 @@ These stay in the repo and are not installed.
 | `scripts/check-secrets.sh` | Scans tracked and untracked, non-ignored files for email addresses outside example domains, absolute home paths, private key headers, full SSH public keys, 1Password references and entries from the local denylist. Exits 1 on any hit. |
 | `.gitleaks.toml`           | gitleaks default rules plus `personal-email`, `home-path`, `ssh-public-key` and `onepassword-reference`. Ignores `.jj/`. |
 | `tests/helpers.bash`       | Shared bats helpers: fake `HOME`, a copy of the repo to install into, throwaway jj repos.      |
-| `tests/install.bats`       | `install.sh`: dry run, links, second run, backups, settings merge, identity from env and template. |
+| `tests/install.bats`       | `install.sh`: dry run, links, second run, backups, settings merge, identity from env and template, one identity only, the second identity's folder and email set together, a folder outside `$HOME`, `~/.config/dotfiles/config`, the template's placeholder folder. |
 | `tests/jj.bats`            | `jw`, `jwrm`, `jpush` and `jj tug` in temporary jj repos.                                     |
 | `tests/statusline.bats`    | `claude/statusline.sh` inside and outside jj, empty input, no op log writes.                  |
 | `tests/infra.bats`         | `infra/compose.yaml` is valid and every port binds to `127.0.0.1` or `[::1]`.                 |
-| `tests/navi.bats`          | `navi/*.cheat` and `zsh/navi.zsh`: every entry renders, unique descriptions, no zsh functions or working-copy snapshots in pickers, the `[LOCAL ONLY]` and `[PERSONAL]` labels, column-1 insertion, and the `.navi/` trust rules. |
+| `tests/navi.bats`          | `navi/*.cheat` and `zsh/navi.zsh`: every entry renders, unique descriptions, no zsh functions or working-copy snapshots in pickers, the `[LOCAL ONLY]` and `[PERSONAL]` labels, column-1 insertion, and the `.navi/` trust rules, with and without `DOTFILES_PERSONAL_DIR`. |
 | `.github/workflows/ci.yml` | CI. Job `check` on `macos-latest` runs `just check`. Job `history-secrets` on `ubuntu-latest` runs gitleaks 8.30.1 over the full git history. |
 | `.github/ISSUE_TEMPLATE/bug_report.yml` | Bug report form.                                                                  |
 | `.github/ISSUE_TEMPLATE/feature_request.yml` | Feature request form.                                                        |

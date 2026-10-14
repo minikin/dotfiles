@@ -11,7 +11,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | `jwl`              | `zsh/jj.zsh`     | none                 | `jj workspace list`.                                          |
 | `jwrm`             | `zsh/jj.zsh`     | `[name...]`          | Remove workspaces. fzf multi-pick without arguments.          |
 | `jpush`            | `zsh/jj.zsh`     | `[bookmark]`         | Push `work()` as a bookmark named after the workspace.        |
-| `sign-as`          | `zsh/sign.zsh`   | `[work\|personal\|status]` | Show or override this repo's commit identity.           |
+| `sign-as`          | `zsh/sign.zsh`   | `[work\|personal\|status]` | Show this repo's commit identity, or switch it between the main and the second identity. |
 | `infra`            | `zsh/infra.zsh`  | `[subcommand] [args...]` | Drive the local Docker stack.                             |
 | `navi-trust`       | `zsh/navi.zsh`   | none                 | Load this repo's `.navi/` workflows from now on.              |
 | `navi-untrust`     | `zsh/navi.zsh`   | none                 | Stop loading this repo's `.navi/` workflows.                  |
@@ -23,6 +23,8 @@ sets up. `<x>` is required, `[x]` is optional.
 | `JW_NO_SETUP` | `jw`, `jwc` | Any non-empty value skips the env-file copy and project setup on a new workspace. |
 | `NAVI_DEFAULT_PATH` | `zsh/navi.zsh` | navi's default cheats folder, first in `NAVI_PATH`. Default `~/.local/share/navi/cheats`. |
 | `NAVI_TRUST_FILE` | `zsh/navi.zsh` | The trusted-repos list. Default `~/.config/navi/trusted-repos`. |
+| `DOTFILES_PERSONAL_DIR` | `zsh/navi.zsh` | The second identity's folder, set from `~/.config/dotfiles/config`. Repos inside it are trusted without `navi-trust`. Unset with one identity. |
+| `DOTFILES_DIR` | `navi/dotfiles.cheat` | Where the dotfiles repo is cloned, set from `~/.config/dotfiles/config`. |
 
 ## Workspace layout
 
@@ -192,15 +194,21 @@ Otherwise:
 sign-as [work|personal|status]
 ```
 
+`work` is the main identity and `personal` the second identity, the one
+`install.sh` sets up for the folder you chose. The names stay `work` and
+`personal` whatever the two identities are for.
+
 | Mode               | jj (`--repo` config)                                                 | git (`--local` config)                                                  |
 | ------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `status` (default) | nothing                                                              | nothing                                                                 |
 | `personal`         | sets `user.email`, `signing.key`, `signing.backends.ssh.program`      | sets `user.email`, `user.signingkey`, `gpg.ssh.program`, `core.sshCommand` |
-| `work`             | unsets the same three                                                | unsets the same four                                                    |
+| `work`             | unsets the same three, back to the main identity                     | unsets the same four                                                    |
 
 `personal` reads its four values from `~/.config/git/personal.gitconfig`
-(`user.email`, `user.signingkey`, `gpg.ssh.program`, `core.sshCommand`). It
-returns 1 with `fill in <file> first` when `user.email` there is empty or the
+(`user.email`, `user.signingkey`, `gpg.ssh.program`, `core.sshCommand`). With
+one identity that file does not exist, and it returns 1 with
+`no second identity set up: move ~/.config/jj/conf.d/identity.toml aside, re-run install.sh and answer yes to the second identity`.
+It also returns 1 with `fill in <file> first` when `user.email` there is empty or the
 placeholder `PERSONAL_EMAIL`. `core.sshCommand` is optional: when the file has
 none, `sign-as personal` removes any per-repo `core.sshCommand` and git uses the
 default ssh. `install.sh` never writes it.
@@ -278,9 +286,12 @@ through a `chpwd` hook and once when it is sourced:
 | In a trusted repo whose top level has a `.navi/` folder          | `$NAVI_DEFAULT_PATH:<top level>/.navi`               |
 | Anywhere else                                                    | unset, so navi reads only its default folder          |
 
-A repo is trusted when its main checkout is under `~/repos/personal/` or its
-path is a line of `trusted-repos`. Repos under `~/repos/personal/` need no
-entry, and `navi-untrust` does not stop them loading. `zsh/navi.zsh` returns
+A repo is trusted when its main checkout is under `$DOTFILES_PERSONAL_DIR`,
+the second identity's folder, or its path is a line of `trusted-repos`.
+Symlinks in `$DOTFILES_PERSONAL_DIR` are resolved for the comparison. Repos
+in that folder need no entry, and `navi-untrust` does not stop them loading.
+Without a second identity the variable is unset, and only `navi-trust` adds
+repos. `zsh/navi.zsh` returns
 without defining anything when `navi` is not installed. See
 [saved workflows](../guides/workflows.md#per-project-workflows).
 

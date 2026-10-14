@@ -107,8 +107,10 @@ the palette runs every picker in those files, so `zsh/navi.zsh` loads a
 repo's `.navi/` only when the repo is trusted, for the same reason
 `mise trust` and `direnv allow` exist.
 
-A repo is trusted when its main checkout is under `~/repos/personal`, or
-when its path is listed in `~/.config/navi/trusted-repos`. Manage the list
+A repo is trusted when its main checkout is inside `$DOTFILES_PERSONAL_DIR`,
+the folder you chose for the second identity in `install.sh`, or when its
+path is listed in `~/.config/navi/trusted-repos`. With one identity the
+variable is unset and nothing is trusted automatically. Manage the list
 from inside the repo:
 
 ```sh
@@ -143,9 +145,10 @@ always there.
   Docker, a cluster, GitHub, Go or Redis are skipped.
 - An expect script picks a change from a tab-separated picker and checks that
   only column 1 is inserted.
-- An untrusted repo's `.navi/` is not loaded, `~/repos/personal` repos are,
-  `navi-trust` and `navi-untrust` toggle a repo, and a workspace of a trusted
-  repo loads its own `.navi/`.
+- An untrusted repo's `.navi/` is not loaded, repos under
+  `DOTFILES_PERSONAL_DIR` are, nothing is trusted automatically without that
+  variable, `navi-trust` and `navi-untrust` toggle a repo, and a workspace of
+  a trusted repo loads its own `.navi/`.
 
 [Contributing](../../CONTRIBUTING.md#adding-a-workflow) has the short
 version. The [cheatsheet](../reference/cheatsheet.md#workflows-zshnavizsh) lists the

@@ -38,7 +38,7 @@ jobs:
           echo "${JJ_SHA256}  ${tarball}" | shasum -a 256 -c -
           mkdir -p "$RUNNER_TEMP/jj" && tar -xzf "$tarball" -C "$RUNNER_TEMP/jj"
           jj_bin=$(find "$RUNNER_TEMP/jj" -type f -name jj | head -1)
-          echo "$(dirname "$jj_bin")" >> "$GITHUB_PATH"
+          dirname "$jj_bin" >> "$GITHUB_PATH"
 
       - name: Tool versions
         run: |

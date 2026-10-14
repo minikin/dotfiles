@@ -21,7 +21,10 @@ jobs:
     env:
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
+      # Full history, so the commit-message check can walk the pushed range.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Install tools
         run: brew install git just bats-core shellcheck jq lychee gitleaks mise navi
@@ -72,6 +75,18 @@ jobs:
         run: |
           set -o pipefail
           just secrets 2>&1 | tee secrets.log || { tail -30 secrets.log | sed 's/^/::error title=secrets::/'; exit 1; }
+
+      # The pull request's own commits, or the commits a push added. A new branch has no
+      # "before" (all zeros), so only its tip is checked.
+      - name: just commits
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -o pipefail
+          if [[ -z $BASE || $BASE =~ ^0+$ ]]; then range="$HEAD_SHA~1..$HEAD_SHA"; else range="$BASE..$HEAD_SHA"; fi
+          just commits "$range" 2>&1 | tee commits.log || { sed 's/^/::error title=commit message::/' commits.log; exit 1; }
 
   history-secrets:
     runs-on: ubuntu-latest

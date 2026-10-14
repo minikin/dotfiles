@@ -41,8 +41,12 @@ secrets:
       echo "skip gitleaks: not installed"
     fi
 
+# Conventional Commits subjects in a git range (default: origin/main..HEAD)
+commits range="origin/main..HEAD":
+    scripts/check-commits.sh "{{range}}"
+
 # Everything CI runs
-check: lint test secrets
+check: lint test secrets commits
 
 # Compare each live file install.sh links against the repo copy (read-only)
 drift:

@@ -8,7 +8,7 @@ macOS (Apple Silicon) dotfiles for running several AI coding agents in parallel,
 
 ```sh
 just check                       # lint + test + secrets + commits, the same as CI. Run before every commit
-just lint                        # shellcheck, zsh -n, docker compose config, lychee --offline on all *.md
+just lint                        # shellcheck, bats asserts, zsh -n, docker compose config, lychee --offline on all *.md
 just test                        # bats tests
 bats tests/jj.bats               # one suite
 bats tests/jj.bats -f 'jpush'    # tests whose name matches a regex
@@ -28,8 +28,8 @@ Run `actionlint` after editing `.github/workflows/ci.yml`, because CI doesn't ru
   - writes the identity to `~/.config/jj/conf.d/identity.toml`: one identity, or two using a `[[--scope]]` keyed on `DOTFILES_PERSONAL_DIR`. It mirrors this into git (`includeIf.gitdir`, `~/.config/git/allowed_signers`).
   - writes `~/.config/dotfiles/config` (`DOTFILES_DIR`, `DOTFILES_PERSONAL_DIR`), which `zsh/zshrc` sources. Code and docs must not hard-code the repo path or the personal folder. Use these variables.
 - **`claude/CLAUDE.md` is linked to `~/.claude/CLAUDE.md`.** It is the user's global instructions for every Claude session, not guidance for this repo. Editing it changes every agent's behaviour.
-- **zsh**: `zsh/zshrc` sources `~/.config/zsh/{jj,sign,infra,reload,navi}.zsh` (the linked copies). The agent workspace commands (`jw`, `jwc`, `jws`, `jwst`, `jwl`, `jwrm`, `jsync`, `jpush`, `jland`) are in `zsh/jj.zsh`. Workspaces go in `<repo>-ws/<name>`, need jj 0.46+, and copy untracked `.env*` files before running the project setup (skipped when `JW_NO_SETUP` is set). `sign-as` is in `sign.zsh`, `infra` (wraps `infra/compose.yaml`) is in `infra.zsh`, and the navi `Ctrl-G` palette and per-project trusted `.navi/` are in `navi.zsh`.
-- **navi cheats** (`navi/*.cheat`) follow rules enforced by `tests/navi.bats`; see CONTRIBUTING.md "Adding a workflow". Pickers run in bash, so they can't call the zsh functions. jj pickers pass `--ignore-working-copy`. Destructive infra entries are prefixed `[LOCAL ONLY]` and target localhost only.
+- **zsh**: `zsh/zshrc` sources `~/.config/zsh/{jj,sign,infra,reload,navi}.zsh` (the linked copies). The agent workspace commands (`jw`, `jwc`, `jws`, `jwst`, `jnext`, `jwl`, `jwrm`, `jsync`, `jpush`, `jland`) are in `zsh/jj.zsh`. Workspaces go in `<repo>-ws/<name>`, need jj 0.46+, and copy untracked `.env*` files before running the project setup (skipped when `JW_NO_SETUP` is set). `sign-as` is in `sign.zsh`, `infra` (wraps `infra/compose.yaml`) is in `infra.zsh`, `reload` is in `reload.zsh`, and the navi `Ctrl-G` palette and per-project trusted `.navi/` are in `navi.zsh`.
+- **navi cheats** (`navi/*.cheat`) follow rules enforced by `tests/navi.bats`, see CONTRIBUTING.md "Adding a workflow". Pickers run in bash, so they can't call the zsh functions. jj pickers pass `--ignore-working-copy`. Destructive infra entries are prefixed `[LOCAL ONLY]` and target localhost only.
 - **Tests must never touch the real machine.** Every test calls `fake_home` in `setup`, which isolates HOME, git and jj config and unsets `DOTFILES_*`. Use `copy_repo` + `run_install` to run the installer against a copy, and `make_jj_repo`/`add_bare_remote` for jj fixtures under `BATS_TEST_TMPDIR`. Never configure real signing in a test. A known bug gets a `skip "BUG: ..."` test.
 - **Docs** (`docs/`) use the Diátaxis layout (guides, reference, explanation). Every path, key, default and port in a reference page must match the code, so grep the docs whenever you change a value. `docs/explanation/design.md` records why each choice was made.
 

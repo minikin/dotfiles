@@ -7,6 +7,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | ------------------ | ---------------- | -------------------- | ------------------------------------------------------------- |
 | `jw`               | `zsh/jj.zsh`     | `<name> [rev]`       | Create or reuse a workspace at `<repo>-ws/<name>`, `cd` into it. |
 | `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude` there with the remaining arguments. |
+| `jnext`            | `zsh/jj.zsh`     | none                 | What to do next: one row per agent workspace that needs you, most urgent first. |
 | `jwst`             | `zsh/jj.zsh`     | none                 | One row per workspace: latest change, commits behind trunk, pushed, conflicts. |
 | `jsync`            | `zsh/jj.zsh`     | `[name...]`          | Fetch, then rebase workspaces onto trunk one at a time. fzf multi-pick without arguments. |
 | `jws`              | `zsh/jj.zsh`     | none                 | Pick a workspace with fzf and `cd` into it.                   |
@@ -25,6 +26,10 @@ sets up. `<x>` is required, `[x]` is optional.
 | Variable      | Read by | Effect                                                         |
 | ------------- | ------- | -------------------------------------------------------------- |
 | `JW_NO_SETUP` | `jw`, `jwc` | Any non-empty value skips the env-file copy and project setup on a new workspace. |
+| `JW_HINT` | `zsh/jj.zsh` | `0` turns off the [repo-entry hint](#repo-entry-hint). Read when the file is sourced. |
+| `CLAUDECODE` | `zsh/jj.zsh` | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint. |
+| `GHOSTTY_BIN` | `reload` | The Ghostty binary to validate the config with. Without it, `ghostty` on `PATH`, else `/Applications/Ghostty.app/Contents/MacOS/ghostty`. |
+| `NAVI_CONFIG_YAML` | navi | Set by `zsh/navi.zsh` to the palette's column layout, unless it is already set or `${NAVI_CONFIG:-~/.config/navi/config.yaml}` exists. |
 | `NAVI_DEFAULT_PATH` | `zsh/navi.zsh` | navi's default cheats folder, first in `NAVI_PATH`. Default `~/.local/share/navi/cheats`. |
 | `NAVI_TRUST_FILE` | `zsh/navi.zsh` | The trusted-repos list. Default `~/.config/navi/trusted-repos`. |
 | `DOTFILES_PERSONAL_DIR` | `zsh/navi.zsh` | The second identity's folder, set from `~/.config/dotfiles/config`. Repos inside it are trusted without `navi-trust`. Unset with one identity. |
@@ -41,7 +46,9 @@ same from the main checkout and from inside any workspace.
 Outside a jj repo `jw`, `jwst`, `jsync` and `jwrm` print `not in a jj repo` and return 1. In a
 git repo without jj they print
 `git repo without jj — run: jj git init --colocate`. `jwl`, `jws` and
-`jpush` call `jj` directly and show jj's own error instead.
+`jpush` call `jj` directly and show jj's own error instead. Outside a jj
+repo `jland` prints `jland: not in a jj repo` and returns 1. `jnext` behaves
+differently, see [jnext](#jnext).
 
 ## jw
 
@@ -179,6 +186,67 @@ operation. Unsaved edits are not in the row until the agent's next jj
 command snapshots them. jj does not expose whether a workspace is stale
 without loading it, so there is no stale column.
 
+## jnext
+
+```sh
+jnext
+```
+
+Prints what to do next as aligned rows of workspace, state, command and a
+note. One row per agent workspace that needs something, most urgent first,
+then a `jwst` row. `default` never gets a row of its own:
+
+```text
+fix-retry-storm  conflicts     jws                    # jj st there, or tell its agent
+feat-export-csv  behind trunk  jsync feat-export-csv  # rebase it onto trunk
+docs-pass        not pushed    jpush                  # from its workspace, jws to get there
+spike            no work       jwrm spike             # merged or abandoned
+all              status        jwst                   # full table
+```
+
+Each workspace gets the first state that matches, in this order:
+
+| State | When | Command |
+| ----- | ---- | ------- |
+| `conflicts` | `trunk()..<name>@` has a conflicted change | `jws`, then `jj st` there or tell its agent |
+| `no work` | `heads(::<name>@ & mutable() & ~empty())` is empty: nothing on top of trunk | `jwrm <name>`. The work may have been merged or abandoned, `jnext` cannot tell which |
+| `behind trunk` | `::trunk() & ~::<name>@` is not empty | `jsync <name>` |
+| `not pushed` | the latest work has a description and the bookmark named after the workspace is not on it at `origin` | `jpush`, run from that workspace |
+
+A workspace that matches none of these, such as an agent still working on
+an undescribed change, gets no row. The rows are sorted by state:
+conflicts, behind trunk, not pushed, no work. With no agent workspaces at
+all, the first row is `-  no agents  jwc feat/<name> --permission-mode plan  # or Ctrl-G, start`.
+
+| Where | Output |
+| ----- | ------ |
+| git repo without jj | one row, `-  git only  jj git init --colocate  # then jw and jwc work here`, exit 0 |
+| Outside any repo | `jnext: not in a jj or git repo` on stderr, exit 1 |
+
+Like `jwst`, every query runs from the main checkout with
+`--ignore-working-copy`, so `jnext` snapshots nothing and creates no
+operation.
+
+### Repo-entry hint
+
+`cd` into a main checkout that has agent workspaces prints one line:
+
+```text
+my-service: 3 agents · 1 behind trunk · conflicts · jnext
+```
+
+`behind trunk` counts the agent workspaces whose working copy is not on top
+of `trunk()`. `conflicts` appears when any agent workspace has a conflicted
+change in `trunk()..<name>@`. Each part is left out when it is zero. A repo
+without agent workspaces prints nothing.
+
+The hint runs three jj queries with `--ignore-working-copy`, the same three
+however many agents there are, and takes about 60 ms. It fires once per repo
+per shell, only in the main checkout (where `.jj/repo` is a directory), and
+also for the directory a new shell starts in. `zsh/jj.zsh` registers it as a
+`chpwd` hook only in an interactive shell, when `CLAUDECODE` is empty and
+`JW_HINT` is not `0`.
+
 ## jsync
 
 ```sh
@@ -260,6 +328,7 @@ For repos without pull requests. Moves the trunk bookmark to `rev`, default
 
 | Case | Result |
 | ---- | ------ |
+| Not in a jj repo | exit 1 with `jland: not in a jj repo` |
 | `rev` has no description | exit 1 with `jland: <rev> has no description, run: jj describe -r '<rev>' -m "..."`, nothing moved |
 | `rev` is behind the bookmark | jj refuses to move it backwards, exit 1, nothing pushed |
 

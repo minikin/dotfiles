@@ -8,7 +8,7 @@ default:
 install *args:
     ./install.sh {{args}}
 
-# Shellcheck, zsh syntax, compose config (if docker is installed) and offline Markdown link check
+# Shellcheck, bats asserts, zsh syntax, compose config (if docker is installed) and offline Markdown link check
 lint:
     #!/usr/bin/env bash
     set -euo pipefail

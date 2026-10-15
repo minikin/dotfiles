@@ -34,10 +34,12 @@ Kafka. It assumes:
 Ghostty is the terminal: splits on `cmd+d` and `cmd+shift+d`, 100 MB of
 scrollback, and a system notification when an agent rings the bell or when a
 command that ran longer than 30 seconds finishes in an unfocused split. zsh
-loads fzf, zoxide, starship and mise, and sources three files of shell
+loads fzf, zoxide, starship and mise, and sources five files of shell
 functions: `jw`, `jwc`, `jws`, `jwst`, `jwl`, `jwrm`, `jsync`, `jpush` and
 `jland` for workspaces,
-`sign-as` for the commit identity, `infra` for the local stack.
+`sign-as` for the commit identity, `infra` for the local stack, `reload`
+to check every config and restart zsh, and the navi palette on `Ctrl-G`
+with `navi-trust` and `navi-untrust`.
 [Parallel agents](guides/parallel-agents.md) covers the workspace commands,
 and [shell commands](reference/shell-commands.md) lists every one.
 

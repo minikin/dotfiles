@@ -4,7 +4,7 @@ Clone the repo anywhere you like (for example `~/src/dotfiles`, `install.sh` rec
 
 ---
 
-Set up my terminal and AI-agent development environment from this repo on this Mac. Read `README.md` first. It describes every file and where it goes.
+Set up my terminal and AI-agent development environment from this repo on this Mac. Read `README.md` first for the overview, then `docs/reference/files.md`, which lists every file and where it goes.
 
 Do this in order, and tell me before anything destructive:
 
@@ -21,7 +21,7 @@ Do this in order, and tell me before anything destructive:
 6. **Verify.** Report each result:
    - `ghostty +validate-config` passes, and font `JetBrainsMono Nerd Font Mono` shows in `ghostty +list-fonts`.
    - `zsh -i -c exit` has no errors and takes under ~150ms (`/usr/bin/time`).
-   - In a new interactive shell, `jw jwc jws jwl jwrm jpush z zi` are defined.
+   - In a new interactive shell, `jw jwc jws jwst jwl jwrm jsync jpush jland jnext sign-as infra reload navi-trust navi-untrust z zi` are defined.
    - `jj --version`, `mise --version`, `just --version`, `jjui --version`, `difft --version` work.
    - `echo '{"workspace":{"current_dir":"'$PWD'"},"model":{"display_name":"test"}}' | ~/.claude/statusline.sh` prints a status line.
 7. **End-to-end test, ONLY in a temp directory.** Make it with `mktemp -d`, never use a real repo, and check that every `cd` succeeded. Create a repo with `jj git init --colocate`, add a `.env` (gitignored) and a `mise.toml`, commit, then run `jw test-agent` and check that `.env` was copied, `mise install` ran, and `git status` works inside the workspace. Then `jwrm test-agent` and delete the temp dir.

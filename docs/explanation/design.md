@@ -161,8 +161,8 @@ one Homebrew formula and needs no app or account.
 `Ctrl-G` inserts the command and never runs it. You see the namespace, the
 topic or the change ID before pressing Enter, which matters most for the
 `[LOCAL ONLY]` and `[PERSONAL]` entries. Inserting into the prompt also
-puts the command in your zsh, where `jw`, `jpush`, `infra` and `sign-as`
-exist.
+puts the command in your zsh, where `jw`, `jwc`, `jwrm`, `jpush`, `jland`
+and `infra` exist.
 
 The pickers are another matter. navi runs every `$ var:` line in bash, which
 has none of those zsh functions, so the pickers call `jj`, `kubectl`, `gh`

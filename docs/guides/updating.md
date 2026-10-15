@@ -23,9 +23,12 @@ any other linked file in place, or edit the file in the repo. Both are the
 same file. Reload what you changed:
 
 ```sh
-exec zsh                     # zsh/zshrc and zsh/*.zsh
-ghostty +validate-config     # ghostty/config, then cmd+shift+, to reload
+reload    # validates Ghostty, jj and zsh configs, then restarts zsh
 ```
+
+`reload` stops before the restart when a config is broken, so a typo never
+leaves you with a shell that cannot start. It only validates Ghostty: press
+`cmd+shift+,` to apply `ghostty/config`.
 
 Some Ghostty settings, such as `macos-option-as-alt`, apply only to new
 windows.
@@ -67,7 +70,8 @@ to switch this repo.
 as the `check` job in CI:
 
 - `lint`: `shellcheck` on `install.sh`, `claude/statusline.sh` and
-  `scripts/*.sh`, `zsh -n` on every zsh file, `docker compose config -q` on
+  `scripts/*.sh`, a check that every bats `[[ ]]` and `!` assert ends in
+  `|| false`, `zsh -n` on every zsh file, `docker compose config -q` on
   `infra/compose.yaml` when Docker is installed, and an offline `lychee` link
   check of the Markdown
 - `test`: `bats tests`
@@ -107,7 +111,7 @@ cd "$DOTFILES_DIR"
 jj git fetch
 jj new 'trunk()'
 ./install.sh               # links new files, existing links print "ok"
-exec zsh
+reload                     # exec zsh if this machine has no reload yet
 ```
 
 New `Brewfile` entries need `brew bundle`. New global tools in

@@ -156,7 +156,7 @@ jws                    # pick the workspace
 jj stack               # its changes on top of trunk
 jj squash              # fold @ into its parent, if needed
 jj describe -r <change> -m "fix(consumer): retry with backoff"
-jj git fetch && jj rebase -d 'trunk()'
+jj git fetch && jj rebase -d 'trunk()'   # or jsync <name> from the main checkout
 jpush                  # pushes work() as the bookmark named after the workspace
 gh pr create --head fix-retry-storm
 ```
@@ -174,10 +174,16 @@ jwrm fix-retry-storm
 ### Morning
 
 ```sh
-cd ~/repos/my-service
+cd ~/repos/my-service   # prints: my-service: 3 agents · 1 behind trunk · conflicts · jnext
 jj git fetch
+jnext                  # what needs you, most urgent first
 jwst                   # workspaces left over from yesterday, one row each
 ```
+
+Entering the repo prints a one-line hint when it has agent workspaces.
+`jnext` turns it into commands: one row per workspace that needs something,
+conflicts first, then behind trunk, not pushed and no work left. Run the
+command on its row, or `jwst` for the full table.
 
 `jwst` shows each workspace's latest change, how many commits it is behind
 trunk, whether that change is pushed and whether it has conflicts. It only
@@ -196,8 +202,8 @@ jsync fix-retry-storm add-metrics    # or jsync alone to pick with fzf
 `jsync` fetches once, then for each workspace snapshots the agent's unsaved
 edits, rebases its stack onto `trunk()` and runs `jj workspace update-stale`
 in it right away, so the agent never meets `The working copy is stale`. It
-prints one line per workspace: `up to date`, `rebased onto trunk`, or
-`conflicts, left for the agent`. Leave conflicts to the agent, `jj st` in
+prints one line per workspace: `up to date`, `up to date, conflicts left
+for the agent`, `rebased onto trunk`, or `conflicts, left for the agent`. Leave conflicts to the agent, `jj st` in
 the workspace lists them. Run `jsync` while the agents wait for input, not
 while they are writing files.
 
@@ -243,6 +249,6 @@ infra down             # stop Redis and Kafka, keep their data
 | A commit is signed with the wrong identity | `sign-as status`, then [Identity and signing](identity-and-signing.md) |
 
 Press `Ctrl-G` and type `start` for the recipe openers above (feature, bug
-fix, ADR, spike, continue), or any other command in this guide you do not
+fix, ADR, spike, continue, drop a spike), or any other command in this guide you do not
 type every day. See
 [Saved workflows](workflows.md).

@@ -139,7 +139,7 @@ exec zsh
 ghostty +validate-config
 ghostty +list-fonts | grep 'JetBrainsMono Nerd Font Mono'
 /usr/bin/time zsh -i -c exit
-type jw jwc jws jwst jwl jwrm jsync jpush jland sign-as infra z zi
+type jw jwc jws jwst jwl jwrm jsync jpush jland jnext sign-as infra reload navi-trust navi-untrust z zi
 (cd ~ && jj config get user.email)
 git config --global user.email
 echo '{"workspace":{"current_dir":"'$PWD'"},"model":{"display_name":"test"}}' | ~/.claude/statusline.sh

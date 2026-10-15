@@ -20,8 +20,8 @@ loads navi's zsh widget with `eval "$(navi widget zsh)"`.
    you get an fzf list. Otherwise you type the value.
 4. The command is inserted into the prompt. Read it, edit it, press Enter.
 
-Some entries call the zsh functions from this repo (`jw`, `jpush`, `infra`,
-`sign-as`). They work through `Ctrl-G` because the command ends up in your
+Some entries call the zsh functions from this repo (`jw`, `jwc`, `jwrm`,
+`jpush`, `jland`, `infra`). They work through `Ctrl-G` because the command ends up in your
 zsh prompt. Running plain `navi` in a terminal picks and runs the command
 in a subshell, where those functions do not exist, so use `Ctrl-G`.
 
@@ -54,6 +54,7 @@ of the palette is the group:
 
 | Group      | File             | Entries, most used first                                                                                                                                                                                                                                        |
 | ---------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start`    | `agents.cheat`   | Start feature agent in plan mode, start bug fix agent, start ADR agent in plan mode, start throwaway spike agent, continue an agent's last conversation, drop a spike and remove its workspace. |
 | `agents`   | `agents.cheat`   | Review agent workspace diff (difftastic), show agent workspace changes and files, push workspace and open pull request, create agent workspaces agent-1..N.                                                                                                |
 | `review`   | `agents.cheat`   | Review pull request in its own workspace, watch CI checks of pull request.                                                                                                                                                                                       |
 | `jj`       | `jj.cheat`       | Describe a change, rebase stack onto latest trunk, squash a change into another, show a change with difftastic, revert a file to its trunk version, abandon a change, find changes that touched a file, find changes by description text, restore the repo to an earlier operation, check signature of a change, push a change straight to main. |
@@ -77,8 +78,8 @@ Two labels mark entries to read twice before pressing Enter:
 - `[LOCAL ONLY]` on the destructive infra entries: deleting a Kafka topic,
   resetting a consumer group and deleting Redis keys. They only ever target
   `localhost`.
-- `[PERSONAL]` on "Push a change straight to main", which skips the pull
-  request. Use it in your own repos only.
+- `[PERSONAL]` on "Push a change straight to main", which runs
+  `jland <change>` and skips the pull request. Use it in your own repos only.
 
 The usual way to land work is "Push workspace and open pull request",
 which runs `jpush <bookmark> && gh pr create --head <bookmark> --fill`. See
@@ -173,9 +174,12 @@ always there.
 - Destructive infra entries (deleting topics or keys, resetting offsets,
   `FLUSH`, `infra reset`) start with `[LOCAL ONLY]`, and every `kcat`,
   `redis-cli` and Kafka command targets `localhost`.
-- Any entry that runs `jj git push -b main` starts with `[PERSONAL]`.
+- Any entry that runs `jj git push -b main` or `jland` starts with
+  `[PERSONAL]`.
 - The local pickers run in bash and print something. Pickers that need
   Docker, a cluster, GitHub, Go or Redis are skipped.
+- `zsh/navi.zsh` sets the column layout in `NAVI_CONFIG_YAML`, and leaves
+  it unset when navi has a config file of its own.
 - An expect script picks a change from a tab-separated picker and checks that
   only column 1 is inserted.
 - An untrusted repo's `.navi/` is not loaded, repos under

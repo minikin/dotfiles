@@ -39,7 +39,7 @@ Guide: [Saved workflows](../guides/workflows.md).
 | `navi-trust` | Load this repo's `.navi/` workflows (repos under `$DOTFILES_PERSONAL_DIR`, the second identity's folder, are trusted already) |
 | `navi-untrust` | Stop loading this repo's `.navi/` workflows |
 
-Groups in the palette's first column: `agents` (review a workspace diff, push and open a pull request), `review` (check out a pull request, watch its CI), `jj` (change pickers, revsets, signature check), `kafka`, `redis`, `infra` (kafka-ui, Jaeger), `k8s`, `go`, `dotfiles`. Type the verb and object, e.g. `tail kafka`, `review agent`, `debug pod`.
+Groups in the palette's first column: `start` (start a feature, fix, ADR or spike agent, continue one, drop a spike), `agents` (review a workspace diff, push and open a pull request), `review` (check out a pull request, watch its CI), `jj` (change pickers, revsets, signature check), `kafka`, `redis`, `infra` (kafka-ui, Jaeger), `k8s`, `go`, `dotfiles`. Type the verb and object, e.g. `tail kafka`, `review agent`, `debug pod`.
 
 ## Agent workspaces (`zsh/jj.zsh`)
 
@@ -49,12 +49,13 @@ Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a 
 |---|---|
 | `jw <name> [rev]` | Create (or reuse) workspace and `cd` in. `rev` defaults to `trunk()`, or `@-` if no remote trunk. `/` in name becomes `-` |
 | `jwc <name> [rev] [claude args...]` | `jw`, then start `claude` in it with the remaining arguments, e.g. `jwc feat/x --permission-mode plan`, `jwc feat-x --continue` |
+| `jnext` | What to do next: one row per agent workspace that needs you (conflicts, behind trunk, not pushed, no work), then `jwst`. Read-only |
 | `jwst` | One row per workspace: latest change, commits behind trunk, pushed, conflicts. Read-only |
 | `jsync [name...]` | Fetch, then rebase each workspace onto trunk, snapshotting and updating it around the rebase (fzf multi-pick if no args) |
 | `jws` | fzf-switch to a workspace (preview: `trunk()::@` log) |
 | `jwl` | List workspaces (`jj workspace list`) |
 | `jwrm [name...]` | Remove workspaces (fzf multi-pick if no args). Changes stay in the repo, only ignored files are lost |
-| `jland [rev]` | Move `main` to `rev` (default `work()`) and push it, for repos without pull requests. Refuses an undescribed change |
+| `jland [rev]` | Move the trunk bookmark (`main`) to `rev` (default `work()`) and push it, for repos without pull requests. Refuses an undescribed change |
 | `jpush [bookmark]` | Push `work()` as a bookmark (default: workspace name). Creates it on first push, moves it forward after that. Refuses trunk and immutable names, and a change that is `@` in several workspaces when no name is given |
 | `JW_NO_SETUP=1 jw <name>` | Skip auto-setup |
 

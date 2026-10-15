@@ -31,9 +31,19 @@ Ghostty split.
   `<repo>-ws/<name>`, copies untracked `.env*` and `mise.local.toml` files
   from the main checkout and runs the project's setup (`just setup`,
   `mise run setup`, or `mise install` and the lockfile install). `jwc` also
-  starts Claude Code. `jws` switches with fzf, `jwl` lists, `jwrm` removes
-  and keeps the changes, and `jpush` pushes `work()` as a bookmark named
-  after the workspace. See [Shell commands](docs/reference/shell-commands.md).
+  starts Claude Code and passes any further arguments to `claude`, such as
+  `--permission-mode plan` or `--continue`. `jws` switches with fzf, `jwl`
+  lists, `jwrm` removes and keeps the changes, and `jpush` pushes `work()`
+  as a bookmark named after the workspace. `jwst` shows one row per
+  workspace with its latest change, commits behind trunk, push state and
+  conflicts. `jsync` fetches and rebases workspaces onto trunk, updating
+  each stale working copy right away. `jland` moves the trunk bookmark to a
+  described change and pushes it, for repos without pull requests. `jnext`
+  suggests the next command for each workspace (resolve conflicts, sync,
+  push, remove), and entering a main checkout in your own shell prints a
+  one-line summary such as `app: 3 agents · 1 behind trunk · jnext`.
+  `JW_HINT=0` turns the summary off, and it never shows in Claude Code.
+  See [Shell commands](docs/reference/shell-commands.md).
 - **jj config** (`jj/config.toml`). Bare `jj` runs `jj log`. Revset aliases
   `work()` and `closest_bookmark()`, aliases `tug`, `stack`, `dft` and
   `dshow`, and difftastic as an opt-in diff tool. See
@@ -44,15 +54,20 @@ Ghostty split.
 - **Local infrastructure** (`infra/compose.yaml`, `zsh/infra.zsh`). Redis 8,
   Apache Kafka 4.1.0 in KRaft mode, kafka-ui and Jaeger with OTLP, driven by
   `infra up`, `down`, `reset`, `ps`, `logs` and `infra kafka <script>`.
+- **`reload`** (`zsh/reload.zsh`). Validates the Ghostty, jj and zsh
+  configs, clears the completion cache and restarts zsh. A broken config
+  stops it before the restart.
 - **Saved workflows** (`navi/`, `zsh/navi.zsh`). `Ctrl-G` opens a navi
-  palette of saved commands for agent workspaces, jj, local infra,
-  Kubernetes, Go and TypeScript, and the dotfiles themselves. Arguments
+  palette of saved commands in curated groups: `start` (open a feature,
+  fix, ADR or spike agent, continue one, drop a spike), `agents`, `review`,
+  `jj`, `kafka`, `redis`, `infra`, `k8s`, `go` and `dotfiles`. Arguments
   come from live pickers, and the command is inserted into the prompt, not
   run. Destructive infra entries are labelled `[LOCAL ONLY]` and a direct
   push to main `[PERSONAL]`. A repo's own `.navi/` folder loads only when the
   repo is inside the second identity's folder (`$DOTFILES_PERSONAL_DIR`) or
-  trusted with `navi-trust`.
-  `tests/navi.bats` checks every entry. See
+  trusted with `navi-trust`. `zsh/navi.zsh` sets a wider command column
+  through `NAVI_CONFIG_YAML`, and skips it when you have a navi config file
+  of your own. `tests/navi.bats` checks every entry. See
   [Saved workflows](docs/guides/workflows.md).
 - **Commit identity** (`install.sh`, `zsh/sign.zsh`). On the first run
   `install.sh` asks for a name, an email used in every repo and a signing
@@ -83,14 +98,15 @@ Ghostty split.
   [install.sh](docs/reference/install-sh.md).
 - **`SETUP_PROMPT.md`**, a prompt that has Claude Code install and verify
   the setup on a new Mac.
-- **justfile**. `just check` runs lint (shellcheck, `zsh -n`,
+- **justfile**. `just check` runs lint (shellcheck, a check that every bats
+  `[[ ]]` and `!` assert ends in `|| false` for macOS's bash 3.2, `zsh -n`,
   `docker compose config`, an offline link check), the bats tests, the
   secret scan and a Conventional Commits check of the commits on top of
   `origin/main`. `just drift` compares each live file with the repo copy and
   reports a link into another checkout as `elsewhere`, with its target.
-- **Tests** (`tests/`). 81 bats tests for `install.sh` (including one
+- **Tests** (`tests/`). 105 bats tests for `install.sh` (including one
   identity only, a folder outside `$HOME`, a symlinked folder, rejected keys
-  and the machine settings file), the workspace commands, `sign-as`, `infra`,
+  and the machine settings file), the workspace commands, `sign-as`, `infra`, `reload`,
   `just drift`, the commit check, the status line, the navi workflows and
   their trust rules, and the Compose file, each in a fake `HOME`
   with jj and git reading only test config.
@@ -100,7 +116,7 @@ Ghostty split.
 - `CLAUDE.md` with the commands, architecture and rules for Claude Code
   sessions in this repo.
 - Documentation in `docs/`: introduction, install, getting started,
-  guides, reference, explanation and troubleshooting. `CONTRIBUTING.md` and
+  guides (including a day with parallel agents), reference, explanation and troubleshooting. `CONTRIBUTING.md` and
   issue forms for bugs and feature requests.
 
 ### Changed
@@ -157,7 +173,6 @@ Ghostty split.
   main key for every repo.
 - `.gitignore` keeps local agent and tool state (`.claude/`, `.wiz/`,
   `.codex/`, `.mdkb/`) and `*.bak-*` backups out of the public repo.
-
 - No identity in the repo. Names, emails and signing keys live in
   `~/.config/jj/conf.d/identity.toml` (mode 600) and the local git config.
   `jj/identity.example.toml` holds placeholders only.

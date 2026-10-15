@@ -48,6 +48,8 @@ link jj/config.toml           "$HOME/.config/jj/config.toml"   # identity lives 
 link mise/config.toml         "$HOME/.config/mise/config.toml"
 link claude/CLAUDE.md         "$HOME/.claude/CLAUDE.md"
 link claude/statusline.sh     "$HOME/.claude/statusline.sh"
+link claude/notify.sh         "$HOME/.claude/notify.sh"
+link claude/guard-push.sh     "$HOME/.claude/guard-push.sh"
 
 # Ghostty on macOS also reads this file *after* ~/.config/ghostty/config; an empty or stale
 # copy silently overrides settings, so move it aside.
@@ -62,7 +64,7 @@ else
   echo "ok   ~/.zprofile"
 fi
 
-echo "== Claude Code settings (merge; fragment keys win, permission allow/deny lists are unioned)"
+echo "== Claude Code settings (merge; fragment keys win, permission allow/deny lists and hooks are unioned)"
 SETTINGS=$HOME/.claude/settings.json
 if (( DRY )); then
   echo "+ merge claude/settings.fragment.json into $SETTINGS"
@@ -77,6 +79,8 @@ else
     | ($c * $a)
     | .permissions.allow = ((($c.permissions.allow // []) + ($a.permissions.allow // [])) | unique)
     | .permissions.deny  = ((($c.permissions.deny  // []) + ($a.permissions.deny  // [])) | unique)
+    | reduce ($a.hooks // {} | keys[]) as $e (.;
+        .hooks[$e] = ((($c.hooks[$e] // []) + $a.hooks[$e]) | unique))
   ' > "$SETTINGS.tmp" || { rm -f "$SETTINGS.tmp"; echo "settings merge failed; $SETTINGS untouched" >&2; exit 1; }
   if [[ -f $SETTINGS ]] && jq -e --slurpfile n "$SETTINGS.tmp" '. == $n[0]' "$SETTINGS" >/dev/null 2>&1; then
     rm -f "$SETTINGS.tmp"; echo "ok   $SETTINGS (unchanged)"

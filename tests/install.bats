@@ -109,6 +109,43 @@ JSON
   jq -e --slurpfile f "$frag" '($f[0].permissions.deny - .permissions.deny) == []' "$s"
 }
 
+@test "install: the user's own hooks survive next to the fragment's hooks" {
+  mkdir -p "$HOME/.claude"
+  cat > "$(SETTINGS)" <<'JSON'
+{
+  "hooks": {
+    "Notification": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "say hello" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit", "hooks": [ { "type": "command", "command": "my-linter" } ] }
+    ]
+  }
+}
+JSON
+  run_install
+  [ "$status" -eq 0 ]
+  s=$(SETTINGS)
+  jq -e '[.hooks.Notification[].hooks[].command] | index("say hello")' "$s"
+  jq -e '[.hooks.Notification[].hooks[].command] | index("~/.claude/notify.sh")' "$s"
+  jq -e '[.hooks.Stop[].hooks[].command] | index("~/.claude/notify.sh")' "$s"
+  jq -e '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command == "~/.claude/guard-push.sh"' "$s"
+  jq -e '.hooks.PostToolUse[0].hooks[0].command == "my-linter"' "$s"
+}
+
+@test "install: re-running does not duplicate hooks" {
+  run_install
+  [ "$status" -eq 0 ]
+  first=$(cat "$(SETTINGS)")
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(cat "$(SETTINGS)")" = "$first" ]
+  s=$(SETTINGS)
+  frag="$DOTFILES/claude/settings.fragment.json"
+  jq -e --slurpfile f "$frag" '.hooks == $f[0].hooks' "$s"
+  jq -e '(.hooks.Stop | length) == 1 and (.hooks.PreToolUse | length) == 1' "$s"
+}
+
 @test "install: parent dir already linked into the repo is left alone" {
   mkdir -p "$HOME/.config"
   ln -s "$DOTFILES/ghostty" "$HOME/.config/ghostty"

@@ -1,19 +1,19 @@
 % start
 
 # Start feature agent in plan mode
-jw feat/<name> && claude --permission-mode plan
+jwc feat/<name> --permission-mode plan
 
 # Start bug fix agent
-jw fix/<name> && claude
+jwc fix/<name>
 
 # Start ADR agent in plan mode
-jw adr/<name> && claude --permission-mode plan
+jwc adr/<name> --permission-mode plan
 
 # Start throwaway spike agent
-jw spike/<name> && claude
+jwc spike/<name>
 
 # Continue an agent's last conversation
-jw <workspace> && claude --continue
+jwc <workspace> --continue
 
 # Drop a spike and remove its workspace
 jj abandon 'trunk()..<workspace>@' && jwrm <workspace>
@@ -30,9 +30,6 @@ jj log -r 'trunk()..<workspace>@' --stat
 
 # Push workspace and open pull request
 jpush <bookmark> && gh pr create --head <bookmark> --fill
-
-# Rebase all agent workspaces onto latest trunk
-jj git fetch && jj --ignore-working-copy workspace list -T 'self.root() ++ "\n"' | while IFS= read -r d; do jj -R "$d" status >/dev/null; done && jj rebase -b 'working_copies() & mutable()' -o 'trunk()' && jj --ignore-working-copy workspace list -T 'self.root() ++ "\n"' | while IFS= read -r d; do jj -R "$d" workspace update-stale; done
 
 # Create agent workspaces agent-1..N
 for n in $(seq 1 <count>); do (jw "agent-$n"); done

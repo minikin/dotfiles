@@ -124,6 +124,75 @@ jwst() {
   print -rl -- $rows
 }
 
+# Names of the workspaces whose working-copy commit is in a revset, default left out.
+_jw_wc_names() {
+  jj -R $1 --ignore-working-copy log --no-graph -r "$2" \
+    -T 'self.working_copies().map(|w| w.name()).join("\n") ++ "\n"' 2>/dev/null | grep -vx -e default -e ''
+}
+
+# Rows of four fields (workspace, state, command, note), printed in aligned columns.
+_jw_rows() {
+  local -a f=("$@")
+  local i w1=0 w2=0 w3=0
+  for (( i = 1; i <= $#f; i += 4 )); do
+    (( ${#f[i]} > w1 )) && w1=${#f[i]}
+    (( ${#f[i+1]} > w2 )) && w2=${#f[i+1]}
+    (( ${#f[i+2]} > w3 )) && w3=${#f[i+2]}
+  done
+  for (( i = 1; i <= $#f; i += 4 )); do
+    printf "%-*s  %-*s  %-*s  # %s\n" $w1 "${f[i]}" $w2 "${f[i+1]}" $w3 "${f[i+2]}" "${f[i+3]}"
+  done
+}
+
+# jnext — what to do next: one row per agent workspace that needs you, most urgent first,
+# then jwst. Same rule as jwst: only --ignore-working-copy queries, only from the root.
+jnext() {
+  local root w work
+  local -a names behind conflicted r1 r2 r3 r4 start
+  root=$(jj --ignore-working-copy workspace root --name default 2>/dev/null) || {
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+      _jw_rows - "git only" "jj git init --colocate" "then jw and jwc work here"
+      return 0
+    fi
+    echo "jnext: not in a jj or git repo" >&2
+    return 1
+  }
+  names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"' 2>/dev/null | grep -vx default)"})
+  behind=(${(f)"$(_jw_wc_names $root 'working_copies() ~ trunk()::')"})
+  conflicted=(${(f)"$(_jw_wc_names $root 'working_copies() & (conflicts() & (trunk()..working_copies()))::')"})
+  for w in $names; do
+    if (( ${conflicted[(Ie)$w]} )); then
+      r1+=("$w" conflicts jws "jj st there, or tell its agent"); continue
+    fi
+    work=$(jj -R $root --ignore-working-copy log --no-graph -r "heads(::\"$w\"@ & mutable() & ~empty())" \
+      -T 'if(description, "described", "undescribed") ++ if(remote_bookmarks.any(|b| b.name() == "'$w'" && b.remote() == "origin"), " pushed", "") ++ "\n"' 2>/dev/null)
+    work=${work%%$'\n'*}
+    if [[ -z $work ]]; then
+      r4+=("$w" "no work" "jwrm $w" "merged or abandoned")
+    elif (( ${behind[(Ie)$w]} )); then
+      r2+=("$w" "behind trunk" "jsync $w" "rebase it onto trunk")
+    elif [[ $work == described ]]; then
+      r3+=("$w" "not pushed" jpush "from its workspace, jws to get there")
+    fi
+  done
+  (( ${#names} )) || start=(- "no agents" "jwc feat/<name> --permission-mode plan" "or Ctrl-G, start")
+  _jw_rows $r1 $r2 $r3 $r4 $start all status jwst "full table"
+}
+
+# _jw_hint [root] — the one-line summary shown on entering a repo. It runs on cd, so it
+# makes the same number of jj calls however many agents there are. Silent without agents.
+_jw_hint() {
+  local root=${1:-} n behind conflicts
+  local -a names
+  [[ -n $root ]] || root=$(jj --ignore-working-copy workspace root --name default 2>/dev/null) || return 0
+  names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"' 2>/dev/null | grep -vx default)"})
+  n=${#names}
+  (( n )) || return 0
+  behind=${#${(f)"$(_jw_wc_names $root 'working_copies() ~ trunk()::')"}}
+  conflicts=$(_jw_wc_names $root 'working_copies() & (conflicts() & (trunk()..working_copies()))::')
+  print -r -- "${root:t}: $n agent${${n:#1}:+s}${${behind:#0}:+ · $behind behind trunk}${conflicts:+ · conflicts} · jnext"
+}
+
 # jsync [name...] — rebase workspaces onto the latest trunk (fzf multi-pick if no args,
 # default included). Per workspace: snapshot its unsaved edits, rebase, update it at once,
 # so an agent never sees a stale working copy for longer than one rebase.
@@ -188,12 +257,11 @@ jwrm() {
   jj -R $root workspace remove $names
 }
 
-# jpush [bookmark] — push your latest work as a bookmark (default: workspace name).
-# Creates the bookmark on first push, moves it forward on later pushes.
 # jland [rev]: move the trunk bookmark (main) to rev, default work(), and push it. For repos
 # without pull requests. jj refuses to move the bookmark backwards.
 jland() {
   local rev=${1:-'work()'} trunk
+  jj --ignore-working-copy root >/dev/null 2>&1 || { echo "jland: not in a jj repo" >&2; return 1; }
   trunk=$(jj log --ignore-working-copy -r 'trunk()' --no-graph -T 'remote_bookmarks.map(|b| b.name()).join("\n")' 2>/dev/null | head -1)
   trunk=${trunk:-main}
   # Checked first: jj git push refuses it anyway, but only after the bookmark has moved.
@@ -204,6 +272,8 @@ jland() {
   jj bookmark set "$trunk" -r "$rev" && jj git push -b "$trunk"
 }
 
+# jpush [bookmark] — push your latest work as a bookmark (default: workspace name).
+# Creates the bookmark on first push, moves it forward on later pushes.
 jpush() {
   local name=${1:-} trunk
   [[ -z $name ]] && name=$(jj log -r @ --no-graph -T 'self.working_copies().map(|w| w.name()).join(",")')
@@ -222,3 +292,19 @@ jpush() {
     jj git push --named "$name=work()"
   fi
 }
+
+# Repo-entry hint: entering a main checkout (where .jj/repo is a directory, in a workspace
+# it is a file) prints _jw_hint once per repo per shell. Off in Claude Code and with JW_HINT=0.
+_jw_hint_chpwd() {
+  [[ -d $PWD/.jj/repo ]] || return 0
+  (( ${+_jw_hinted[${PWD:A}]} )) && return 0
+  _jw_hinted[${PWD:A}]=1
+  _jw_hint $PWD
+}
+
+if [[ -o interactive && -z ${CLAUDECODE:-} && ${JW_HINT:-1} != 0 ]]; then
+  typeset -gA _jw_hinted
+  autoload -Uz add-zsh-hook
+  add-zsh-hook chpwd _jw_hint_chpwd
+  _jw_hint_chpwd
+fi

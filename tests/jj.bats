@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# zsh/jj.zsh: jw, jwc, jwst, jsync, jwrm, jpush, jland and the `jj tug` alias, in throwaway colocated repos.
+# zsh/jj.zsh: jw, jwc, jwst, jnext, the repo-entry hint, jsync, jwrm, jpush, jland and the `jj tug` alias, in throwaway colocated repos.
 
 load helpers
 
@@ -126,6 +126,15 @@ setup() {
   [ "${#lines[@]}" -ge 3 ]
   for l in "${lines[@]}"; do
     [[ $l == *'jj -R $root --ignore-working-copy '* ]] || { echo "jwst query not read-only from the root: $l"; return 1; }
+  done
+  # jnext and the repo-entry hint: the same rule, and the root lookup is read-only too
+  for f in jnext _jw_hint _jw_wc_names; do
+    run bash -c "sed -n '/^$f()/,/^}/p' '$REPO_ROOT/zsh/jj.zsh' | grep -E '(^[[:space:]]*|\\\$\\()jj '"
+    [ "$status" -eq 0 ]
+    for l in "${lines[@]}"; do
+      [[ $l == *'jj -R $root --ignore-working-copy '* || $l == *'jj -R $1 --ignore-working-copy '* ||
+         $l == *'jj --ignore-working-copy workspace root '* ]] || { echo "$f query not read-only from the root: $l"; return 1; }
+    done
   done
   run grep -nE 'jpush|workspace add' "$REPO_ROOT/zsh/jj.zsh"
   [[ $output != *--ignore-working-copy* ]] || false
@@ -351,4 +360,121 @@ setup() {
   run_zsh "cd '$REPO' && jw t >/dev/null 2>&1 && echo z > t.txt && jj commit -m 'agent' >/dev/null 2>&1 && jj tug"
   [[ $output == *"No bookmarks to update"* || $status -eq 0 ]] || false
   [ "$(jj -R "$REPO" log -r main --no-graph -T commit_id)" = "$main_before" ]
+}
+
+@test "jland: outside a jj repo says so instead of blaming the description" {
+  mkdir -p "$BATS_TEST_TMPDIR/plain"
+  run_zsh "cd '$BATS_TEST_TMPDIR/plain' && jland"
+  [ "$status" -ne 0 ]
+  [ "$output" = "jland: not in a jj repo" ]
+}
+
+# Four agents in four states, plus default: a pushed and behind trunk, c rebased into a
+# conflict, p described but not pushed, e empty on top of trunk.
+make_agent_states() {
+  add_bare_remote "$REPO" "$BATS_TEST_TMPDIR/remote.git"
+  run_zsh "cd '$REPO' && jw a && echo a > a.txt && jj commit -m 'a work' && jpush \
+    && jw c && echo c > README.md && jj commit -m 'c work' \
+    && cd '$REPO' && echo main > README.md && jj commit -m 'main moves' && jland \
+    && jj rebase -b c@ -d 'trunk()' \
+    && jw p && echo p > p.txt && jj commit -m 'p work' \
+    && jw e"
+  [ "$status" -eq 0 ]
+}
+
+@test "jnext: one ranked row per agent that needs something, then jwst, aligned and read-only" {
+  make_agent_states
+  ops_before=$(jj -R "$REPO" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' | wc -l)
+  echo dirty > "$WS/p/unsaved.txt"
+
+  run_zsh "cd '$WS/p' && jnext"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 5 ]
+  [[ ${lines[0]} =~ ^c\ +conflicts\ +jws\ +#\ jj\ st\ there,\ or\ tell\ its\ agent$ ]] || false
+  [[ ${lines[1]} =~ ^a\ +behind\ trunk\ +jsync\ a\ +#\  ]] || false
+  [[ ${lines[2]} =~ ^p\ +not\ pushed\ +jpush\ +#\ from\ its\ workspace ]] || false
+  [[ ${lines[3]} =~ ^e\ +no\ work\ +jwrm\ e\ +#\ merged\ or\ abandoned$ ]] || false
+  [[ ${lines[4]} =~ ^all\ +status\ +jwst\ +#\ full\ table$ ]] || false
+  [[ $output != *default* ]] || false
+  # the command and note columns line up
+  for l in "${lines[@]}"; do
+    [ "$(expr "$l" : '[^#]*')" -eq "$(expr "${lines[0]}" : '[^#]*')" ]
+  done
+  [ "$(jj -R "$REPO" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' | wc -l)" -eq "$ops_before" ]
+  run jj -R "$REPO" --ignore-working-copy file list -r p@
+  [[ $output != *unsaved.txt* ]] || false
+}
+
+@test "jnext: without agents suggests starting one" {
+  run_zsh "cd '$REPO' && jnext"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 2 ]
+  [[ ${lines[0]} =~ ^-\ +no\ agents\ +jwc\ feat/\<name\>\ --permission-mode\ plan\ +#\ or\ Ctrl-G,\ start$ ]] || false
+  [[ ${lines[1]} =~ ^all\ +status\ +jwst\ +#\ full\ table$ ]] || false
+}
+
+@test "jnext: in a git-only repo suggests jj git init, outside any repo fails" {
+  mkdir -p "$BATS_TEST_TMPDIR/g" "$BATS_TEST_TMPDIR/plain"
+  git -C "$BATS_TEST_TMPDIR/g" init --quiet
+  run_zsh "cd '$BATS_TEST_TMPDIR/g' && jnext"
+  [ "$status" -eq 0 ]
+  [[ $output == *"jj git init --colocate"* ]] || false
+  [ "${#lines[@]}" -eq 1 ]
+  run_zsh "cd '$BATS_TEST_TMPDIR/plain' && jnext"
+  [ "$status" -eq 1 ]
+  [ "$output" = "jnext: not in a jj or git repo" ]
+}
+
+@test "_jw_hint: one summary line, nothing without agents" {
+  run_zsh "cd '$REPO' && _jw_hint"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  make_agent_states
+  run_zsh "cd '$REPO' && _jw_hint"
+  [ "$status" -eq 0 ]
+  [ "$output" = "app: 4 agents · 1 behind trunk · conflicts · jnext" ]
+  run_zsh "cd '$WS/a' && _jw_hint"
+  [ "$output" = "app: 4 agents · 1 behind trunk · conflicts · jnext" ]
+}
+
+@test "_jw_hint: the number of jj calls does not grow with the number of agents" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" | tr "\\n" " " >> "%s/calls"\necho >> "%s/calls"\nexec %s "$@"\n' "$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR" "$(command -v jj)" > "$BATS_TEST_TMPDIR/bin/jj"
+  chmod +x "$BATS_TEST_TMPDIR/bin/jj"
+  run_zsh "cd '$REPO' && jw one"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && _jw_hint"
+  [ "$output" = "app: 1 agent · jnext" ]
+  one=$(wc -l < "$BATS_TEST_TMPDIR/calls")
+  run_zsh "cd '$REPO' && jw two && jw three && jw four"
+  rm "$BATS_TEST_TMPDIR/calls"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && _jw_hint"
+  [ "$output" = "app: 4 agents · jnext" ]
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/calls")" -eq "$one" ]
+  run grep -vc -- --ignore-working-copy "$BATS_TEST_TMPDIR/calls"
+  [ "$output" = 0 ]
+}
+
+@test "repo-entry hint: no chpwd hook outside an interactive shell, under Claude Code or with JW_HINT=0" {
+  run zsh -f -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
+  [ "$output" = "hooks=" ]
+  run env CLAUDECODE=1 zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
+  [ "$output" = "hooks=" ]
+  run env -u CLAUDECODE JW_HINT=0 zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
+  [ "$output" = "hooks=" ]
+  run env -u CLAUDECODE -u JW_HINT zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
+  [ "$output" = "hooks=_jw_hint_chpwd" ]
+}
+
+@test "repo-entry hint: once per repo per shell, in the main checkout only, including the start directory" {
+  run_zsh "cd '$REPO' && jw a"
+  mkdir -p "$REPO/sub" "$BATS_TEST_TMPDIR/plain"
+  cd "$BATS_TEST_TMPDIR/plain"
+  run env -u CLAUDECODE -u JW_HINT zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; cd '$WS/a'; cd '$REPO/sub'; cd '$REPO'; cd /; cd '$REPO'"
+  echo "$output"
+  [ "$output" = "app: 1 agent · jnext" ]
+  cd "$REPO"
+  run env -u CLAUDECODE -u JW_HINT zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; cd /; cd '$REPO'"
+  [ "$output" = "app: 1 agent · jnext" ]
 }

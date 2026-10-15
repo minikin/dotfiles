@@ -172,6 +172,45 @@ setup() {
   [ "$output" = main ]
 }
 
+@test "jland: moves main to the latest change and pushes it" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && echo y > f.txt && jj commit -m 'land me' >/dev/null 2>&1 && jland"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$remote" log -1 --format=%s refs/heads/main)" = "land me" ]
+}
+
+@test "jland: lands the given revision" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && echo y > f.txt && jj commit -m 'one' >/dev/null 2>&1 \
+    && echo z > g.txt && jj commit -m 'two' >/dev/null 2>&1 && jland @--"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$remote" log -1 --format=%s refs/heads/main)" = one ]
+}
+
+@test "jland: refuses a change without a description and moves nothing" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  before=$(jj -R "$REPO" log -r main --no-graph -T commit_id)
+  run_zsh "cd '$REPO' && echo y > f.txt && jland"
+  [ "$status" -ne 0 ]
+  [[ $output == *"jland: "*"has no description"* ]] || false
+  [ "$(jj -R "$REPO" log --ignore-working-copy -r main --no-graph -T commit_id)" = "$before" ]
+  [ "$(git -C "$remote" log -1 --format=%s refs/heads/main)" = init ]
+}
+
+@test "jland: refuses to move main backwards" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && echo y > f.txt && jj commit -m 'one' >/dev/null 2>&1 \
+    && echo z > g.txt && jj commit -m 'two' >/dev/null 2>&1 && jland >/dev/null 2>&1 && jland 'main-'"
+  [ "$status" -ne 0 ]
+  [[ $output == *"backwards"* ]] || false
+  [ "$(git -C "$remote" log -1 --format=%s refs/heads/main)" = two ]
+}
+
 @test "jj tug: in a fresh workspace does not move main" {
   remote="$BATS_TEST_TMPDIR/remote.git"
   add_bare_remote "$REPO" "$remote"

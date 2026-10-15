@@ -112,6 +112,20 @@ jwrm() {
 
 # jpush [bookmark] — push your latest work as a bookmark (default: workspace name).
 # Creates the bookmark on first push, moves it forward on later pushes.
+# jland [rev]: move the trunk bookmark (main) to rev, default work(), and push it. For repos
+# without pull requests. jj refuses to move the bookmark backwards.
+jland() {
+  local rev=${1:-'work()'} trunk
+  trunk=$(jj log --ignore-working-copy -r 'trunk()' --no-graph -T 'remote_bookmarks.map(|b| b.name()).join("\n")' 2>/dev/null | head -1)
+  trunk=${trunk:-main}
+  # Checked first: jj git push refuses it anyway, but only after the bookmark has moved.
+  if [[ -z $(jj log -r "$rev" --no-graph -T 'description' 2>/dev/null) ]]; then
+    echo "jland: $rev has no description, run: jj describe -r '$rev' -m \"...\"" >&2
+    return 1
+  fi
+  jj bookmark set "$trunk" -r "$rev" && jj git push -b "$trunk"
+}
+
 jpush() {
   local name=${1:-} trunk
   [[ -z $name ]] && name=$(jj log -r @ --no-graph -T 'self.working_copies().map(|w| w.name()).join(",")')

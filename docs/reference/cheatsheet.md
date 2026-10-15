@@ -49,7 +49,7 @@ Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a 
 | `jws` | fzf-switch to a workspace (preview: `trunk()::@` log) |
 | `jwl` | List workspaces (`jj workspace list`) |
 | `jwrm [name...]` | Remove workspaces (fzf multi-pick if no args). Changes stay in the repo, only ignored files are lost |
-| `jpush [bookmark]` | Push `work()` as a bookmark (default: workspace name). Creates it on first push, moves it forward after that. Refuses trunk and immutable names |
+| `jpush [bookmark]` | Push `work()` as a bookmark (default: workspace name). Creates it on first push, moves it forward after that. Refuses trunk and immutable names, and a change that is `@` in several workspaces when no name is given |
 | `JW_NO_SETUP=1 jw <name>` | Skip auto-setup |
 
 Auto-setup of a new workspace copies untracked `.env*` / `mise.local.toml` from the main checkout, then runs `just setup`, else `mise run setup`, else `mise install` + lockfile install (pnpm/bun/yarn/npm, `uv sync`, `poetry install`, `go mod download`, `bundle install`). A failed step warns and never blocks.
@@ -173,6 +173,20 @@ Go itself comes from the official installer, and each project's `go.mod` `toolch
 | `xh post :8080/items name=x n:=1` | POST JSON (`:=` for non-string) |
 | `hurl --test *.hurl` | Run HTTP test files (`--variable k=v`) |
 | `d2 --watch in.d2 out.svg` | Render diagram with live preview |
+
+## Maintaining the dotfiles (from `$DOTFILES_DIR`)
+
+Guide: [Updating the dotfiles](../guides/updating.md).
+
+| Command | Does |
+|---|---|
+| `./install.sh --dry-run` | Show what would be linked and backed up, change nothing |
+| `./install.sh` | Link, merge Claude settings, write identity on first run. Safe to re-run |
+| `just check` | Lint, tests, secret scan and commit-message check, the same as CI |
+| `just test` / `bats tests/<suite>.bats -f <regex>` | All tests, or the matching tests of one suite |
+| `just drift` | `linked`, `elsewhere`, `same (copy)`, `DIFFERS` or `missing` per live file |
+| `just commits [range]` | Conventional Commits check, default `origin/main..HEAD` |
+| `just infra-up` / `just infra-down` | Same as `infra up` / `infra down` |
 
 ## Claude Code integration (`claude/`)
 

@@ -108,7 +108,8 @@ has the Kafka and Redis commands.
 
 - Start with the [introduction](docs/introduction.md),
   [install](docs/install.md) and [getting started](docs/getting-started.md).
-- Guides: [parallel agents](docs/guides/parallel-agents.md),
+- Guides: [a day with parallel agents](docs/guides/daily-routine.md),
+  [parallel agents](docs/guides/parallel-agents.md),
   [reviewing and landing their work](docs/guides/review-and-land.md),
   [identity and commit signing](docs/guides/identity-and-signing.md),
   [local infra](docs/guides/local-infra.md),

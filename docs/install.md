@@ -121,7 +121,7 @@ identity is picked per repo and how `sign-as` overrides it.
 Anything `install.sh` would replace is renamed to
 `<file>.bak-<YYYYMMDD-HHMMSS>`, one timestamp per run. That covers:
 
-- each of the 13 link targets that exists and is not already a link into the
+- each of the 14 link targets that exists and is not already a link into the
   repo, such as `~/.zshrc` or `~/.config/jj/config.toml`
 - `~/Library/Application Support/com.mitchellh.ghostty/config.ghostty`,
   which Ghostty reads after `~/.config/ghostty/config` and which would
@@ -164,7 +164,8 @@ There is no uninstall script. Remove the symlinks and move the backups back:
 ```bash
 cd ~
 for f in .zshrc .config/ghostty/config .config/zsh/jj.zsh .config/zsh/sign.zsh \
-         .config/zsh/infra.zsh .config/zsh/navi.zsh .local/share/navi/cheats/dotfiles \
+         .config/zsh/infra.zsh .config/zsh/navi.zsh .config/zsh/reload.zsh \
+         .local/share/navi/cheats/dotfiles \
          .config/devinfra/compose.yaml .config/starship.toml \
          .config/jj/config.toml .config/mise/config.toml .claude/CLAUDE.md \
          .claude/statusline.sh; do

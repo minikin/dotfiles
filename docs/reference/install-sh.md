@@ -69,6 +69,7 @@ The script prints a `==` header before each step.
 | `zsh/sign.zsh`           | `~/.config/zsh/sign.zsh`              |
 | `zsh/infra.zsh`          | `~/.config/zsh/infra.zsh`             |
 | `zsh/navi.zsh`           | `~/.config/zsh/navi.zsh`              |
+| `zsh/reload.zsh`         | `~/.config/zsh/reload.zsh`            |
 | `navi/` (directory)      | `~/.local/share/navi/cheats/dotfiles` |
 | `infra/compose.yaml`     | `~/.config/devinfra/compose.yaml`     |
 | `starship/starship.toml` | `~/.config/starship.toml`             |

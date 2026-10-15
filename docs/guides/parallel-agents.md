@@ -8,7 +8,8 @@ to be a jj repo first, see [Getting started](../getting-started.md). In a
 plain git repo `jw` stops with `git repo without jj — run: jj git init --colocate`.
 
 [Review and land](review-and-land.md) covers what happens after the agents
-finish. Every command here is also listed in
+finish. [A day with parallel agents](daily-routine.md) puts both into a
+daily routine. Every command here is also listed in
 [Shell commands](../reference/shell-commands.md).
 
 ## Layout

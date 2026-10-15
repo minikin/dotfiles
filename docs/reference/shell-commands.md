@@ -13,6 +13,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | `jpush`            | `zsh/jj.zsh`     | `[bookmark]`         | Push `work()` as a bookmark named after the workspace.        |
 | `sign-as`          | `zsh/sign.zsh`   | `[work\|personal\|status]` | Show this repo's commit identity, or switch it between the main and the second identity. |
 | `infra`            | `zsh/infra.zsh`  | `[subcommand] [args...]` | Drive the local Docker stack.                             |
+| `reload`           | `zsh/reload.zsh` | none                 | Check every config, then restart zsh. Tells you to press `cmd+shift+,` for Ghostty. |
 | `navi-trust`       | `zsh/navi.zsh`   | none                 | Load this repo's `.navi/` workflows from now on.              |
 | `navi-untrust`     | `zsh/navi.zsh`   | none                 | Stop loading this repo's `.navi/` workflows.                  |
 | `z`                | zoxide           | `<query...>` or `-`  | Jump to the best-matching directory you visited.              |
@@ -263,6 +264,30 @@ Every port is published on `127.0.0.1` and `[::1]` only. Redis data lives in
 the `redis-data` volume and Kafka data in `kafka-data`. `infra down` keeps
 them, `infra reset` removes them. Kafka creates new topics with 3 partitions.
 `kafka-ui` starts once Kafka's health check passes.
+
+## reload
+
+```sh
+reload
+```
+
+Applies changes to the dotfiles without opening a new tab. It checks first
+and stops with exit 1 at the first problem, so a broken config never
+replaces a working shell:
+
+| Step | On failure |
+| ---- | ---------- |
+| `ghostty +validate-config`, when Ghostty is installed. On success prints `ghostty: config valid, press cmd+shift+, to apply it` | Ghostty's own error |
+| `jj config list`, when jj is installed | `reload: jj config is invalid, see: jj config list` |
+| `zsh -n` on `~/.zshrc` and every `~/.config/zsh/*.zsh` | `reload: syntax error in <file>, see: zsh -n <file>` |
+
+Then it deletes `~/.zcompdump*`, so new completions load, prints
+`zsh: restarting` and runs `exec zsh`. Shell variables you set by hand in
+that shell are gone afterwards. Exported variables survive.
+
+Ghostty is only checked, not reloaded: press `cmd+shift+,` (its
+`reload_config` action). jj, mise and starship read their config on every
+command or prompt and need nothing.
 
 ## navi-trust and navi-untrust
 

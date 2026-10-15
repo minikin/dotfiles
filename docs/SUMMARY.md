@@ -7,6 +7,7 @@
 
 # Guides
 
+- [A day with parallel agents](guides/daily-routine.md)
 - [Parallel agents](guides/parallel-agents.md)
 - [Review and land](guides/review-and-land.md)
 - [Identity and signing](guides/identity-and-signing.md)

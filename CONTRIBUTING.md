@@ -91,6 +91,9 @@ The rules for a new test:
   signing code paths, check what `install.sh` writes, not whether a commit
   verifies.
 - Write files only under `BATS_TEST_TMPDIR`. Remotes are bare repos there.
+- End every `[[ ... ]]` and `! cmd` assert with `|| false`. bats runs under
+  macOS's bash 3.2, which ignores those when they fail anywhere but on a
+  test's last line. `just lint` checks it.
 - A known bug gets a test with `skip "BUG: ..."` that says what is wrong,
   until the fix lands.
 
@@ -103,16 +106,20 @@ A saved workflow is an entry in one of the `navi/*.cheat` files: a
 `# description` line, the command, and a `$ name:` picker line for each
 `<name>` argument that should offer choices. [Saved
 workflows](docs/guides/workflows.md#write-your-own) has the format.
+Add an entry only when it has a picker or a command line you would not
+type from memory. A short command like `jj undo` is faster to type than to
+find. Put the `%` group line on a meaningful category (`kafka`, `review`)
+and order entries from most to least used.
 `tests/navi.bats` enforces these rules:
 
-- The description is unique across all cheats. Keep it short, with the
-  words you would search for first.
+- The description is unique across all cheats. Start it with the verb and
+  the object you would search for ("Tail Kafka topic") and keep it short.
 - Pickers run in bash, so they never call `jw`, `jwc`, `jws`, `jwl`, `jwrm`,
   `jpush`, `infra`, `sign-as`, `z` or `zi`. The command line may.
 - Every `jj` picker passes `--ignore-working-copy`.
-- An infra entry that deletes topics, flushes Redis or runs `infra reset`
-  starts with `[LOCAL ONLY]`, and every `kcat`, `redis-cli` and Kafka
-  command targets `localhost`.
+- An infra entry that deletes topics or Redis keys, resets consumer group
+  offsets, flushes Redis or runs `infra reset` starts with `[LOCAL ONLY]`,
+  and every `kcat`, `redis-cli` and Kafka command targets `localhost`.
 - An entry that pushes straight to main starts with `[PERSONAL]`.
 
 Run the suite before you push:

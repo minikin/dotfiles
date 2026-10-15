@@ -13,8 +13,9 @@ file edits the repo. `just drift` reports the state of each linked file.
 | `zsh/jj.zsh`                    | linked: `~/.config/zsh/jj.zsh`              | `jw`, `jwc`, `jws`, `jwl`, `jwrm`, `jpush`. See [shell commands](shell-commands.md).           |
 | `zsh/sign.zsh`                  | linked: `~/.config/zsh/sign.zsh`            | `sign-as`.                                                                                     |
 | `zsh/infra.zsh`                 | linked: `~/.config/zsh/infra.zsh`           | `infra`.                                                                                       |
+| `zsh/reload.zsh`                | linked: `~/.config/zsh/reload.zsh`          | `reload`.                                                                                      |
 | `zsh/navi.zsh`                  | linked: `~/.config/zsh/navi.zsh`            | The navi widget on `Ctrl-G`, `navi-trust`, `navi-untrust`, and the `chpwd` hook that sets `NAVI_PATH` for a trusted repo's `.navi/`. See [saved workflows](../guides/workflows.md). |
-| `navi/` (`agents.cheat`, `jj.cheat`, `infra.cheat`, `k8s.cheat`, `dev.cheat`, `dotfiles.cheat`) | linked: `~/.local/share/navi/cheats/dotfiles` (the directory) | The saved workflows `Ctrl-G` offers.                                     |
+| `navi/` (`agents.cheat`, `jj.cheat`, `infra.cheat`, `k8s.cheat`, `dev.cheat`, `dotfiles.cheat`) | linked: `~/.local/share/navi/cheats/dotfiles` (the directory) | The saved workflows `Ctrl-G` offers, in the groups `agents`, `review`, `jj`, `kafka`, `redis`, `infra`, `k8s`, `go` and `dotfiles`. |
 | `zsh/zprofile.snippet`          | appended once to `~/.zprofile`              | Homebrew `PATH` and `mise activate zsh --shims` for login shells that are not interactive.     |
 | `infra/compose.yaml`            | linked: `~/.config/devinfra/compose.yaml`   | Compose project `devinfra`: Redis 8, Apache Kafka 4.1.0 (KRaft, one node), kafka-ui, Jaeger. Loopback ports only. |
 | `starship/starship.toml`        | linked: `~/.config/starship.toml`           | Catppuccin Mocha prompt. `custom.jj` shows change ID, bookmarks, conflict and empty markers and the description. `git_branch` shows only on an attached HEAD. |
@@ -63,6 +64,7 @@ These stay in the repo and are not installed.
 | `tests/commits.bats`       | `scripts/check-commits.sh`: conventional subjects pass, other subjects fail and are named, commits before the range and merge commits are skipped. |
 | `tests/drift.bats`         | `just drift`: `linked`, `elsewhere` for a link into another clone or a dangling link, `same (copy)`, `DIFFERS` and `missing`, and nothing in `HOME` changes. |
 | `tests/infra.bats`         | `infra/compose.yaml` is valid and every port binds to `127.0.0.1` or `[::1]`.                 |
+| `tests/reload.bats`        | `reload`: valid configs restart zsh and clear the completion cache, and a zsh syntax error, an invalid Ghostty config or an invalid jj config stops before the restart. |
 | `tests/navi.bats`          | `navi/*.cheat` and `zsh/navi.zsh`: every entry renders, unique descriptions, no zsh functions or working-copy snapshots in pickers, the `[LOCAL ONLY]` and `[PERSONAL]` labels, column-1 insertion, and the `.navi/` trust rules, with and without `DOTFILES_PERSONAL_DIR`. |
 | `.github/workflows/ci.yml` | CI. Job `check` on `macos-latest` runs `just check`, with the commit check limited to the pushed or pull request commits. Job `history-secrets` on `ubuntu-latest` runs gitleaks 8.30.1 over the full git history. |
 | `.github/ISSUE_TEMPLATE/bug_report.yml` | Bug report form.                                                                  |

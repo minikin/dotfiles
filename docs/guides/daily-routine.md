@@ -1,0 +1,247 @@
+# A day with parallel agents
+
+Start from what you want to do: build a feature, fix a bug, write an
+architecture decision record, review a pull request. Each kind of work below
+is a recipe: how to name the workspace, how to start the agent, what to tell
+it and how to land the result. The routine around them (the morning fetch,
+watching agents, cleaning up) comes after.
+
+The recipes use commands that the other guides explain in detail:
+[Parallel agents](parallel-agents.md) for workspaces,
+[Review and land](review-and-land.md) for everything after an agent is done.
+The examples use a repo at `~/repos/my-service`.
+
+## The ground rules
+
+- **One task, one workspace, one agent.** The workspace name becomes the
+  directory, the jj workspace and the bookmark `jpush` pushes, so name it
+  like a branch: `feat/export-csv` becomes `feat-export-csv`.
+- **The main checkout is for you.** Start agents from it, review in it,
+  never run an agent in it. One Ghostty tab per repo, the main checkout in
+  the left split, one split per agent (`cmd+d` right, `cmd+shift+d` down).
+- **Tasks that touch different code run well in parallel.** Two agents in
+  the same file both finish, but the second one to merge gets a conflict.
+- **Two or three agents per repo** is what you can still review.
+
+## Recipes
+
+### Build a feature
+
+Plan first, code second. Start the agent in plan mode, where it reads the
+code and proposes a plan but changes nothing:
+
+```sh
+cd ~/repos/my-service
+jw feat/export-csv && claude --permission-mode plan
+```
+
+Tell it what the feature is for, not only what to build, and where you
+expect it to live. Read the plan, correct it, and approve it when it looks
+right. Then ask for the work in small steps, one `jj commit -m` per step with
+a message such as `feat(export): add CSV writer`, so the result is a stack
+you can review change by change.
+
+While it works, follow along from the main checkout:
+
+```sh
+jj log -r 'trunk()::feat-export-csv@'    # its stack so far
+jj dft -r feat-export-csv@-              # its last finished step
+```
+
+Land it as described in [Land the result](#land-the-result).
+
+### Fix a bug
+
+A bug fix starts with a test that fails:
+
+```sh
+jwc fix/retry-storm
+```
+
+Give the agent the symptom and everything you have: the error, the log
+line, the request that triggers it, the version where it started. Ask it to
+write a failing test first and stop. Review that test from the main
+checkout before it fixes anything:
+
+```sh
+jj dft -r fix-retry-storm@-
+```
+
+A test that reproduces the bug is half the review. Then let it fix the code,
+run the tests, and commit the fix on top of the test.
+
+For a fix that must go onto a release branch rather than trunk, start the
+workspace from that branch:
+
+```sh
+jj git fetch
+jw hotfix/1.4-timeout release-1.4@origin && claude
+```
+
+### Write an architecture decision record
+
+An ADR is a document, so the agent researches and drafts, and you decide.
+Start it in plan mode so the research step cannot change code:
+
+```sh
+jw adr/event-store && claude --permission-mode plan
+```
+
+Give it the decision to make, the constraints (load, team, budget,
+deadlines) and the options you already know about. Ask it to read the code
+the decision affects and the existing records first, so it follows the
+repo's format and numbering (often `docs/adr/` or `docs/decisions/`). Once
+the plan is approved, it writes the record with context, the options with
+their trade-offs, the decision and its consequences, and commits it as
+`docs(adr): ...`.
+
+Edit the draft yourself once the agent is done, then push it with `jpush`
+and open a pull request: the review of an ADR is the discussion.
+
+### Explore or prototype
+
+For a question about the code ("how does auth reach this handler?") or a
+throwaway spike:
+
+```sh
+jwc spike/grpc-streaming
+```
+
+When the answer is all you need, drop its changes and then the workspace,
+from the main checkout:
+
+```sh
+jj abandon 'trunk()..spike-grpc-streaming@'
+jwrm spike-grpc-streaming
+```
+
+`jj abandon` comes first, while `<name>@` still exists. Keep the
+spike's findings by asking the agent to write them into the pull request or
+issue you are working from.
+
+### Review someone else's pull request
+
+Check out the branch in a workspace of its own, so your other agents are not
+disturbed:
+
+```sh
+jj git fetch
+jwc review/pr-123 their-branch@origin
+```
+
+Ask the agent to review the change against `trunk()` (`jj diff --git -r
+'trunk()..@'`), to run the tests and to list problems by severity with file
+and line. Its notes go into the pull request through you. Remove the
+workspace with `jwrm review-pr-123` when you are done.
+
+### Answer review comments on your own pull request
+
+Go back to the workspace that made the change. Its agent still has the
+context:
+
+```sh
+jws                       # pick the workspace
+claude --continue         # the last conversation in this directory
+```
+
+Paste the comments, let it fix them in new changes, and run `jpush` again.
+It moves the bookmark forward and the pull request updates.
+
+## Land the result
+
+When the agent is done, review in the main checkout first
+(`jj dft -r <name>@-`, or `jjui` to browse). Then switch into its workspace:
+
+```sh
+jws                    # pick the workspace
+jj stack               # its changes on top of trunk
+jj squash              # fold @ into its parent, if needed
+jj describe -r <change> -m "fix(consumer): retry with backoff"
+jj git fetch && jj rebase -d 'trunk()'
+jpush                  # pushes work() as the bookmark named after the workspace
+gh pr create --head fix-retry-storm
+```
+
+After the merge:
+
+```sh
+cd ~/repos/my-service
+jj git fetch
+jwrm fix-retry-storm
+```
+
+## The day around the recipes
+
+### Morning
+
+```sh
+cd ~/repos/my-service
+jj git fetch
+jwl                    # workspaces left over from yesterday
+jj log                 # each one shows up as <name>@
+```
+
+Remove the ones whose pull requests merged with `jwrm <name>`. After a
+squash merge, their original changes stay in `jj log` on top of the old
+trunk, and `jj abandon <change>` drops them.
+
+A workspace you keep working on should start from the latest trunk. Rebase
+its stack from the main checkout, then update the workspace:
+
+```sh
+jj rebase -b fix-retry-storm@ -d 'trunk()'
+jws                                      # pick fix-retry-storm
+jj workspace update-stale
+```
+
+Rebasing from outside makes every jj command in that workspace fail with
+`The working copy is stale` until `jj workspace update-stale` runs there. Do
+it while the agent is idle, or tell the agent to run it. If the rebase
+reports conflicts, leave them for the agent: `jj st` lists them.
+
+To come back to yesterday's agent, `jw <name>` prints `reusing` and changes
+into the workspace without running setup, and `claude --continue` picks up
+the last conversation there.
+
+### While agents work
+
+You do not have to watch the splits. A bell from an agent waiting for input
+sends a macOS notification and marks the tab, and a command over 30 seconds
+in an unfocused split notifies when it ends. The status line in each agent
+shows its workspace, change and description.
+
+Leave the files in an agent's workspace to the agent. Tell it what to change
+instead. All agents share the local infra from `infra up`, so ask agents that
+create Kafka topics or Redis keys to prefix them with the workspace name.
+`cmd+shift+s` writes the screen to a file and pastes its path, to hand long
+output from one split to another agent.
+
+After a merge, rebase the agents that are still running onto the new trunk,
+as in the morning, so their conflicts show up now and not at their own
+merge.
+
+### Evening
+
+Nothing has to be shut down. Workspaces are directories and survive a
+reboot, and the agents' changes are already in the repo.
+
+```sh
+jwl                    # what is still open
+jwrm                   # fzf multi-picker: drop the ones you gave up on
+infra down             # stop Redis and Kafka, keep their data
+```
+
+## When something goes wrong
+
+| Symptom | Fix |
+|---|---|
+| A workspace says its working copy is stale | `jj workspace update-stale` inside it |
+| You deleted a workspace directory by hand | `jw <name>` recreates it |
+| A rebase or squash went wrong | `jj undo`, or `jj op log` and `jj op restore <op>` |
+| An agent uses the wrong tool versions | [Troubleshooting](../troubleshooting.md), and [Agents and PATH](../explanation/agents-and-path.md) |
+| A commit is signed with the wrong identity | `sign-as status`, then [Identity and signing](identity-and-signing.md) |
+
+Press `Ctrl-G` and type `start` for the recipe openers above (feature, bug
+fix, ADR, spike, continue), or any other command in this guide you do not
+type every day. See
+[Saved workflows](workflows.md).

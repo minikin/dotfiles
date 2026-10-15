@@ -27,6 +27,7 @@ A command that runs longer than 30s in an unfocused split sends a desktop notifi
 | `z <dir>` / `z foo bar` | Jump to best-matching frecent dir |
 | `z -` | Back to previous dir |
 | `zi [query]` | Interactive dir picker (fzf) |
+| `reload` | Check every config, then restart zsh. Press `cmd+shift+,` for Ghostty |
 
 ## Workflows (`zsh/navi.zsh`)
 
@@ -37,6 +38,8 @@ Guide: [Saved workflows](../guides/workflows.md).
 | `Ctrl-G` | Open the navi palette, fill the arguments, insert the command at the prompt (never runs it) |
 | `navi-trust` | Load this repo's `.navi/` workflows (repos under `$DOTFILES_PERSONAL_DIR`, the second identity's folder, are trusted already) |
 | `navi-untrust` | Stop loading this repo's `.navi/` workflows |
+
+Groups in the palette's first column: `agents` (review a workspace diff, rebase all workspaces onto trunk, push and open a pull request), `review` (check out a pull request, watch its CI), `jj` (change pickers, revsets, signature check), `kafka`, `redis`, `infra` (kafka-ui, Jaeger), `k8s`, `go`, `dotfiles`. Type the verb and object, e.g. `tail kafka`, `review agent`, `debug pod`.
 
 ## Agent workspaces (`zsh/jj.zsh`)
 

@@ -43,8 +43,12 @@ $ count: printf '2\n3\n4\n5\n'
 # Review pull request in its own workspace
 jj git fetch && jw review-<pr_branch> '<pr_branch>@origin'
 
+# Review agent workspace with a second Claude
+jreview <workspace>
+
 # Watch CI checks of pull request
 gh pr checks <pr> --watch
 
 $ pr_branch: gh pr list --json headRefName,title --template '{{range .}}{{.headRefName}}{{"\t"}}{{.title}}{{"\n"}}{{end}}' --- --column 1 --delimiter '\t'
 $ pr: gh pr list --json number,title --template '{{range .}}{{.number}}{{"\t"}}{{.title}}{{"\n"}}{{end}}' --- --column 1 --delimiter '\t'
+$ workspace: jj --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default | while IFS= read -r w; do d=$(jj --ignore-working-copy log --no-graph --limit 1 -r "heads(::\"$w\"@ & mutable() & ~empty())" -T 'coalesce(description.first_line(), "(no description)")'); printf '%s\t%s\n' "$w" "${d:-(no changes)}"; done --- --column 1 --delimiter '\t'

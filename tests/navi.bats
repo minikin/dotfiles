@@ -68,7 +68,7 @@ pickers() {
 
 @test "navi: destructive infra entries are labelled [LOCAL ONLY] and target localhost" {
   while IFS=$'\t' read -r desc cmd; do
-    if grep -qE -- '--delete|FLUSH|infra reset' <<<"$cmd"; then
+    if grep -qE -- '--delete|--reset-offsets|FLUSH|UNLINK|infra reset' <<<"$cmd"; then
       [[ $desc == "[LOCAL ONLY]"* ]] || { echo "unlabelled: $desc"; return 1; }
     fi
     if grep -qE 'kcat|redis-cli|bootstrap-server' <<<"$cmd"; then
@@ -124,6 +124,15 @@ navi_zsh() {
   run zsh -f -c "cd '$1' || exit 1; source '$REPO_ROOT/zsh/navi.zsh'; $2"
 }
 
+@test "navi.zsh: sets the column layout unless navi has a config file" {
+  command -v navi >/dev/null || skip "navi not installed"
+  navi_zsh "$HOME" 'print -r -- "$NAVI_CONFIG_YAML"'
+  [[ $output == *"width_percentage: 10"* ]] || false
+  mkdir -p "$HOME/.config/navi" && touch "$HOME/.config/navi/config.yaml"
+  navi_zsh "$HOME" 'print -r -- "yaml=${NAVI_CONFIG_YAML-unset}"'
+  [ "$output" = "yaml=unset" ]
+}
+
 @test "navi.zsh: an untrusted repo's .navi/ is not loaded" {
   make_jj_repo "$HOME/work/app"
   mkdir -p "$HOME/work/app/.navi"
@@ -138,7 +147,7 @@ navi_zsh() {
   export DOTFILES_PERSONAL_DIR="$HOME/src/mine"
   navi_zsh "$HOME/src/mine/app" 'print -r -- "$NAVI_PATH"'
   [ "$status" -eq 0 ]
-  [[ $output == "$HOME/.local/share/navi/cheats:"*"/src/mine/app/.navi" ]]
+  [[ $output == "$HOME/.local/share/navi/cheats:"*"/src/mine/app/.navi" ]] || false
 }
 
 @test "navi.zsh: without DOTFILES_PERSONAL_DIR nothing is trusted automatically" {
@@ -155,10 +164,10 @@ navi_zsh() {
   navi_zsh "$HOME/work/app" 'navi-trust >/dev/null; print -r -- "after-trust=${NAVI_PATH-unset}";
     navi-untrust >/dev/null; print -r -- "after-untrust=${NAVI_PATH-unset}"'
   [ "$status" -eq 0 ]
-  [[ ${lines[0]} == after-trust=*"/.navi" ]]
+  [[ ${lines[0]} == after-trust=*"/.navi" ]] || false
   [ "${lines[1]}" = "after-untrust=unset" ]
   [ -f "$HOME/.config/navi/trusted-repos" ]
-  ! grep -q . "$HOME/.config/navi/trusted-repos"
+  ! grep -q . "$HOME/.config/navi/trusted-repos" || false
 }
 
 @test "navi.zsh: a workspace of a trusted repo loads its own .navi/" {
@@ -167,5 +176,5 @@ navi_zsh() {
     jj commit -m navi >/dev/null 2>&1 && mkdir -p ../app-ws && jj workspace add --name w1 ../app-ws/w1 >/dev/null 2>&1) || return 1
   navi_zsh "$HOME/work/app" 'navi-trust >/dev/null; cd ../app-ws/w1 && print -r -- "$NAVI_PATH"'
   [ "$status" -eq 0 ]
-  [[ $output == *"/app-ws/w1/.navi" ]]
+  [[ $output == *"/app-ws/w1/.navi" ]] || false
 }

@@ -1,16 +1,10 @@
 % dotfiles
 
-# Run every check before pushing the dotfiles (lint, tests, secret scan)
+# Check dotfiles before pushing (lint, tests, secret scan)
 cd "$DOTFILES_DIR" && just check
 
-# Compare the live config files with the dotfiles repo
+# Compare live config files with the dotfiles repo
 cd "$DOTFILES_DIR" && just drift
 
-# Preview what install.sh would change
+# Preview what the dotfiles install would change
 cd "$DOTFILES_DIR" && ./install.sh --dry-run
-
-# Trust the current repo's .navi/ workflows
-navi-trust
-
-# Stop trusting the current repo's .navi/ workflows
-navi-untrust

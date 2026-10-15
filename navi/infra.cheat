@@ -1,49 +1,44 @@
-% infra, local-only
+% kafka
 
-# Start the local stack (Redis, Kafka, kafka-ui, Jaeger) and wait until healthy
-infra up
+# Tail Kafka topic
+kcat -C -b localhost:9092 -t <topic> -o <offset> -f 'p%p@%o %k => %s\n'
 
-# Stop the local stack, keeping its data
-infra down
-
-# Follow the logs of one service
-infra logs -f <service>
-
-# Tail a Kafka topic from the beginning
-kcat -C -b localhost:9092 -t <topic> -o beginning -f '%k => %s\n'
-
-# Produce one message to a Kafka topic
+# Produce message to Kafka topic
 echo '<message>' | kcat -P -b localhost:9092 -t <topic>
 
-# Create a Kafka topic
+# Show Kafka consumer group lag
+infra kafka kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group <group>
+
+# Create Kafka topic
 infra kafka kafka-topics.sh --bootstrap-server localhost:9092 --create --topic <new_topic> --partitions <partitions>
 
-# Show consumer group lag
-infra kafka kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group <group>
+# [LOCAL ONLY] Reset Kafka consumer group to earliest offset
+infra kafka kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group <group> --topic <topic> --to-earliest --execute
+
+# [LOCAL ONLY] Delete Kafka topic
+infra kafka kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic <topic>
+
+$ topic: docker compose -f "$HOME/.config/devinfra/compose.yaml" exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list </dev/null
+$ group: docker compose -f "$HOME/.config/devinfra/compose.yaml" exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list </dev/null
+$ offset: printf 'end\nbeginning\n-10\n'
+$ partitions: printf '3\n1\n6\n12\n'
+
+% redis
 
 # Find Redis keys by pattern (SCAN, not KEYS)
 redis-cli -h localhost --scan --pattern '<pattern>'
 
-# Show the type and TTL of a Redis key
-redis-cli -h localhost type '<key>' && redis-cli -h localhost ttl '<key>'
+# Inspect Redis key (type, TTL, memory)
+redis-cli -h localhost type '<key>' && redis-cli -h localhost ttl '<key>' && redis-cli -h localhost memory usage '<key>'
 
-# Open kafka-ui
-open http://localhost:8088
+# [LOCAL ONLY] Delete Redis keys by pattern
+redis-cli -h localhost --scan --pattern '<pattern>' | tr '\n' '\0' | xargs -0 -n 100 redis-cli -h localhost UNLINK
 
-# Open the Jaeger UI
-open http://localhost:16686
-
-# [LOCAL ONLY] Delete a Kafka topic
-infra kafka kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic <topic>
-
-# [LOCAL ONLY] Flush the local Redis database
-redis-cli -h localhost FLUSHDB
-
-# [LOCAL ONLY] Stop the stack and delete all its data
-infra reset
-
-$ service: printf 'redis\nkafka\nkafka-ui\njaeger\n'
-$ topic: docker compose -f "$HOME/.config/devinfra/compose.yaml" exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list </dev/null
-$ group: docker compose -f "$HOME/.config/devinfra/compose.yaml" exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list </dev/null
-$ partitions: printf '3\n1\n6\n12\n'
 $ key: redis-cli -h localhost --scan --count 100 | head -200
+
+% infra
+
+# Open kafka-ui or Jaeger in the browser
+open <ui_url>
+
+$ ui_url: printf 'http://localhost:8088\tkafka-ui\nhttp://localhost:16686\tJaeger\n' --- --column 1 --delimiter '\t'

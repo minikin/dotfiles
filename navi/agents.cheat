@@ -1,24 +1,53 @@
-% agents, workspaces
+% start
 
-# Create N agent workspaces (agent-1..N) and stay where you are
-for n in $(seq 1 <count>); do (jw "agent-$n"); done
+# Start feature agent in plan mode
+jw feat/<name> && claude --permission-mode plan
 
-# Start Claude Code in a new workspace
-jwc <name>
+# Start bug fix agent
+jw fix/<name> && claude
 
-# Switch to an agent workspace
-cd <workspace_dir>
+# Start ADR agent in plan mode
+jw adr/<name> && claude --permission-mode plan
 
-# Push the current workspace as a bookmark and open a pull request
+# Start throwaway spike agent
+jw spike/<name> && claude
+
+# Continue an agent's last conversation
+jw <workspace> && claude --continue
+
+# Drop a spike and remove its workspace
+jj abandon 'trunk()..<workspace>@' && jwrm <workspace>
+
+$ workspace: jj --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default | while IFS= read -r w; do d=$(jj --ignore-working-copy log --no-graph --limit 1 -r "heads(::\"$w\"@ & mutable() & ~empty())" -T 'coalesce(description.first_line(), "(no description)")'); printf '%s\t%s\n' "$w" "${d:-(no changes)}"; done --- --column 1 --delimiter '\t'
+
+% agents
+
+# Review agent workspace diff (difftastic)
+jj dft -r 'trunk()..<workspace>@'
+
+# Show agent workspace changes and files
+jj log -r 'trunk()..<workspace>@' --stat
+
+# Push workspace and open pull request
 jpush <bookmark> && gh pr create --head <bookmark> --fill
 
-# Remove an agent workspace (its changes stay in the repo)
-jwrm <workspace>
+# Rebase all agent workspaces onto latest trunk
+jj git fetch && jj --ignore-working-copy workspace list -T 'self.root() ++ "\n"' | while IFS= read -r d; do jj -R "$d" status >/dev/null; done && jj rebase -b 'working_copies() & mutable()' -o 'trunk()' && jj --ignore-working-copy workspace list -T 'self.root() ++ "\n"' | while IFS= read -r d; do jj -R "$d" workspace update-stale; done
 
-# List workspaces with their working-copy change
-jj --ignore-working-copy workspace list
+# Create agent workspaces agent-1..N
+for n in $(seq 1 <count>); do (jw "agent-$n"); done
 
-$ count: printf '2\n3\n4\n5\n'
-$ workspace: jj --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default
-$ workspace_dir: jj --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"' --- --column 2 --delimiter '\t'
+$ workspace: jj --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default | while IFS= read -r w; do d=$(jj --ignore-working-copy log --no-graph --limit 1 -r "heads(::\"$w\"@ & mutable() & ~empty())" -T 'coalesce(description.first_line(), "(no description)")'); printf '%s\t%s\n' "$w" "${d:-(no changes)}"; done --- --column 1 --delimiter '\t'
 $ bookmark: jj --ignore-working-copy log --no-graph -r @ -T 'self.working_copies().map(|w| w.name()).join("") ++ "\n"' | grep -vx default
+$ count: printf '2\n3\n4\n5\n'
+
+% review
+
+# Review pull request in its own workspace
+jj git fetch && jw review-<pr_branch> '<pr_branch>@origin'
+
+# Watch CI checks of pull request
+gh pr checks <pr> --watch
+
+$ pr_branch: gh pr list --json headRefName,title --template '{{range .}}{{.headRefName}}{{"\t"}}{{.title}}{{"\n"}}{{end}}' --- --column 1 --delimiter '\t'
+$ pr: gh pr list --json number,title --template '{{range .}}{{.number}}{{"\t"}}{{.title}}{{"\n"}}{{end}}' --- --column 1 --delimiter '\t'

@@ -1,26 +1,13 @@
-% dev, go, typescript, github
+% go
 
-# Run Go tests with readable output
-gotestsum --format testname -- ./...
-
-# Check Go dependencies for known vulnerabilities
-govulncheck ./...
+# Run one Go test
+go test <package> -run '^<test>$' -count=1 -v
 
 # Debug one Go test with delve
-dlv test <package> -- -test.run '<test>'
+dlv test <package> -- -test.run '^<test>$'
 
-# Install JS dependencies exactly as locked
-pnpm install --frozen-lockfile
-
-# Open a pull request for a pushed bookmark
-gh pr create --head <bookmark> --fill
-
-# Show CI checks of the current pull request
-gh pr checks
-
-# Review a pull request in its own workspace
-jj git fetch && jw review-<pr_branch> '<pr_branch>@origin'
+# Open Go test coverage in the browser
+go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out
 
 $ package: go list ./...
-$ bookmark: jj --ignore-working-copy bookmark list -T 'name ++ "\n"'
-$ pr_branch: gh pr list --json headRefName,title --template '{{range .}}{{.headRefName}}{{"\t"}}{{.title}}{{"\n"}}{{end}}' --- --column 1 --delimiter '\t'
+$ test: grep -hoE '^func Test[A-Za-z0-9_]+' "$(go list -f '{{.Dir}}' "$package")"/*_test.go | sed 's/^func //' | sort -u

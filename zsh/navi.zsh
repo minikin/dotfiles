@@ -4,6 +4,21 @@
 (( $+commands[navi] )) || return 0
 eval "$(navi widget zsh)"
 
+# Column widths: navi's defaults give the one-word group tag a quarter of the screen and
+# cut long commands off. A config file of your own (navi info config-path) wins.
+if [[ -z ${NAVI_CONFIG_YAML:-} && ! -f ${NAVI_CONFIG:-$HOME/.config/navi/config.yaml} ]]; then
+  export NAVI_CONFIG_YAML='
+style:
+  tag:     { color: cyan, width_percentage: 10, min_width: 8 }
+  comment: { color: blue, width_percentage: 40, min_width: 30 }
+  snippet: { color: white }
+finder:
+  command: fzf
+shell:
+  command: bash
+'
+fi
+
 # Per-project workflows: a repo's .navi/ folder is loaded only when the repo is
 # trusted, because opening the palette runs the picker commands in those files.
 # Trusted: the main checkout lives under $DOTFILES_PERSONAL_DIR (the second identity's

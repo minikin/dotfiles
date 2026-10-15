@@ -1,6 +1,6 @@
 % dotfiles
 
-# Check dotfiles before pushing (lint, tests, secret scan)
+# Check dotfiles before pushing (lint, tests, secrets, commits)
 cd "$DOTFILES_DIR" && just check
 
 # Compare live config files with the dotfiles repo

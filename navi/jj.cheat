@@ -31,7 +31,7 @@ jj op restore <operation>
 jj --ignore-working-copy log --no-graph -r <change> -T 'if(signature, signature.status() ++ " " ++ signature.display(), "unsigned") ++ "\n"'
 
 # [PERSONAL] Push a change straight to main, no pull request
-jj bookmark set main -r <change> && jj git push -b main
+jland <change>
 
 $ change: jj --ignore-working-copy log --no-graph -r 'mutable()' -T 'change_id.shortest(8) ++ "\t" ++ coalesce(description.first_line(), "(no description)") ++ "\n"' --- --column 1 --delimiter '\t'
 $ target: jj --ignore-working-copy log --no-graph -r 'mutable()' -T 'change_id.shortest(8) ++ "\t" ++ coalesce(description.first_line(), "(no description)") ++ "\n"' --- --column 1 --delimiter '\t'

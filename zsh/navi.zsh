@@ -1,6 +1,6 @@
 # navi: Ctrl-G opens the saved workflows (navi/*.cheat) and inserts the chosen
 # command into the prompt without running it. Commands that use zsh functions
-# (jw, jpush, infra, sign-as) only work this way, because navi runs pickers in bash.
+# (jw, jwc, jwrm, jpush, jland, infra) only work this way, because navi runs pickers in bash.
 (( $+commands[navi] )) || return 0
 eval "$(navi widget zsh)"
 

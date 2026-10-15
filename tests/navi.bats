@@ -56,7 +56,7 @@ pickers() {
 
 @test "navi: pickers call no zsh functions (navi runs them in bash)" {
   bad=$(for f in "$CHEATS"/*.cheat; do pickers "$f" | cut -f2 | sed "s|^|${f##*/}: |"; done |
-    grep -E '(^|[^a-z_-])(jw|jwc|jws|jwst|jwl|jwrm|jsync|jpush|jland|reload|infra|sign-as|z|zi)( |$)' || true)
+    grep -E '(^|[^a-z_-])(jw|jwc|jws|jwst|jwl|jwrm|jsync|jnext|jpush|jland|reload|infra|sign-as|z|zi)( |$)' || true)
   [ -z "$bad" ] || { echo "$bad"; return 1; }
 }
 
@@ -79,7 +79,7 @@ pickers() {
 
 @test "navi: direct pushes to main are labelled [PERSONAL]" {
   while IFS=$'\t' read -r desc cmd; do
-    if grep -q 'git push -b main' <<<"$cmd"; then
+    if grep -qE 'git push -b main|(^|[|;&] *)jland ' <<<"$cmd"; then
       [[ $desc == "[PERSONAL]"* ]] || { echo "unlabelled: $desc"; return 1; }
     fi
   done < <(for f in "$CHEATS"/*.cheat; do entries "$f"; done)

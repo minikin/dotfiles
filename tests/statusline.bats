@@ -84,3 +84,41 @@ op_count() { jj -R "$1" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' 
   [ "$status" -eq 0 ]
   [ "$output" = "~/src/plain · Opus" ]
 }
+
+# statusline_json <json>: feed raw status JSON
+statusline_json() { run bash "$REPO_ROOT/claude/statusline.sh" <<<"$1"; }
+
+@test "statusline: context percentage and cost follow the model" {
+  mkdir -p "$HOME/outside"
+  statusline_json "{\"workspace\":{\"current_dir\":\"$HOME/outside\"},\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"used_percentage\":42.7},\"cost\":{\"total_cost_usd\":1.234}}"
+  [ "$status" -eq 0 ]
+  [ "$output" = "~/outside · Opus · 42% ctx · \$1.23" ]
+}
+
+@test "statusline: null used_percentage falls back to total_input_tokens over the window size" {
+  mkdir -p "$HOME/outside"
+  statusline_json "{\"workspace\":{\"current_dir\":\"$HOME/outside\"},\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"used_percentage\":null,\"total_input_tokens\":50000,\"context_window_size\":200000}}"
+  [ "$status" -eq 0 ]
+  [ "$output" = "~/outside · Opus · 25% ctx" ]
+}
+
+@test "statusline: no context data before the first response and zero cost are omitted" {
+  mkdir -p "$HOME/outside"
+  statusline_json "{\"workspace\":{\"current_dir\":\"$HOME/outside\"},\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"used_percentage\":null,\"total_input_tokens\":0,\"context_window_size\":200000},\"cost\":{\"total_cost_usd\":0}}"
+  [ "$status" -eq 0 ]
+  [ "$output" = "~/outside · Opus" ]
+}
+
+@test "statusline: 0% context is still shown" {
+  mkdir -p "$HOME/outside"
+  statusline_json "{\"workspace\":{\"current_dir\":\"$HOME/outside\"},\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"used_percentage\":0}}"
+  [ "$status" -eq 0 ]
+  [ "$output" = "~/outside · Opus · 0% ctx" ]
+}
+
+@test "statusline: a dir with spaces and a model with spaces survive the single jq call" {
+  mkdir -p "$HOME/my dir"
+  statusline_json "{\"workspace\":{\"current_dir\":\"$HOME/my dir\"},\"model\":{\"display_name\":\"Opus 5.5\"},\"cost\":{\"total_cost_usd\":12}}"
+  [ "$status" -eq 0 ]
+  [ "$output" = "~/my dir · Opus 5.5 · \$12.00" ]
+}

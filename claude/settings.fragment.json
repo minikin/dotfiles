@@ -33,5 +33,40 @@
   "statusLine": {
     "type": "command",
     "command": "~/.claude/statusline.sh"
+  },
+  "preferredNotifChannel": "notifications_disabled",
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt|elicitation_dialog|elicitation_url_dialog|agent_needs_input",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/notify.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/notify.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/guard-push.sh"
+          }
+        ]
+      }
+    ]
   }
 }

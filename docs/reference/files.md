@@ -45,7 +45,7 @@ None of these are in the repo. See [install.sh](install-sh.md#what-it-writes).
 
 | Repo file  | Used by        | Installs                                                                                     |
 | ---------- | -------------- | -------------------------------------------------------------------------------------------- |
-| `Brewfile` | `brew bundle`  | Casks: `ghostty`, `font-jetbrains-mono-nerd-font`, `claude-code@latest`, `redis-insight`. Formulae: `starship`, `zsh-autosuggestions`, `zsh-syntax-highlighting`, `fzf`, `zoxide`, `navi`, `jq`, `ripgrep`, `git`, `jj`, `jjui`, `difftastic`, `gh`, `mise`, `just`, `redis`, `kcat`, `grpcurl`, `xh`, `hurl`, `d2`, `k9s`, `kubectx`, `stern`, `bats-core`, `shellcheck`, `gitleaks`, `lychee`, `actionlint`. |
+| `Brewfile` | `brew bundle`  | Casks: `ghostty`, `font-jetbrains-mono-nerd-font`, `shottr`, `claude-code@latest`, `redis-insight`. Formulae: `starship`, `zsh-autosuggestions`, `zsh-syntax-highlighting`, `fzf`, `zoxide`, `navi`, `jq`, `ripgrep`, `git`, `jj`, `jjui`, `difftastic`, `gh`, `mise`, `just`, `redis`, `kcat`, `grpcurl`, `xh`, `hurl`, `d2`, `k9s`, `kubectx`, `stern`, `bats-core`, `shellcheck`, `gitleaks`, `lychee`, `actionlint`. |
 
 ## Repo tooling
 

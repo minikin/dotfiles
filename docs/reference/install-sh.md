@@ -9,6 +9,8 @@ identity and records the machine settings in `~/.config/dotfiles/config`. It is 
 ```sh
 ./install.sh             # install
 ./install.sh --dry-run   # print every action, change (almost) nothing
+./install.sh --shottr    # also free the screenshot shortcuts for Shottr
+./install.sh --all       # brew bundle, install and --shottr in one command
 just install --dry-run   # the same through the justfile
 ```
 
@@ -16,10 +18,13 @@ just install --dry-run   # the same through the justfile
 | ----------- | --------------------------------------------------------------------------------------------------------- |
 | none        | Full install.                                                                                             |
 | `--dry-run` | Prints each command as `+ <command>` instead of running it. Skips the identity prompts and the jq check. |
+| `--brew`    | Runs `brew bundle --file <repo>/Brewfile` before the links. Without `brew` on `PATH` it prints `Homebrew is required for --brew` and exits 1 before changing anything. |
+| `--shottr`  | Adds the screenshot shortcuts step, see [Screenshot shortcuts](#screenshot-shortcuts). Combines with `--dry-run`. |
+| `--all`     | The same as `--brew --shottr`. |
 | `--help`, `-h` | Prints the usage comment from the top of the script and exits 0. |
 
-Only the first argument is read. Any other argument prints the usage line and
-exits 2 without changing anything.
+Arguments are read in order. An unknown one prints the usage line and exits 2
+without changing anything.
 
 ## Environment variables
 
@@ -31,6 +36,7 @@ exits 2 without changing anything.
 | `DOTFILES_PERSONAL_DIR`   | Folder for the second identity's repos, for example `~/src/personal`. Absolute or starting with `~`, created if missing. | One identity everywhere. |
 | `DOTFILES_PERSONAL_EMAIL` | Email for repos inside `DOTFILES_PERSONAL_DIR`. | One identity everywhere.                |
 | `DOTFILES_PERSONAL_KEY`   | Signing key for repos inside `DOTFILES_PERSONAL_DIR`. | The main key applies there too.   |
+| `DOTFILES_ACTIVATE_SETTINGS` | Program `--shottr` runs with `-u` to apply the shortcut change. The tests point it at a fake. | `/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings` |
 
 `DOTFILES_NAME` is the switch. With it set, all six values come from the
 environment and a missing one is an empty answer. An empty `DOTFILES_EMAIL`
@@ -51,13 +57,15 @@ The script prints a `==` header before each step.
 
 | Step | Header                       | What it does                                                                                     |
 | ---- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| 0    | `== brew bundle`             | Only with `--brew` or `--all`: installs everything in the `Brewfile`.                            |
 | 1    | `== symlinks`                | Links each repo file below into `$HOME`, then moves Ghostty's macOS config aside.               |
 | 2    | `== .zprofile`               | Appends `zsh/zprofile.snippet` to `~/.zprofile` if the mise shims line is missing.               |
 | 3    | `== Claude Code settings`    | Merges `claude/settings.fragment.json` into `~/.claude/settings.json`.                           |
 | 4    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
 | 5    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
 | 6    | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
-| 7    | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
+| 7    | `== screenshot shortcuts`    | Only with `--shottr`: turns off the macOS screenshot shortcuts.                                  |
+| 8    | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
 
 ## Linked files
 
@@ -316,6 +324,28 @@ line to stderr and goes on.
 If `difft` is on `PATH`, it sets the global alias
 `dft = -c diff.external=difft diff` every run.
 
+### Screenshot shortcuts
+
+Runs only with `--shottr`. macOS has no setting for a default screenshot app,
+so the step turns off its own shortcuts and leaves the keys free for Shottr
+(`cask "shottr"` in the `Brewfile`). For each ID below it runs
+`defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add <id> '<dict><key>enabled</key><false/></dict>'`.
+
+| ID    | Shortcut | macOS action                     |
+| ----- | -------- | -------------------------------- |
+| `28`  | ⇧⌘3      | Save a picture of the screen     |
+| `29`  | ⌃⇧⌘3     | Copy a picture of the screen     |
+| `30`  | ⇧⌘4      | Save a picture of a selected area |
+| `31`  | ⌃⇧⌘4     | Copy a picture of a selected area |
+| `184` | ⇧⌘5      | Screenshot and recording options |
+
+Then it runs `activateSettings -u` so the change applies without logging out.
+If that program is missing it prints `skip applying now` to stderr, and the
+change applies at the next login. The step does not set Shottr's own hotkeys.
+Assign ⇧⌘3, ⇧⌘4 and ⇧⌘5 in Shottr under Preferences, Hotkeys, and turn on
+Launch at login. To undo the step, tick the shortcuts again in System Settings
+under Keyboard, Keyboard Shortcuts, Screenshots.
+
 ## Backups
 
 Every backup is `<original path>.bak-<stamp>`, where `<stamp>` is
@@ -338,6 +368,7 @@ The script runs under `set -euo pipefail`.
 | Exit | Cause                                                                       |
 | ---- | --------------------------------------------------------------------------- |
 | `0`  | Finished. The last line is `done — open a new terminal tab (or: exec zsh)`. |
+| `1`  | `--brew` and no `brew` on `PATH`.                                           |
 | `1`  | `jq` is not installed (not checked under `--dry-run`).                      |
 | `1`  | The settings merge failed. `settings.json` is untouched.                    |
 | `1`  | A bad signing key with `DOTFILES_NAME` set, including a file that is not a public key. No identity file is written. |
@@ -368,6 +399,7 @@ runs only when `ghostty` is on `PATH` or
 | Second git config    | Only when the `includeIf` key is not set.                              |
 | Git identity         | Only when git has no `user.email`.                                     |
 | `git dft` alias      | Set again each run to the same value.                                  |
+| Screenshot shortcuts | Written again each `--shottr` run with the same value.                 |
 
 `tests/install.bats` checks that a second run makes no new backups and leaves
 `settings.json` unchanged.

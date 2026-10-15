@@ -22,14 +22,13 @@ Clone the repo anywhere you like. `~/src/dotfiles` below is only an example.
 ```bash
 git clone https://github.com/minikin/dotfiles ~/src/dotfiles
 cd ~/src/dotfiles
-brew bundle
-./install.sh --dry-run
-./install.sh
+./install.sh --dry-run --all
+./install.sh --all
 exec zsh
 ```
 
-`brew bundle` installs everything in the `Brewfile`: Ghostty and the
-JetBrains Mono Nerd Font, the shell tools, jj, jjui and difftastic, mise,
+`--all` runs `brew bundle` first, which installs everything in the `Brewfile`: Ghostty and the
+JetBrains Mono Nerd Font, Shottr, the shell tools, jj, jjui and difftastic, mise,
 just, Claude Code, `redis-cli` and `kcat`, the API and Kubernetes tools, and
 what the repo's own checks need.
 
@@ -41,6 +40,10 @@ line to `~/.zprofile`, merges the Claude Code settings, writes your identity,
 writes the machine settings file `~/.config/dotfiles/config`, mirrors the
 identity into git, and validates the Ghostty config.
 [install.sh](reference/install-sh.md) describes each step.
+
+`--all` also turns off the macOS screenshot shortcuts so you can assign
+⇧⌘3, ⇧⌘4 and ⇧⌘5 in Shottr's Hotkeys preferences. Run `./install.sh` without
+flags to skip both, or pick one with `--brew` or `--shottr`.
 
 The live configs end up as symlinks into the repo, so editing `~/.zshrc`
 edits `zsh/zshrc`. [Updating](guides/updating.md) covers committing those

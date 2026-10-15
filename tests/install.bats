@@ -430,3 +430,85 @@ TOML
   done < <(link_pairs)
   ( source "$HOME/.config/dotfiles/config"; [ "$DOTFILES_DIR" = "$DOTFILES" ] )
 }
+
+# fake_screenshot_tools: a logging `defaults` on PATH and a logging activateSettings, so the
+# --shottr step never writes the real com.apple.symbolichotkeys or reloads the real session.
+fake_screenshot_tools() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "defaults $*" >> "%s"\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/defaults"
+  printf '#!/bin/sh\necho "activate $*" >> "%s"\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/activateSettings"
+  chmod +x "$BATS_TEST_TMPDIR/bin/"*
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+  export DOTFILES_ACTIVATE_SETTINGS="$BATS_TEST_TMPDIR/bin/activateSettings"
+}
+
+@test "install: --shottr turns off every macOS screenshot shortcut and applies it" {
+  fake_screenshot_tools
+  run_install --shottr
+  [ "$status" -eq 0 ]
+  for id in 28 29 30 31 184; do
+    grep -qF "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add $id <dict><key>enabled</key><false/></dict>" "$BATS_TEST_TMPDIR/calls" ||
+      { echo "shortcut $id not turned off"; return 1; }
+  done
+  [ "$(grep -c '^defaults ' "$BATS_TEST_TMPDIR/calls")" -eq 5 ]
+  grep -qx 'activate -u' "$BATS_TEST_TMPDIR/calls"
+}
+
+@test "install: without --shottr the screenshot shortcuts are left alone" {
+  fake_screenshot_tools
+  run_install
+  [ "$status" -eq 0 ]
+  [ ! -e "$BATS_TEST_TMPDIR/calls" ]
+  [[ $output != *"screenshot shortcuts"* ]] || false
+}
+
+@test "install: --dry-run --shottr only prints the screenshot commands" {
+  fake_screenshot_tools
+  run_install --dry-run --shottr
+  [ "$status" -eq 0 ]
+  [ ! -e "$BATS_TEST_TMPDIR/calls" ]
+  [[ $output == *"+ defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 184"* ]] || false
+}
+
+@test "install: an unknown argument exits 2 before changing anything" {
+  before_home=$(home_listing)
+  run_install --dry-run --bogus
+  [ "$status" -eq 2 ]
+  [[ $output == *"unknown argument: --bogus"* ]] || false
+  [ "$(home_listing)" = "$before_home" ]
+}
+
+# fake_brew: a logging `brew` on PATH, so --brew never installs anything for real.
+fake_brew() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "brew $*" >> "%s"\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
+  chmod +x "$BATS_TEST_TMPDIR/bin/brew"
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "install: --brew runs brew bundle on the repo's Brewfile before linking" {
+  fake_brew
+  run_install --brew
+  [ "$status" -eq 0 ]
+  grep -qx "brew bundle --file $DOTFILES/Brewfile" "$BATS_TEST_TMPDIR/calls"
+  [[ ${output%%== symlinks*} == *"== brew bundle"* ]] || false
+}
+
+@test "install: --all runs brew bundle and the screenshot step" {
+  fake_brew
+  fake_screenshot_tools
+  run_install --all
+  [ "$status" -eq 0 ]
+  grep -q '^brew bundle' "$BATS_TEST_TMPDIR/calls"
+  grep -qx 'activate -u' "$BATS_TEST_TMPDIR/calls"
+}
+
+@test "install: --brew without Homebrew fails before changing anything" {
+  mkdir -p "$BATS_TEST_TMPDIR/nobrew"
+  for t in bash dirname date; do ln -s "$(command -v "$t")" "$BATS_TEST_TMPDIR/nobrew/$t"; done
+  before_home=$(home_listing)
+  PATH="$BATS_TEST_TMPDIR/nobrew" run_install --brew
+  [ "$status" -eq 1 ]
+  [[ $output == *"Homebrew is required"* ]] || false
+  [ "$(home_listing)" = "$before_home" ]
+}

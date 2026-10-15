@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 # Install the dotfiles: symlink configs into $HOME (backing up anything in the way),
 # merge Claude Code settings, add the mise line to .zprofile, sync git identity from jj.
-# Safe to re-run. Usage: ./install.sh [--dry-run | --help]
+# Safe to re-run. Usage: ./install.sh [--dry-run] [--brew] [--shottr] [--all] | --help
+# --brew runs brew bundle first. --all is --brew --shottr: everything in one command.
+# --shottr also turns off the macOS screenshot shortcuts (⇧⌘3, ⇧⌘4, ⇧⌘5 and the clipboard
+# variants) so Shottr can take them.
 # Identity: prompts on first run, or set DOTFILES_NAME / DOTFILES_EMAIL / DOTFILES_SIGNING_KEY,
 # plus DOTFILES_PERSONAL_DIR / DOTFILES_PERSONAL_EMAIL / DOTFILES_PERSONAL_KEY for an optional
 # second identity used in one folder, to run without prompts.
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$0")" && pwd)
-DRY=0
-case ${1:-} in
-  "") ;;
-  --dry-run) DRY=1 ;;
-  -h|--help) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "unknown argument: $1 (usage: ./install.sh [--dry-run | --help])" >&2; exit 2 ;;
-esac
+DRY=0 BREW=0 SHOTTR=0
+for arg in "$@"; do
+  case $arg in
+    --dry-run) DRY=1 ;;
+    --brew) BREW=1 ;;
+    --shottr) SHOTTR=1 ;;
+    --all) BREW=1 SHOTTR=1 ;;
+    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown argument: $arg (usage: ./install.sh [--dry-run] [--brew] [--shottr] [--all] | --help)" >&2; exit 2 ;;
+  esac
+done
 STAMP=$(date +%Y%m%d-%H%M%S)
 
 run() { echo "+ $*"; (( DRY )) || "$@"; }
@@ -32,6 +39,12 @@ link() {  # link <repo-relative src> <dest>
   fi
   run ln -s "$src" "$dest"
 }
+
+if (( BREW )); then
+  echo "== brew bundle"
+  command -v brew >/dev/null || { echo "Homebrew is required for --brew: https://brew.sh" >&2; exit 1; }
+  run brew bundle --file "$REPO/Brewfile"
+fi
 
 echo "== symlinks"
 link ghostty/config           "$HOME/.config/ghostty/config"
@@ -268,6 +281,19 @@ else
   fi
 fi
 command -v difft >/dev/null && run git config --global alias.dft '-c diff.external=difft diff'
+
+if (( SHOTTR )); then
+  echo "== screenshot shortcuts (turn off the macOS ones so Shottr can take them)"
+  # AppleSymbolicHotKeys IDs: 28 ⇧⌘3, 29 ⌃⇧⌘3, 30 ⇧⌘4, 31 ⌃⇧⌘4, 184 ⇧⌘5.
+  for id in 28 29 30 31 184; do
+    run defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add "$id" '<dict><key>enabled</key><false/></dict>'
+  done
+  # Applies the change without logging out. Overridable so tests never touch the real session.
+  ACTIVATE=${DOTFILES_ACTIVATE_SETTINGS:-/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings}
+  if [[ -x $ACTIVATE ]]; then run "$ACTIVATE" -u
+  else echo "skip applying now: $ACTIVATE not found, log out and back in" >&2; fi
+  echo "ok   now assign ⇧⌘3, ⇧⌘4 and ⇧⌘5 in Shottr → Preferences → Hotkeys, and turn on Launch at login"
+fi
 
 echo "== checks"
 if command -v ghostty >/dev/null || [[ -x /Applications/Ghostty.app/Contents/MacOS/ghostty ]]; then

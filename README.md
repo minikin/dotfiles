@@ -30,9 +30,8 @@ records the location as `DOTFILES_DIR`.
 ```bash
 git clone https://github.com/minikin/dotfiles ~/src/dotfiles
 cd ~/src/dotfiles
-brew bundle              # everything in the Brewfile
-./install.sh --dry-run   # what it would link, and what it would back up
-./install.sh             # link, merge Claude settings, ask for one identity or two
+./install.sh --dry-run --all   # what it would install, link and back up
+./install.sh --all             # brew bundle, link, merge Claude settings, identity, Shottr keys
 exec zsh
 ```
 

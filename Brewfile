@@ -2,6 +2,9 @@
 cask "ghostty"
 cask "font-jetbrains-mono-nerd-font"
 
+# Screenshots (./install.sh --shottr frees ⇧⌘3/4/5 for it)
+cask "shottr"
+
 # Shell
 brew "starship"
 brew "zsh-autosuggestions"

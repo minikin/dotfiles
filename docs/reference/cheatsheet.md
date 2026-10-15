@@ -52,6 +52,7 @@ Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a 
 | `jws` | fzf-switch to a workspace (preview: `trunk()::@` log) |
 | `jwl` | List workspaces (`jj workspace list`) |
 | `jwrm [name...]` | Remove workspaces (fzf multi-pick if no args). Changes stay in the repo, only ignored files are lost |
+| `jland [rev]` | Move `main` to `rev` (default `work()`) and push it, for repos without pull requests. Refuses an undescribed change |
 | `jpush [bookmark]` | Push `work()` as a bookmark (default: workspace name). Creates it on first push, moves it forward after that. Refuses trunk and immutable names, and a change that is `@` in several workspaces when no name is given |
 | `JW_NO_SETUP=1 jw <name>` | Skip auto-setup |
 

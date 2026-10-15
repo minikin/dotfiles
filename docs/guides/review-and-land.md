@@ -126,10 +126,14 @@ In a repo without pull requests, land directly by moving `main` to the
 change and pushing it:
 
 ```sh
-jj bookmark set main -r 'work()'
-jj git push -b main
+jland                  # main to work(), then push
+jland <change>         # or a change you name
 ```
 
-Without `--allow-backwards`, `jj bookmark set` only moves `main` forward.
+`jland` runs `jj bookmark set main -r 'work()'` and `jj git push -b main`,
+using the trunk bookmark's real name when it is not `main`. It refuses a
+change without a description before moving anything. Without
+`--allow-backwards`, `jj bookmark set` only moves `main` forward, so
+`jland` cannot rewind it.
 Run `jj git fetch` and `jj rebase -d 'trunk()'` first, so the change sits on
 top of the latest `main`.

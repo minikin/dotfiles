@@ -52,12 +52,13 @@ jj st
 jj diff --git
 jj commit -m "feat(ghostty): bump font size"
 just check
-jj bookmark set main -r @-
-jj git push -b main
+jland
 ```
 
-`@-` is the change you just committed, below the empty `@` that
-`jj commit` leaves on top. The commits use the identity of wherever the clone
+`jland` moves `main` to `work()`, the change you just committed below the
+empty `@` that `jj commit` leaves on top, and pushes it. It is
+`jj bookmark set main -r 'work()' && jj git push -b main` with a check that
+the change has a description. The commits use the identity of wherever the clone
 lives: the main one, or the second one if the clone is inside the second
 identity's folder. Run `sign-as status` to check, or `sign-as personal` once
 to switch this repo.

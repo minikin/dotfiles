@@ -11,6 +11,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | `jwl`              | `zsh/jj.zsh`     | none                 | `jj workspace list`.                                          |
 | `jwrm`             | `zsh/jj.zsh`     | `[name...]`          | Remove workspaces. fzf multi-pick without arguments.          |
 | `jpush`            | `zsh/jj.zsh`     | `[bookmark]`         | Push `work()` as a bookmark named after the workspace.        |
+| `jland`            | `zsh/jj.zsh`     | `[rev]`              | Move the trunk bookmark to `rev` (default `work()`) and push it. |
 | `sign-as`          | `zsh/sign.zsh`   | `[work\|personal\|status]` | Show this repo's commit identity, or switch it between the main and the second identity. |
 | `infra`            | `zsh/infra.zsh`  | `[subcommand] [args...]` | Drive the local Docker stack.                             |
 | `reload`           | `zsh/reload.zsh` | none                 | Check every config, then restart zsh. Tells you to press `cmd+shift+,` for Ghostty. |
@@ -158,6 +159,22 @@ main checkout. It then runs `jj workspace remove <names...>`. jj snapshots
 each working copy into a commit and deletes the workspace directory, so the
 changes stay in the repo and only ignored files (`node_modules`, `.env`,
 build output) are lost. jj refuses to remove `default`.
+
+## jland
+
+```sh
+jland [rev]
+```
+
+For repos without pull requests. Moves the trunk bookmark to `rev`, default
+`work()`, and pushes it: `jj bookmark set <trunk> -r <rev>` then
+`jj git push -b <trunk>`. The bookmark is the first remote bookmark on
+`trunk()`, or `main` when there is none.
+
+| Case | Result |
+| ---- | ------ |
+| `rev` has no description | exit 1 with `jland: <rev> has no description, run: jj describe -r '<rev>' -m "..."`, nothing moved |
+| `rev` is behind the bookmark | jj refuses to move it backwards, exit 1, nothing pushed |
 
 ## jpush
 

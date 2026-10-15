@@ -210,12 +210,13 @@ setup() {
   printf '#!/bin/sh\npwd -P > "%s/claude.cwd"\nprintf "%%s\\n" "$@" > "%s/claude.args"\n' \
     "$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
   chmod +x "$BATS_TEST_TMPDIR/bin/claude"
-  run_zsh "cd '$REPO' && jw feat/x >/dev/null 2>&1 && jw other >/dev/null 2>&1"
+  run_zsh "cd '$REPO' && jw feat/x >/dev/null 2>&1 && echo x > x.txt && jw other >/dev/null 2>&1"
   [ "$status" -eq 0 ]
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$WS/other' && jreview feat/x 'focus on the retry logic' && pwd -P"
   [ "$status" -eq 0 ]
-  [ "$output" = "$WS/other" ]
+  [[ ${lines[0]} == "jreview: reviewing feat-x"* ]] || false
+  [ "${lines[1]}" = "$WS/other" ]
   [ "$(cat "$BATS_TEST_TMPDIR/claude.cwd")" = "$WS/feat-x" ]
   args=$(cat "$BATS_TEST_TMPDIR/claude.args")
   grep -qx -- -p "$BATS_TEST_TMPDIR/claude.args"
@@ -231,7 +232,7 @@ setup() {
   printf '#!/bin/sh\npwd -P > "%s/claude.cwd"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
   printf '#!/bin/sh\ncat > "%s/offered"\necho a\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/fzf"
   chmod +x "$BATS_TEST_TMPDIR/bin/claude" "$BATS_TEST_TMPDIR/bin/fzf"
-  run_zsh "cd '$REPO' && jw a >/dev/null 2>&1"
+  run_zsh "cd '$REPO' && jw a >/dev/null 2>&1 && echo a > a.txt"
   [ "$status" -eq 0 ]
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview nope"
@@ -243,6 +244,20 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$(cat "$BATS_TEST_TMPDIR/offered")" = "a" ]
   [ "$(cat "$BATS_TEST_TMPDIR/claude.cwd")" = "$WS/a" ]
+}
+
+@test "jreview: a workspace with no changes since trunk() stops without running claude" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\ntouch "%s/claude.ran"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  add_bare_remote "$REPO" "$BATS_TEST_TMPDIR/remote.git"
+  run_zsh "cd '$REPO' && jw idle >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview idle"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jreview: idle has no changes since trunk()"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
 }
 
 @test "jwst: one row per workspace with change, behind count, pushed and conflicts" {

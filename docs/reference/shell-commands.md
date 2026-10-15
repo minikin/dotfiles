@@ -171,8 +171,13 @@ jreview [name] [focus...]
 
 `jreview` finds the workspace directory from the main checkout with
 `jj --ignore-working-copy workspace list`, as `jsync` does, so it works from
-the main checkout or from any workspace. Then, in that directory and in a
-subshell, so your own directory does not change:
+the main checkout or from any workspace. If
+`jj -R <dir> diff -r 'trunk()..@' --name-only` lists no files, it prints
+`jreview: <name> has no changes since trunk(), nothing to review` to stderr
+and returns 1 without starting Claude. Otherwise it prints
+`jreview: reviewing <name>, this takes a minute or two...` to stderr, because
+`claude -p` shows nothing until the review is done. Then, in that directory
+and in a subshell, so your own directory does not change:
 
 ```sh
 claude -p "<prompt>" \
@@ -187,7 +192,7 @@ In `-p` mode a tool call that no rule allows is denied, not asked about, so
 the reviewer can read files and run `jj diff`, `jj log` and `jj show`, and
 nothing else. `Bash(jj diff *)` also matches a bare `jj diff`.
 
-The reviewer's `jj diff` snapshots the workspace like any jj command run in
+That check and the reviewer's `jj diff` snapshot the workspace like any jj command run in
 it. Run `jreview` while the agent waits for input, not while it is writing
 files, as with `jsync`.
 

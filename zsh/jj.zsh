@@ -106,6 +106,11 @@ jreview() {
   name=${name//\//-}
   d=${dirs[$name]:-}
   [[ -n $d && -d $d ]] || { echo "jreview: no workspace named $name" >&2; return 1; }
+  # Without --ignore-working-copy on purpose: edits the agent has not snapshotted yet count.
+  [[ -n $(jj -R "$d" diff -r 'trunk()..@' --name-only 2>/dev/null) ]] ||
+    { echo "jreview: $name has no changes since trunk(), nothing to review" >&2; return 1; }
+  # claude -p prints nothing until the review is done.
+  echo "jreview: reviewing $name, this takes a minute or two..." >&2
   prompt="Review the change in this jj workspace. Run jj diff --git -r 'trunk()..@' and read the code it touches. \
 List the problems you find by severity (blocking, should fix, nit), each with file:line and the reason. \
 Do not edit any file."

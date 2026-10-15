@@ -56,7 +56,7 @@ pickers() {
 
 @test "navi: pickers call no zsh functions (navi runs them in bash)" {
   bad=$(for f in "$CHEATS"/*.cheat; do pickers "$f" | cut -f2 | sed "s|^|${f##*/}: |"; done |
-    grep -E '(^|[^a-z_-])(jw|jwc|jws|jwl|jwrm|jpush|jland|reload|infra|sign-as|z|zi)( |$)' || true)
+    grep -E '(^|[^a-z_-])(jw|jwc|jws|jwst|jwl|jwrm|jsync|jpush|jland|reload|infra|sign-as|z|zi)( |$)' || true)
   [ -z "$bad" ] || { echo "$bad"; return 1; }
 }
 

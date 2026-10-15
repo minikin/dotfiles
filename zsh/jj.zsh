@@ -78,8 +78,14 @@ _jw_setup() {
   )
 }
 
-# jwc <name> [rev] — create workspace and start Claude Code in it
-jwc() { jw "$@" && claude; }
+# jwc <name> [rev] [claude args...] — create (or reuse) a workspace and start Claude Code in it.
+# The second argument is a rev unless it starts with "-": jwc x --continue, jwc x @- --continue.
+jwc() {
+  local name=${1:-} rev
+  (( $# )) && shift
+  [[ -n ${1:-} && $1 != -* ]] && { rev=$1; shift; }
+  jw "$name" ${rev:+"$rev"} && claude "$@"
+}
 
 # jwl — list workspaces
 jwl() { jj workspace list; }
@@ -91,6 +97,78 @@ jws() {
     fzf --prompt="workspace> " --with-nth=1 --delimiter='\t' --preview 'jj -R {2} --ignore-working-copy log -r "trunk()::@" --color always' |
     cut -f2)
   [[ -n $dir ]] && cd "$dir"
+}
+
+# jwst — one row per workspace: latest work, commits behind trunk, pushed, conflicts.
+# Queries only the root with --ignore-working-copy: touching a workspace would snapshot it.
+jwst() {
+  local root w work change desc pushed conflicts behind width=9
+  local -a names rows
+  root=$(_jw_root) || return 1
+  names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"')"})
+  for w in $names; do (( ${#w} > width )) && width=${#w}; done
+  for w in $names; do
+    work=$(jj -R $root --ignore-working-copy log --no-graph -r "heads(::\"$w\"@ & mutable() & ~empty())" \
+      -T 'change_id.short(8) ++ "\t" ++ coalesce(description.first_line(), "(no description)") ++ "\t" ++ if(remote_bookmarks.any(|b| b.name() == "'$w'" && b.remote() == "origin"), "yes", "no")' 2>/dev/null)
+    if [[ -n $work ]]; then
+      change=${work%%$'\t'*} desc=${${work#*$'\t'}%$'\t'*} pushed=${work##*$'\t'}
+    else
+      change=- desc='(no changes)' pushed=no
+    fi
+    conflicts=no
+    [[ -n $(jj -R $root --ignore-working-copy log --no-graph -r "trunk()..\"$w\"@ & conflicts()" -T '"x"' 2>/dev/null) ]] && conflicts=yes
+    behind=$(jj -R $root --ignore-working-copy log --no-graph -r "::trunk() & ~::\"$w\"@" -T '"x"' 2>/dev/null)
+    rows+=("$(printf "%-${width}s  %-8s  %6s  %-6s  %-9s  %s" "$w" "$change" "${#behind}" "$pushed" "$conflicts" "$desc")")
+  done
+  printf "%-${width}s  %-8s  %6s  %-6s  %-9s  %s\n" WORKSPACE CHANGE BEHIND PUSHED CONFLICTS DESCRIPTION
+  print -rl -- $rows
+}
+
+# jsync [name...] — rebase workspaces onto the latest trunk (fzf multi-pick if no args,
+# default included). Per workspace: snapshot its unsaved edits, rebase, update it at once,
+# so an agent never sees a stale working copy for longer than one rebase.
+jsync() {
+  local root w d out rc=0
+  local -a names
+  local -A dirs
+  root=$(_jw_root) || return 1
+  for w d in ${(@ps:\t:)${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"')"}}; do
+    dirs[$w]=$d
+  done
+  if (( $# )); then
+    names=(${@//\//-})
+  else
+    names=(${(f)"$(print -rl -- ${(k)dirs} | fzf -m --prompt="sync> ")"})
+  fi
+  (( ${#names} )) || return 1
+  if [[ -n $(jj -R $root --ignore-working-copy git remote list 2>/dev/null) ]]; then
+    jj -R $root git fetch --quiet || echo "jsync: fetch failed, using the trunk already fetched" >&2
+  fi
+  for w in $names; do
+    d=${dirs[$w]:-}
+    if [[ -z $d || ! -d $d ]]; then
+      echo "$w: no such workspace directory, run: jw $w" >&2; rc=1; continue
+    fi
+    if [[ -z $(jj -R $root --ignore-working-copy log --no-graph -r "::trunk() & ~::\"$w\"@" -T '"x"' 2>/dev/null) ]]; then
+      if [[ -n $(jj -R $root --ignore-working-copy log --no-graph -r "trunk()..\"$w\"@ & conflicts()" -T '"x"' 2>/dev/null) ]]; then
+        echo "$w: up to date, conflicts left for the agent"
+      else
+        echo "$w: up to date"
+      fi
+      continue
+    fi
+    # update-stale first: a workspace left stale by an earlier rebase cannot snapshot
+    out=$(jj -R $d workspace update-stale 2>&1 && jj -R $d status 2>&1 >/dev/null \
+      && jj -R $root rebase --quiet -b "\"$w\"@" -d 'trunk()' 2>&1 && jj -R $d workspace update-stale 2>&1) || {
+      echo "$w: rebase failed" >&2; print -r -- "$out" >&2; rc=1; continue
+    }
+    if [[ -n $(jj -R $root --ignore-working-copy log --no-graph -r "trunk()..\"$w\"@ & conflicts()" -T '"x"' 2>/dev/null) ]]; then
+      echo "$w: conflicts, left for the agent"
+    else
+      echo "$w: rebased onto trunk"
+    fi
+  done
+  return $rc
 }
 
 # jwrm [name...] — remove workspaces (fzf multi-pick if no args).

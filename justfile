@@ -14,7 +14,7 @@ lint:
     set -euo pipefail
     shopt -s nullglob
     echo "== shellcheck"
-    shellcheck install.sh claude/statusline.sh scripts/*.sh
+    shellcheck install.sh claude/*.sh scripts/*.sh
     echo "== bats asserts"
     # bash 3.2 (macOS /usr/bin/env bash) ignores a failing [[ ]] or ! that is not a test's last command.
     if grep -nE '^[[:space:]]+(\[\[ .*\]\]|! .*)$' tests/*.bats | grep -v '|| false$'; then

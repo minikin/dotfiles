@@ -37,7 +37,7 @@ published_ports() {
     [[ $p == 127.0.0.1:* || $p == "[::1]:"* ]] || { echo "not loopback: $p"; return 1; }
   done
   # No long-syntax port entries (host_ip/published) that the grep above would miss
-  ! grep -Eq '^[[:space:]]*(published|host_ip|target):' "$COMPOSE"
+  ! grep -Eq '^[[:space:]]*(published|host_ip|target):' "$COMPOSE" || false
 }
 
 # infra_args <infra args...>: run the infra function against a docker stub, print what docker got

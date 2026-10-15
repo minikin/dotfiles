@@ -68,8 +68,8 @@ personal_identity() {
 @test "sign-as personal: without personal.gitconfig fails with one clear message" {
   run_sign "sign-as personal"
   [ "$status" -ne 0 ]
-  [[ $output == *"no second identity set up"* ]]
-  [[ $output != *fatal* ]]
+  [[ $output == *"no second identity set up"* ]] || false
+  [[ $output != *fatal* ]] || false
   run git -C "$REPO" config --local user.email
   [ "$status" -ne 0 ]
 }
@@ -93,8 +93,8 @@ personal_identity() {
   personal_identity with-key
   run_sign "sign-as status"
   [ "$status" -eq 0 ]
-  [[ $output == *"jj:  test@example.com"* ]]
-  [[ $output == *"git: "* ]]
+  [[ $output == *"jj:  test@example.com"* ]] || false
+  [[ $output == *"git: "* ]] || false
   run git -C "$REPO" config --local user.email
   [ "$status" -ne 0 ]
   jj_repo_unset user.email
@@ -103,5 +103,5 @@ personal_identity() {
 @test "sign-as: outside a repo fails" {
   run zsh -f -c "source '$REPO_ROOT/zsh/sign.zsh'; cd '$HOME' && sign-as status"
   [ "$status" -ne 0 ]
-  [[ $output == *"not in a repo"* ]]
+  [[ $output == *"not in a repo"* ]] || false
 }

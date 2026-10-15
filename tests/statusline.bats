@@ -24,15 +24,15 @@ op_count() { jj -R "$1" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' 
   statusline "$ws"
   [ "$status" -eq 0 ]
   echo "output: $output"
-  [[ $output =~ ^~/src/app-ws/feat\ ·\ \[feat\]\ [a-z]{4,}\ .*add\ login\ ·\ Opus$ ]]
+  [[ $output =~ ^~/src/app-ws/feat\ ·\ \[feat\]\ [a-z]{4,}\ .*add\ login\ ·\ Opus$ ]] || false
 }
 
 @test "statusline: single-workspace repo never prints an empty []" {
   statusline "$REPO"
   [ "$status" -eq 0 ]
   echo "output: $output"
-  [[ $output != *"[]"* ]]
-  [[ $output =~ ^~/src/app\ ·\ .+\ ·\ Opus$ ]]
+  [[ $output != *"[]"* ]] || false
+  [[ $output =~ ^~/src/app\ ·\ .+\ ·\ Opus$ ]] || false
 }
 
 @test "statusline: outside a repo prints only dir and model" {
@@ -62,7 +62,7 @@ op_count() { jj -R "$1" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' 
   cd "$HOME"
   statusline "$HOME/gone"
   [ "$status" -eq 0 ]
-  [[ $output == *"· Opus" ]]
+  [[ $output == *"· Opus" ]] || false
 }
 
 @test "statusline: plain git repo (no jj) shows git:<branch>" {

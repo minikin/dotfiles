@@ -21,7 +21,7 @@ SETTINGS() { echo "$HOME/.claude/settings.json"; }
   [ "$status" -eq 0 ]
   [ "$(home_listing)" = "$before_home" ]
   [ "$(cd "$DOTFILES" && find . -exec ls -ld {} + | LC_ALL=C sort)" = "$before_repo" ]
-  [[ $output == *"+ ln -s"* ]]
+  [[ $output == *"+ ln -s"* ]] || false
 }
 
 @test "install: first run symlinks every link line" {
@@ -43,15 +43,15 @@ SETTINGS() { echo "$HOME/.claude/settings.json"; }
   run_install
   [ "$status" -eq 0 ]
   [ "$(count_backups)" -eq "$before" ]
-  [[ $output == *"settings.json (unchanged)"* ]]
-  [[ $output != *"+ ln -s"* ]]
+  [[ $output == *"settings.json (unchanged)"* ]] || false
+  [[ $output != *"+ ln -s"* ]] || false
 }
 
 @test "install: an existing plain file is backed up before being replaced" {
   printf 'my old zshrc\n' > "$HOME/.zshrc"
   run_install
   [ "$status" -eq 0 ]
-  [[ $HOME/.zshrc -ef $DOTFILES/zsh/zshrc ]]
+  [[ $HOME/.zshrc -ef $DOTFILES/zsh/zshrc ]] || false
   backups=("$HOME"/.zshrc.bak-*)
   [ "${#backups[@]}" -eq 1 ]
   [ -f "${backups[0]}" ]
@@ -73,7 +73,7 @@ SETTINGS() { echo "$HOME/.claude/settings.json"; }
   printf '{"a":1,}' > "$(SETTINGS)"
   run_install
   [ "$status" -ne 0 ]
-  [[ $output == *"merge failed"* ]]
+  [[ $output == *"merge failed"* ]] || false
   [ "$(cat "$(SETTINGS)")" = '{"a":1,}' ]
   [ ! -e "$(SETTINGS).tmp" ]
 }
@@ -118,7 +118,7 @@ JSON
   [ -f "$DOTFILES/ghostty/config" ]
   [ ! -L "$DOTFILES/ghostty/config" ]
   [ -z "$(find "$DOTFILES/ghostty" -name '*.bak-*')" ]
-  [[ $HOME/.config/ghostty/config -ef $DOTFILES/ghostty/config ]]
+  [[ $HOME/.config/ghostty/config -ef $DOTFILES/ghostty/config ]] || false
 }
 
 @test "install: non-interactive identity from DOTFILES_* env vars" {
@@ -165,13 +165,13 @@ JSON
   id="$HOME/.config/jj/conf.d/identity.toml"
   cmp "$id" "$DOTFILES/jj/identity.example.toml"
   [ "$(file_mode "$id")" = 600 ]
-  [[ $output == *"no terminal"* ]]
+  [[ $output == *"no terminal"* ]] || false
 }
 
 @test "install: template placeholders are never copied into git identity" {
   run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL bash "$DOTFILES/install.sh" </dev/null
   [ "$status" -eq 0 ]
-  [[ $output == *"still has placeholders"* ]]
+  [[ $output == *"still has placeholders"* ]] || false
   run git config --global user.email
   [ "$status" -ne 0 ]
   run git config --global user.name
@@ -194,7 +194,7 @@ JSON
   export DOTFILES_SIGNING_KEY="$BATS_TEST_TMPDIR/does-not-exist.pub"
   run_install
   [ "$status" -ne 0 ]
-  [[ $output == *"neither a public key line nor an existing .pub file"* ]]
+  [[ $output == *"neither a public key line nor an existing .pub file"* ]] || false
   [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
 }
 
@@ -202,7 +202,7 @@ JSON
   run_install
   [ "$status" -eq 0 ]
   [ -z "$(find "$HOME/.claude" -name 'settings.json.bak-*')" ]
-  [[ $output != *"(backup:"* ]]
+  [[ $output != *"(backup:"* ]] || false
 }
 
 @test "install: one identity only writes no second scope and no includeIf" {
@@ -210,18 +210,18 @@ JSON
   export DOTFILES_NAME=Solo DOTFILES_EMAIL=solo@example.com DOTFILES_SIGNING_KEY="$BATS_TEST_TMPDIR/k.pub"
   run_install
   [ "$status" -eq 0 ]
-  ! grep -q -- '--scope' "$HOME/.config/jj/conf.d/identity.toml"
+  ! grep -q -- '--scope' "$HOME/.config/jj/conf.d/identity.toml" || false
   run git config --global --get-regexp '^includeif\.'
   [ -z "$output" ]
   [ ! -e "$HOME/.config/git/personal.gitconfig" ]
-  ! grep -q DOTFILES_PERSONAL_DIR "$HOME/.config/dotfiles/config"
+  ! grep -q DOTFILES_PERSONAL_DIR "$HOME/.config/dotfiles/config" || false
 }
 
 @test "install: a second email without its folder (or the reverse) is refused" {
   export DOTFILES_NAME=X DOTFILES_EMAIL=x@example.com DOTFILES_PERSONAL_EMAIL=y@example.org
   run_install
   [ "$status" -eq 2 ]
-  [[ $output == *"together"* ]]
+  [[ $output == *"together"* ]] || false
   [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
   unset DOTFILES_PERSONAL_EMAIL
   export DOTFILES_PERSONAL_DIR="~/src/mine"
@@ -248,13 +248,13 @@ JSON
   unset DOTFILES_NAME DOTFILES_EMAIL DOTFILES_PERSONAL_EMAIL DOTFILES_PERSONAL_DIR
   run_install
   [ "$status" -eq 0 ]
-  [[ $output == *"$conf (unchanged)"* ]]
+  [[ $output == *"$conf (unchanged)"* ]] || false
 }
 
 @test "install: the template's placeholder folder never becomes DOTFILES_PERSONAL_DIR" {
   run_install
   [ "$status" -eq 0 ]
-  ! grep -q DOTFILES_PERSONAL_DIR "$HOME/.config/dotfiles/config"
+  ! grep -q DOTFILES_PERSONAL_DIR "$HOME/.config/dotfiles/config" || false
 }
 
 @test "install: a private key file given as the signing key is rejected and never written" {
@@ -263,10 +263,10 @@ JSON
   export DOTFILES_SIGNING_KEY="$BATS_TEST_TMPDIR/id_test"
   run_install
   [ "$status" -eq 1 ]
-  [[ $output == *"not a public key file"* ]]
+  [[ $output == *"not a public key file"* ]] || false
   [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
   [ ! -e "$HOME/.config/git/allowed_signers" ]
-  ! grep -rqs 'PRIVATE KEY' "$HOME"
+  ! grep -rqs 'PRIVATE KEY' "$HOME" || false
 }
 
 @test "install: allowed_signers is created private (mode 600)" {
@@ -285,14 +285,14 @@ JSON
   run_install
   [ "$status" -eq 0 ]
   id="$HOME/.config/jj/conf.d/identity.toml"
-  ! grep -q '^\[signing\]' "$id"
+  ! grep -q '^\[signing\]' "$id" || false
   grep -qF '[--scope.signing]' "$id"
   grep -qF "key = \"$DOTFILES_PERSONAL_KEY\"" "$id"
   run git config --global user.signingkey
   [ "$status" -ne 0 ]
   [ "$(git config -f "$HOME/.config/git/personal.gitconfig" user.signingkey)" = "$DOTFILES_PERSONAL_KEY" ]
   signers="$HOME/.config/git/allowed_signers"
-  ! grep -q '^work@example.com ' "$signers"
+  ! grep -q '^work@example.com ' "$signers" || false
   grep -qF "me@personal.example namespaces=\"git\" $(cat "$BATS_TEST_TMPDIR/personal_key.pub")" "$signers"
 }
 
@@ -336,7 +336,7 @@ TOML
 @test "install: the no-terminal template copy leaves signing off so jj keeps working" {
   run_install
   [ "$status" -eq 0 ]
-  [[ $output == *"signing is off"* ]]
+  [[ $output == *"signing is off"* ]] || false
   run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj config get signing.behavior
   [ "$output" != own ]
   run env -u JJ_CONFIG -u JJ_USER -u JJ_EMAIL jj config get signing.key
@@ -369,7 +369,7 @@ TOML
   export DOTFILES_NAME=X DOTFILES_EMAIL=''
   run_install
   [ "$status" -eq 2 ]
-  [[ $output == *"DOTFILES_EMAIL"* ]]
+  [[ $output == *"DOTFILES_EMAIL"* ]] || false
   [ ! -e "$HOME/.config/jj/conf.d/identity.toml" ]
   [ ! -e "$HOME/.config/git/allowed_signers" ]
   export DOTFILES_EMAIL=x@example.com DOTFILES_PERSONAL_DIR="~/src/mine" DOTFILES_PERSONAL_EMAIL=''

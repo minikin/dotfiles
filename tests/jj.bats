@@ -19,7 +19,7 @@ setup() {
   [ -f "$WS/feat-x/README.md" ]
   [[ ${lines[1]} == "## "* ]]   # git works inside the workspace
   run jj -R "$REPO" workspace list -T 'name ++ "\n"'
-  [[ $output == *feat-x* ]]
+  [[ $output == *feat-x* ]] || false
 }
 
 @test "jw: from inside a workspace creates a sibling, not a nested workspace" {
@@ -46,14 +46,14 @@ setup() {
   [ "$(cat "$WS/withenv/.env")" = "SECRET=1" ]
   [ "$(cat "$WS/withenv/svc/.env.local")" = "SVC=1" ]
   [ "$(cat "$WS/withenv/.env.example")" = "tracked" ]
-  [[ $output != *"copied .env.example"* ]]
+  [[ $output != *"copied .env.example"* ]] || false
 
   run_zsh "cd '$REPO' && JW_NO_SETUP=1 jw bare"
   [ "$status" -eq 0 ]
   [ ! -e "$WS/bare/.env" ]
   [ ! -e "$WS/bare/svc/.env.local" ]
-  [[ $output != *"copied"* ]]
-  [[ $output != *"setup:"* ]]
+  [[ $output != *"copied"* ]] || false
+  [[ $output != *"setup:"* ]] || false
 }
 
 @test "jw: setup runs 'just setup' instead of lockfile installs" {
@@ -71,7 +71,7 @@ setup() {
   unset JW_NO_SETUP
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw s"
   [ "$status" -eq 0 ]
-  [[ $output == *"setup: just setup"* ]]
+  [[ $output == *"setup: just setup"* ]] || false
   [ -f "$WS/s/setup-ran" ]
   [ ! -e "$BATS_TEST_TMPDIR/npm-ran" ]
 }
@@ -86,7 +86,7 @@ setup() {
   [ -f "$WS/x/README.md" ]
   run git -C "$REPO" worktree list
   [ "$status" -eq 0 ]
-  [[ $output != *prunable* ]]
+  [[ $output != *prunable* ]] || false
   run git -C "$WS/x" status --short
   [ "$status" -eq 0 ]
 }
@@ -99,10 +99,10 @@ setup() {
   [ "${lines[1]}" = "$(realpath_of "$REPO")" ]
   [ ! -e "$WS/x" ]
   run jj -R "$REPO" workspace list -T 'name ++ "\n"'
-  [[ $output != *x* ]]
+  [[ $output != *x* ]] || false
   run jj -R "$REPO" log -r "$change" --no-graph -T 'description'
   [ "$status" -eq 0 ]
-  [[ $output == *"agent work"* ]]
+  [[ $output == *"agent work"* ]] || false
 }
 
 @test "jwrm: from inside the workspace reached through a symlink still cds out first" {
@@ -121,7 +121,7 @@ setup() {
     [[ $l == *--ignore-working-copy* ]] || { echo "missing --ignore-working-copy: $l"; return 1; }
   done
   run grep -nE 'jpush|workspace add' "$REPO_ROOT/zsh/jj.zsh"
-  [[ $output != *--ignore-working-copy* ]]
+  [[ $output != *--ignore-working-copy* ]] || false
 }
 
 @test "jpush: refuses a workspace named after trunk; pushes a normal workspace as its own bookmark" {
@@ -131,7 +131,7 @@ setup() {
 
   run_zsh "cd '$REPO' && jw main >/dev/null 2>&1 && echo x > m.txt && jj commit -m 'onto main' >/dev/null 2>&1 && jpush"
   [ "$status" -ne 0 ]
-  [[ $output == *refusing* ]]
+  [[ $output == *refusing* ]] || false
   [ "$(git -C "$remote" rev-parse refs/heads/main)" = "$main_before" ]
 
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && echo y > f.txt && jj commit -m 'feature' >/dev/null 2>&1 && jpush"
@@ -145,7 +145,7 @@ setup() {
 @test "jpush: in the default workspace requires an explicit name" {
   run_zsh "cd '$REPO' && jpush"
   [ "$status" -ne 0 ]
-  [[ $output == *"usage: jpush"* ]]
+  [[ $output == *"usage: jpush"* ]] || false
 }
 
 @test "jpush: a second push moves the existing bookmark forward" {
@@ -167,7 +167,7 @@ setup() {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && echo y > f.txt && jj describe -m 'shared' >/dev/null 2>&1 \
     && change=\$(jj log -r @ --no-graph -T change_id) && jw fix >/dev/null 2>&1 && jj edit \$change >/dev/null 2>&1 && jpush"
   [ "$status" -ne 0 ]
-  [[ $output == *"usage: jpush"* ]]
+  [[ $output == *"usage: jpush"* ]] || false
   run git -C "$remote" for-each-ref --format='%(refname:short)' refs/heads
   [ "$output" = main ]
 }
@@ -177,6 +177,6 @@ setup() {
   add_bare_remote "$REPO" "$remote"
   main_before=$(jj -R "$REPO" log -r main --no-graph -T commit_id)
   run_zsh "cd '$REPO' && jw t >/dev/null 2>&1 && echo z > t.txt && jj commit -m 'agent' >/dev/null 2>&1 && jj tug"
-  [[ $output == *"No bookmarks to update"* || $status -eq 0 ]]
+  [[ $output == *"No bookmarks to update"* || $status -eq 0 ]] || false
   [ "$(jj -R "$REPO" log -r main --no-graph -T commit_id)" = "$main_before" ]
 }

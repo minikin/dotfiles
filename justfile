@@ -15,6 +15,11 @@ lint:
     shopt -s nullglob
     echo "== shellcheck"
     shellcheck install.sh claude/statusline.sh scripts/*.sh
+    echo "== bats asserts"
+    # bash 3.2 (macOS /usr/bin/env bash) ignores a failing [[ ]] or ! that is not a test's last command.
+    if grep -nE '^[[:space:]]+(\[\[ .*\]\]|! .*)$' tests/*.bats | grep -v '|| false$'; then
+      echo "add '|| false' to the asserts above" >&2; exit 1
+    fi
     echo "== zsh -n"
     for f in zsh/zshrc zsh/*.zsh; do zsh -n "$f"; done
     if command -v docker >/dev/null; then

@@ -27,7 +27,7 @@ line_for() { grep -E " $1( |$)" <<<"$output"; }
 @test "drift: a link into the checkout is linked" {
   drift
   [ "$status" -eq 0 ]
-  [[ $(line_for '~/.zshrc') == "linked "* ]]
+  [[ $(line_for '~/.zshrc') == "linked "* ]] || false
 }
 
 @test "drift: a link into another clone with identical content is elsewhere, with its target" {
@@ -46,9 +46,9 @@ line_for() { grep -E " $1( |$)" <<<"$output"; }
 @test "drift: a regular file is same (copy), DIFFERS or missing" {
   drift
   [ "$status" -eq 0 ]
-  [[ $(line_for '~/.config/zsh/sign.zsh') == "same (copy) "* ]]
-  [[ $(line_for '~/.config/zsh/infra.zsh') == "DIFFERS "* ]]
-  [[ $(line_for '~/.config/jj/config.toml') == "missing "* ]]
+  [[ $(line_for '~/.config/zsh/sign.zsh') == "same (copy) "* ]] || false
+  [[ $(line_for '~/.config/zsh/infra.zsh') == "DIFFERS "* ]] || false
+  [[ $(line_for '~/.config/jj/config.toml') == "missing "* ]] || false
 }
 
 @test "drift: changes nothing in HOME" {

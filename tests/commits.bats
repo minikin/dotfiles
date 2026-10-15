@@ -24,7 +24,7 @@ check() {
   commit "refactor(install)!: rename the identity file"
   check
   [ "$status" -eq 0 ]
-  [[ $output == *"4 commits ok"* ]]
+  [[ $output == *"4 commits ok"* ]] || false
 }
 
 @test "commits: a subject without a type fails and is named" {
@@ -32,8 +32,8 @@ check() {
   commit "zsh: old style subject"
   check
   [ "$status" -eq 1 ]
-  [[ $output == *"zsh: old style subject"* ]]
-  [[ $output != *"add jwx"* ]]
+  [[ $output == *"zsh: old style subject"* ]] || false
+  [[ $output != *"add jwx"* ]] || false
 }
 
 @test "commits: unknown type, uppercase scope and missing summary fail" {
@@ -48,7 +48,7 @@ check() {
 @test "commits: commits before the range are not checked" {
   check
   [ "$status" -eq 0 ]
-  [[ $output == *"0 commits ok"* ]]
+  [[ $output == *"0 commits ok"* ]] || false
 }
 
 @test "commits: merge commits are skipped" {

@@ -39,7 +39,7 @@ Guide: [Saved workflows](../guides/workflows.md).
 | `navi-trust` | Load this repo's `.navi/` workflows (repos under `$DOTFILES_PERSONAL_DIR`, the second identity's folder, are trusted already) |
 | `navi-untrust` | Stop loading this repo's `.navi/` workflows |
 
-Groups in the palette's first column: `agents` (review a workspace diff, rebase all workspaces onto trunk, push and open a pull request), `review` (check out a pull request, watch its CI), `jj` (change pickers, revsets, signature check), `kafka`, `redis`, `infra` (kafka-ui, Jaeger), `k8s`, `go`, `dotfiles`. Type the verb and object, e.g. `tail kafka`, `review agent`, `debug pod`.
+Groups in the palette's first column: `agents` (review a workspace diff, push and open a pull request), `review` (check out a pull request, watch its CI), `jj` (change pickers, revsets, signature check), `kafka`, `redis`, `infra` (kafka-ui, Jaeger), `k8s`, `go`, `dotfiles`. Type the verb and object, e.g. `tail kafka`, `review agent`, `debug pod`.
 
 ## Agent workspaces (`zsh/jj.zsh`)
 
@@ -48,7 +48,9 @@ Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a 
 | Command | Action |
 |---|---|
 | `jw <name> [rev]` | Create (or reuse) workspace and `cd` in. `rev` defaults to `trunk()`, or `@-` if no remote trunk. `/` in name becomes `-` |
-| `jwc <name> [rev]` | `jw`, then start `claude` in it |
+| `jwc <name> [rev] [claude args...]` | `jw`, then start `claude` in it with the remaining arguments, e.g. `jwc feat/x --permission-mode plan`, `jwc feat-x --continue` |
+| `jwst` | One row per workspace: latest change, commits behind trunk, pushed, conflicts. Read-only |
+| `jsync [name...]` | Fetch, then rebase each workspace onto trunk, snapshotting and updating it around the rebase (fzf multi-pick if no args) |
 | `jws` | fzf-switch to a workspace (preview: `trunk()::@` log) |
 | `jwl` | List workspaces (`jj workspace list`) |
 | `jwrm [name...]` | Remove workspaces (fzf multi-pick if no args). Changes stay in the repo, only ignored files are lost |

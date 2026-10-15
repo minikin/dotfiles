@@ -36,7 +36,10 @@ jwc fix-retry
 ```
 
 `jwc <name> [rev]` runs `jw <name> [rev]` and then `claude` in the new
-directory. Use `jw` alone when you want the shell without the agent. The
+directory. Arguments after the name and the optional `rev` go to `claude`,
+so `jwc feat/login --permission-mode plan` starts in plan mode and
+`jwc fix-retry --continue` reopens an existing workspace's last
+conversation. Use `jw` alone when you want the shell without the agent. The
 output from a repo with a `.env` at the root, a `pkg/.env` and a `justfile`
 with a `setup` recipe:
 
@@ -154,6 +157,7 @@ does not ask again. [Project tools](project-tools.md) has examples of a
 ## Switch, list and remove
 
 ```sh
+jwst                      # one row per workspace: change, behind trunk, pushed, conflicts
 jws                       # fzf picker over workspaces, previews trunk()::@, then cd
 jwl                       # jj workspace list
 jwrm fix-retry add-metrics
@@ -166,10 +170,29 @@ still shows them. Ignored files are lost: `node_modules`, `.env`, build
 output. Running `jwrm` from inside one of the repo's workspaces moves you back
 to the main checkout first.
 
+`jwst` reads everything from the main checkout without loading any
+workspace, so it never snapshots or disturbs a running agent.
+
+## Keep workspaces on the latest trunk
+
+```sh
+jsync fix-retry add-metrics
+jsync                     # no arguments: fzf multi-picker, default included
+```
+
+`jsync` fetches once, then takes the workspaces one at a time: it snapshots
+the agent's unsaved edits, rebases the stack onto `trunk()` and runs
+`jj workspace update-stale` in the workspace right after, so the agent does
+not hit a stale working copy. A workspace already on the latest trunk is
+skipped, and conflicts are reported and left for the agent. Run it while the
+agents wait for input. [Shell commands](../reference/shell-commands.md#jsync)
+lists every message.
+
 ## Recover a stale workspace
 
 When another workspace rewrites the change a workspace is on, jj reports
-that the working copy is stale. Update it from inside that workspace:
+that the working copy is stale. `jsync <name>` updates it as its first step.
+Or update it from inside that workspace:
 
 ```sh
 jj workspace update-stale

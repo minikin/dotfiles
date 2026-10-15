@@ -114,9 +114,9 @@ and order entries from most to least used.
 
 - The description is unique across all cheats. Start it with the verb and
   the object you would search for ("Tail Kafka topic") and keep it short.
-- Pickers run in bash, so they never call `jw`, `jwc`, `jws`, `jwl`, `jwrm`,
-  `jpush`, `jland`, `reload`, `infra`, `sign-as`, `z` or `zi`. The command
-  line may.
+- Pickers run in bash, so they never call `jw`, `jwc`, `jws`, `jwst`, `jwl`,
+  `jwrm`, `jsync`, `jpush`, `jland`, `reload`, `infra`, `sign-as`, `z` or
+  `zi`. The command line may.
 - Every `jj` picker passes `--ignore-working-copy`.
 - An infra entry that deletes topics or Redis keys, resets consumer group
   offsets, flushes Redis or runs `infra reset` starts with `[LOCAL ONLY]`,

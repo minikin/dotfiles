@@ -54,7 +54,7 @@ of the palette is the group:
 
 | Group      | File             | Entries, most used first                                                                                                                                                                                                                                        |
 | ---------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agents`   | `agents.cheat`   | Review agent workspace diff (difftastic), show agent workspace changes and files, push workspace and open pull request, rebase all agent workspaces onto latest trunk, create agent workspaces agent-1..N.                                                        |
+| `agents`   | `agents.cheat`   | Review agent workspace diff (difftastic), show agent workspace changes and files, push workspace and open pull request, create agent workspaces agent-1..N.                                                                                                |
 | `review`   | `agents.cheat`   | Review pull request in its own workspace, watch CI checks of pull request.                                                                                                                                                                                       |
 | `jj`       | `jj.cheat`       | Describe a change, rebase stack onto latest trunk, squash a change into another, show a change with difftastic, revert a file to its trunk version, abandon a change, find changes that touched a file, find changes by description text, restore the repo to an earlier operation, check signature of a change, push a change straight to main. |
 | `kafka`    | `infra.cheat`    | Tail Kafka topic, produce message, show consumer group lag, create topic, reset consumer group to earliest offset, delete topic.                                                                                                                                 |
@@ -69,10 +69,6 @@ A few entries are worth a closer look:
 - "Review agent workspace diff" diffs `trunk()..<workspace>@`, everything
   the agent changed on top of trunk. The workspace picker shows the latest
   change description of each agent.
-- "Rebase all agent workspaces onto latest trunk" fetches, snapshots every
-  workspace so no agent loses unsaved edits, rebases every mutable working
-  copy onto `trunk()` and runs `jj workspace update-stale` in each one, so
-  the agents' next jj command does not fail on a stale working copy.
 - The pod picker in `k8s.cheat` lists pods that are not ready first, with
   their status and restart count.
 

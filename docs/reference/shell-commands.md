@@ -6,7 +6,9 @@ sets up. `<x>` is required, `[x]` is optional.
 | Command            | Defined in       | Arguments            | Does                                                          |
 | ------------------ | ---------------- | -------------------- | ------------------------------------------------------------- |
 | `jw`               | `zsh/jj.zsh`     | `<name> [rev]`       | Create or reuse a workspace at `<repo>-ws/<name>`, `cd` into it. |
-| `jwc`              | `zsh/jj.zsh`     | `<name> [rev]`       | `jw`, then start `claude` there.                              |
+| `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude` there with the remaining arguments. |
+| `jwst`             | `zsh/jj.zsh`     | none                 | One row per workspace: latest change, commits behind trunk, pushed, conflicts. |
+| `jsync`            | `zsh/jj.zsh`     | `[name...]`          | Fetch, then rebase workspaces onto trunk one at a time. fzf multi-pick without arguments. |
 | `jws`              | `zsh/jj.zsh`     | none                 | Pick a workspace with fzf and `cd` into it.                   |
 | `jwl`              | `zsh/jj.zsh`     | none                 | `jj workspace list`.                                          |
 | `jwrm`             | `zsh/jj.zsh`     | `[name...]`          | Remove workspaces. fzf multi-pick without arguments.          |
@@ -32,11 +34,11 @@ sets up. `<x>` is required, `[x]` is optional.
 
 A workspace for repo `~/repos/app` named `fix-login` lives at
 `~/repos/app-ws/fix-login`: next to the main checkout, never inside it. The
-main checkout is the workspace named `default`. `jw` and `jwrm` first find
+main checkout is the workspace named `default`. `jw`, `jwst`, `jsync` and `jwrm` first find
 the main checkout with `jj workspace root --name default`, so they work the
 same from the main checkout and from inside any workspace.
 
-Outside a jj repo `jw` and `jwrm` print `not in a jj repo` and return 1. In a
+Outside a jj repo `jw`, `jwst`, `jsync` and `jwrm` print `not in a jj repo` and return 1. In a
 git repo without jj they print
 `git repo without jj — run: jj git init --colocate`. `jwl`, `jws` and
 `jpush` call `jj` directly and show jj's own error instead.
@@ -116,10 +118,21 @@ never makes `jw` fail.
 ## jwc
 
 ```sh
-jwc <name> [rev]
+jwc <name> [rev] [claude args...]
 ```
 
-`jw "$@" && claude`. Claude Code starts in the workspace directory, so it
+The second argument is the `rev` for `jw` unless it starts with `-`. Every
+argument after the name and the optional `rev` goes to `claude`:
+
+| Call | Runs |
+| ---- | ---- |
+| `jwc feat/x` | `jw feat/x && claude` |
+| `jwc feat/x @-` | `jw feat/x @- && claude` |
+| `jwc feat/x --permission-mode plan` | `jw feat/x && claude --permission-mode plan` |
+| `jwc feat/x @- --continue` | `jw feat/x @- && claude --continue` |
+
+`jw` reuses an existing workspace, so `jwc <name> --continue` goes back to an
+agent's last conversation. Claude Code starts in the workspace directory, so it
 inherits that directory's mise `PATH` (see
 [Agents and PATH](../explanation/agents-and-path.md)). It honours
 `JW_NO_SETUP` the same way.
@@ -134,6 +147,80 @@ Lists `jj workspace list` in fzf with the prompt `workspace> `, showing only
 the names. The preview runs
 `jj -R <workspace root> --ignore-working-copy log -r "trunk()::@"` for the
 highlighted workspace. Enter `cd`s into it. Esc leaves you where you are.
+
+## jwst
+
+```sh
+jwst
+```
+
+Prints a header and one row per workspace, in `jj workspace list` order,
+with the columns aligned:
+
+```text
+WORKSPACE        CHANGE    BEHIND  PUSHED  CONFLICTS  DESCRIPTION
+default          -              0  no      no         (no changes)
+feat-export-csv  plkupkts       1  yes     no         feat(export): add CSV writer
+fix-retry-storm  pvptytmu       0  no      yes        fix(consumer): retry with backoff
+```
+
+| Column | Value |
+| ------ | ----- |
+| `CHANGE` | Short change ID of the workspace's latest work, `heads(::<name>@ & mutable() & ~empty())`. `-` when there is none. |
+| `BEHIND` | Number of commits in `::trunk() & ~::<name>@`. `0` means the workspace is on the latest trunk. |
+| `PUSHED` | `yes` when the bookmark named after the workspace is on that change at `origin`. A bookmark pushed before the latest change, or before a rebase, shows `no`. |
+| `CONFLICTS` | `yes` when `trunk()..<name>@` has a conflicted change. |
+| `DESCRIPTION` | First line of the change's description, `(no description)` when empty, `(no changes)` when there is no change. |
+
+Every query runs from the main checkout with `--ignore-working-copy` and
+names the workspace as `<name>@`. `jwst` never opens a workspace's directory,
+so it does not snapshot an agent's unsaved edits, sign anything or create an
+operation. Unsaved edits are not in the row until the agent's next jj
+command snapshots them. jj does not expose whether a workspace is stale
+without loading it, so there is no stale column.
+
+## jsync
+
+```sh
+jsync [name...]
+```
+
+| Argument | Behaviour |
+| -------- | --------- |
+| names    | Syncs those workspaces, in that order. Every `/` becomes `-`, as in `jw`. |
+| none     | fzf multi-pick (`Tab` to mark, prompt `sync> `) over every workspace, `default` included. Esc returns 1. |
+
+`jsync` runs `jj git fetch` once from the main checkout, and skips it when
+the repo has no remote. A failed fetch prints
+`jsync: fetch failed, using the trunk already fetched` to stderr and the sync
+goes on. Then, for each workspace in turn:
+
+1. If `::trunk() & ~::<name>@` is empty, prints `<name>: up to date`, or
+   `<name>: up to date, conflicts left for the agent` when
+   `trunk()..<name>@` has conflicts, and moves on.
+2. `jj workspace update-stale` in the workspace, for one left stale by an
+   earlier rebase. It does nothing in a fresh one.
+3. `jj status` in the workspace, which snapshots the agent's unsaved edits.
+4. `jj rebase -b <name>@ -d 'trunk()'` from the main checkout.
+5. `jj workspace update-stale` in the workspace right away, so the agent
+   finds it fresh.
+
+Each workspace prints one line:
+
+| Case | Line |
+| ---- | ---- |
+| Already on the latest trunk | `<name>: up to date` |
+| Already on the latest trunk, with conflicts | `<name>: up to date, conflicts left for the agent` |
+| Rebased cleanly | `<name>: rebased onto trunk` |
+| Rebased with a conflict in `trunk()..<name>@` | `<name>: conflicts, left for the agent` |
+| No such workspace, or its directory is gone | `<name>: no such workspace directory, run: jw <name>` on stderr |
+| A step failed | `<name>: rebase failed` and jj's output on stderr |
+
+A failed workspace does not stop the others, and `jsync` then returns 1.
+When one workspace's stack
+sits on another's, rebasing the lower one also moves the upper one and
+leaves it stale until it is synced or runs `jj workspace update-stale`. Run
+`jsync` while an agent waits for input, not while it is writing files.
 
 ## jwl
 

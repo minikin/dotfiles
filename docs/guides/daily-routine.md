@@ -32,7 +32,7 @@ code and proposes a plan but changes nothing:
 
 ```sh
 cd ~/repos/my-service
-jw feat/export-csv && claude --permission-mode plan
+jwc feat/export-csv --permission-mode plan
 ```
 
 Tell it what the feature is for, not only what to build, and where you
@@ -75,7 +75,7 @@ workspace from that branch:
 
 ```sh
 jj git fetch
-jw hotfix/1.4-timeout release-1.4@origin && claude
+jwc hotfix/1.4-timeout release-1.4@origin
 ```
 
 ### Write an architecture decision record
@@ -84,7 +84,7 @@ An ADR is a document, so the agent researches and drafts, and you decide.
 Start it in plan mode so the research step cannot change code:
 
 ```sh
-jw adr/event-store && claude --permission-mode plan
+jwc adr/event-store --permission-mode plan
 ```
 
 Give it the decision to make, the constraints (load, team, budget,
@@ -140,8 +140,7 @@ Go back to the workspace that made the change. Its agent still has the
 context:
 
 ```sh
-jws                       # pick the workspace
-claude --continue         # the last conversation in this directory
+jwc fix-retry-storm --continue    # reuses the workspace, resumes its last conversation
 ```
 
 Paste the comments, let it fix them in new changes, and run `jpush` again.
@@ -177,31 +176,33 @@ jwrm fix-retry-storm
 ```sh
 cd ~/repos/my-service
 jj git fetch
-jwl                    # workspaces left over from yesterday
-jj log                 # each one shows up as <name>@
+jwst                   # workspaces left over from yesterday, one row each
 ```
+
+`jwst` shows each workspace's latest change, how many commits it is behind
+trunk, whether that change is pushed and whether it has conflicts. It only
+reads the repo, so it is safe while agents work.
 
 Remove the ones whose pull requests merged with `jwrm <name>`. After a
 squash merge, their original changes stay in `jj log` on top of the old
 trunk, and `jj abandon <change>` drops them.
 
-A workspace you keep working on should start from the latest trunk. Rebase
-its stack from the main checkout, then update the workspace:
+A workspace you keep working on should start from the latest trunk:
 
 ```sh
-jj rebase -b fix-retry-storm@ -d 'trunk()'
-jws                                      # pick fix-retry-storm
-jj workspace update-stale
+jsync fix-retry-storm add-metrics    # or jsync alone to pick with fzf
 ```
 
-Rebasing from outside makes every jj command in that workspace fail with
-`The working copy is stale` until `jj workspace update-stale` runs there. Do
-it while the agent is idle, or tell the agent to run it. If the rebase
-reports conflicts, leave them for the agent: `jj st` lists them.
+`jsync` fetches once, then for each workspace snapshots the agent's unsaved
+edits, rebases its stack onto `trunk()` and runs `jj workspace update-stale`
+in it right away, so the agent never meets `The working copy is stale`. It
+prints one line per workspace: `up to date`, `rebased onto trunk`, or
+`conflicts, left for the agent`. Leave conflicts to the agent, `jj st` in
+the workspace lists them. Run `jsync` while the agents wait for input, not
+while they are writing files.
 
-To come back to yesterday's agent, `jw <name>` prints `reusing` and changes
-into the workspace without running setup, and `claude --continue` picks up
-the last conversation there.
+To come back to yesterday's agent, `jwc <name> --continue` reuses the
+workspace without running setup and picks up the last conversation there.
 
 ### While agents work
 
@@ -216,9 +217,9 @@ create Kafka topics or Redis keys to prefix them with the workspace name.
 `cmd+shift+s` writes the screen to a file and pastes its path, to hand long
 output from one split to another agent.
 
-After a merge, rebase the agents that are still running onto the new trunk,
-as in the morning, so their conflicts show up now and not at their own
-merge.
+After a merge, run `jsync` for the agents that are still running, as in
+the morning, so their conflicts show up now and not at their own merge. Pick
+a moment when they wait for input. `jwst` shows which ones are behind.
 
 ### Evening
 
@@ -226,7 +227,7 @@ Nothing has to be shut down. Workspaces are directories and survive a
 reboot, and the agents' changes are already in the repo.
 
 ```sh
-jwl                    # what is still open
+jwst                   # what is still open, and what is behind trunk
 jwrm                   # fzf multi-picker: drop the ones you gave up on
 infra down             # stop Redis and Kafka, keep their data
 ```

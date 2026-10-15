@@ -54,6 +54,10 @@ jj git fetch
 jj rebase -d 'trunk()'                 # move the stack onto the latest trunk
 ```
 
+From the main checkout, `jsync <name>` does the fetch and the rebase
+without switching into the workspace, and updates the workspace afterwards
+so the agent does not find it stale.
+
 Always pass `-m`. If something goes wrong, `jj undo` reverts the last
 operation, and `jj op log` with `jj op restore <op-id>` goes back further.
 

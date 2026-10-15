@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# zsh/jj.zsh: jw, jwc, jwst, jnext, the repo-entry hint, jsync, jwrm, jpush, jland and the `jj tug` alias, in throwaway colocated repos.
+# zsh/jj.zsh: jw, jwc, jreview, jwst, jnext, the repo-entry hint, jsync, jwrm, jpush, jland and the `jj tug` alias, in throwaway colocated repos.
 
 load helpers
 
@@ -170,6 +170,79 @@ setup() {
   [ "${lines[0]}" = "pwd=$WS/w" ]
   [ "${lines[1]}" = "args=--continue" ]
   [ "$(parent w)" = init ]
+}
+
+@test "jwc: a second argument with whitespace is the task for claude, not a rev" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nprintf "pwd=%%s\\nargc=%%s\\nfirst=%%s\\n" "$(pwd -P)" "$#" "$1"\n' > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  (cd "$REPO" && echo two > two.txt && jj commit -m second >/dev/null 2>&1)
+  parent() { jj -R "$REPO" --ignore-working-copy log --no-graph -r "$1@-" -T "description.first_line()"; }
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc x 'fix the retry storm' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "pwd=$WS/x" ]
+  [ "${lines[1]}" = "argc=1" ]
+  [ "${lines[2]}" = "first=fix the retry storm" ]
+  [ "$(parent x)" = second ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc y @-- 'add the export button' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "pwd=$WS/y" ]
+  [ "${lines[1]}" = "argc=1" ]
+  [ "${lines[2]}" = "first=add the export button" ]
+  [ "$(parent y)" = init ]
+}
+
+@test "jwc: claude runs with JW_NAME set to the workspace name" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nprintf "JW_NAME=%%s\\n" "$JW_NAME"\n' > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc fix/x 2>/dev/null; print -r -- \"after=\${JW_NAME:-unset}\""
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "JW_NAME=fix-x" ]
+  [ "${lines[1]}" = "after=unset" ]
+  [ ! -e "$WS/fix-x/.jw_name" ]
+}
+
+@test "jreview: runs a read-only claude -p in the workspace on the trunk()..@ diff" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\npwd -P > "%s/claude.cwd"\nprintf "%%s\\n" "$@" > "%s/claude.args"\n' \
+    "$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  run_zsh "cd '$REPO' && jw feat/x >/dev/null 2>&1 && jw other >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$WS/other' && jreview feat/x 'focus on the retry logic' && pwd -P"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$WS/other" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/claude.cwd")" = "$WS/feat-x" ]
+  args=$(cat "$BATS_TEST_TMPDIR/claude.args")
+  grep -qx -- -p "$BATS_TEST_TMPDIR/claude.args"
+  allowed=$(sed -n '/^--allowedTools$/{n;p;}' "$BATS_TEST_TMPDIR/claude.args")
+  [[ $allowed == *Read* && $allowed == *'Bash(jj diff *)'* ]] || false
+  [[ $allowed != *Edit* && $allowed != *Write* ]] || false
+  [[ $args == *"trunk()..@"* ]] || false
+  [[ $args == *"focus on the retry logic"* ]] || false
+}
+
+@test "jreview: an unknown workspace fails; without a name picks with fzf, default left out" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\npwd -P > "%s/claude.cwd"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  printf '#!/bin/sh\ncat > "%s/offered"\necho a\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/fzf"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude" "$BATS_TEST_TMPDIR/bin/fzf"
+  run_zsh "cd '$REPO' && jw a >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview nope"
+  [ "$status" -eq 1 ]
+  [[ $output == *"nope"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/claude.cwd" ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/offered")" = "a" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/claude.cwd")" = "$WS/a" ]
 }
 
 @test "jwst: one row per workspace with change, behind count, pushed and conflicts" {
@@ -457,6 +530,8 @@ make_agent_states() {
 }
 
 @test "repo-entry hint: no chpwd hook outside an interactive shell, under Claude Code or with JW_HINT=0" {
+  # The hint also fires for the start directory: start outside any repo, not in this checkout.
+  cd "$HOME"
   run zsh -f -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
   [ "$output" = "hooks=" ]
   run env CLAUDECODE=1 zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""

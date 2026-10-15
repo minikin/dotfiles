@@ -78,13 +78,42 @@ _jw_setup() {
   )
 }
 
-# jwc <name> [rev] [claude args...] — create (or reuse) a workspace and start Claude Code in it.
-# The second argument is a rev unless it starts with "-": jwc x --continue, jwc x @- --continue.
+# jwc <name> [rev] [claude args...] — create (or reuse) a workspace and start Claude Code in it,
+# with JW_NAME=<workspace name> in its environment. The second argument is a rev unless it
+# starts with "-" or contains whitespace: jwc x --continue, jwc x @- --continue, jwc x "fix the bug".
 jwc() {
   local name=${1:-} rev
   (( $# )) && shift
-  [[ -n ${1:-} && $1 != -* ]] && { rev=$1; shift; }
-  jw "$name" ${rev:+"$rev"} && claude "$@"
+  [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
+  jw "$name" ${rev:+"$rev"} && JW_NAME=${PWD:t} claude "$@"
+}
+
+# jreview [name] [focus...] — a second Claude reviews a workspace's trunk()..@ read-only:
+# claude -p in that workspace, allowed to read files and run only jj diff, log and show.
+# fzf pick without a name, default left out. Extra arguments are appended to the prompt.
+jreview() {
+  local root w d name prompt
+  local -A dirs
+  root=$(_jw_root) || return 1
+  for w d in ${(@ps:\t:)${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"')"}}; do
+    dirs[$w]=$d
+  done
+  name=${1:-}
+  (( $# )) && shift
+  if [[ -z $name ]]; then
+    name=$(print -rl -- ${(k)dirs} | grep -vx default | fzf --prompt="review> ") || return 1
+  fi
+  name=${name//\//-}
+  d=${dirs[$name]:-}
+  [[ -n $d && -d $d ]] || { echo "jreview: no workspace named $name" >&2; return 1; }
+  prompt="Review the change in this jj workspace. Run jj diff --git -r 'trunk()..@' and read the code it touches. \
+List the problems you find by severity (blocking, should fix, nit), each with file:line and the reason. \
+Do not edit any file."
+  (( $# )) && prompt+=" Focus: $*"
+  # The prompt goes before the tool lists: --allowedTools takes several values and would eat it.
+  (cd "$d" && claude -p "$prompt" \
+    --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
+    --disallowedTools 'Edit,Write,NotebookEdit')
 }
 
 # jwl — list workspaces

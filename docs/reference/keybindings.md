@@ -37,13 +37,15 @@ Not keys, but the reason a split gets your attention:
 | Setting                             | Value                            |
 | ----------------------------------- | -------------------------------- |
 | `desktop-notifications`             | `true`                           |
-| `bell-features`                     | `system,attention,title,border`  |
+| `bell-features`                     | `attention,title,border`         |
 | `notify-on-command-finish`          | `unfocused`                      |
 | `notify-on-command-finish-after`    | `30s`                            |
 | `notify-on-command-finish-action`   | `notify,bell`                    |
 
-A bell in any split shows a system notification, bounces the dock icon, marks
-the tab title and flashes the split border. A command that runs longer than
+A bell in any split bounces the dock icon, marks the tab title and flashes the
+split border. It shows no system notification of its own, because Claude
+Code's hooks send one named after the workspace (see
+[Claude Code](../guides/claude-code.md#notifications)). A command that runs longer than
 30 seconds in a split without focus sends a notification and rings the bell
 when it ends.
 

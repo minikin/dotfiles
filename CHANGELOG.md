@@ -86,9 +86,18 @@ Ghostty split.
   second identity.
 - **Claude Code integration** (`claude/`). Global rules in `CLAUDE.md` (jj
   instead of git writes, always `-m`, local infra only, never change
-  authorship or bypass signing), a status line with the workspace, change and
-  model, and a settings fragment that allows read-only jj commands, denies
-  `--tool` and `--config`, and sets `JJ_EDITOR=false`.
+  authorship or bypass signing), a status line with the workspace, change,
+  model, context use and cost, and a settings fragment that allows read-only
+  jj commands, denies `--tool` and `--config`, and sets `JJ_EDITOR=false`.
+  Hooks: `notify.sh` sends a notification titled with the workspace name when
+  an agent waits for input or finishes, and `guard-push.sh` blocks `git push`
+  and `jj git push` from agent workspaces while the main checkout may push.
+  `install.sh` merges hooks per event, so your own hooks stay.
+- **Second-agent review** (`jreview <name>`). Runs a read-only Claude in an
+  agent's workspace that reviews `trunk()..@` and lists problems by severity
+  with file and line. `jwc <name> "task"` passes the task to the agent, and
+  every agent started with `jwc` gets `JW_NAME` for prefixing topics and keys
+  on the shared local infra.
 - **install.sh**. Symlinks every config, backs up what it replaces as
   `<file>.bak-<timestamp>`, appends the mise line to `~/.zprofile` and merges
   the Claude Code settings. The repo can be cloned anywhere: every run writes
@@ -104,7 +113,7 @@ Ghostty split.
   secret scan and a Conventional Commits check of the commits on top of
   `origin/main`. `just drift` compares each live file with the repo copy and
   reports a link into another checkout as `elsewhere`, with its target.
-- **Tests** (`tests/`). 105 bats tests for `install.sh` (including one
+- **Tests** (`tests/`). 129 bats tests for `install.sh` (including one
   identity only, a folder outside `$HOME`, a symlinked folder, rejected keys
   and the machine settings file), the workspace commands, `sign-as`, `infra`, `reload`,
   `just drift`, the commit check, the status line, the navi workflows and

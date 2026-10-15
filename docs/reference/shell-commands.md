@@ -6,7 +6,8 @@ sets up. `<x>` is required, `[x]` is optional.
 | Command            | Defined in       | Arguments            | Does                                                          |
 | ------------------ | ---------------- | -------------------- | ------------------------------------------------------------- |
 | `jw`               | `zsh/jj.zsh`     | `<name> [rev]`       | Create or reuse a workspace at `<repo>-ws/<name>`, `cd` into it. |
-| `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude` there with the remaining arguments. |
+| `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude` there with the remaining arguments and `JW_NAME` set. |
+| `jreview`          | `zsh/jj.zsh`     | `[name] [focus...]`  | A second, read-only Claude reviews the workspace's `trunk()..@`. fzf pick without a name. |
 | `jnext`            | `zsh/jj.zsh`     | none                 | What to do next: one row per agent workspace that needs you, most urgent first. |
 | `jwst`             | `zsh/jj.zsh`     | none                 | One row per workspace: latest change, commits behind trunk, pushed, conflicts. |
 | `jsync`            | `zsh/jj.zsh`     | `[name...]`          | Fetch, then rebase workspaces onto trunk one at a time. fzf multi-pick without arguments. |
@@ -26,6 +27,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | Variable      | Read by | Effect                                                         |
 | ------------- | ------- | -------------------------------------------------------------- |
 | `JW_NO_SETUP` | `jw`, `jwc` | Any non-empty value skips the env-file copy and project setup on a new workspace. |
+| `JW_NAME` | your app and tests | Set by `jwc` to the workspace name, in the environment of the `claude` it starts and every command that `claude` runs. Not exported to your shell, not written to a file. |
 | `JW_HINT` | `zsh/jj.zsh` | `0` turns off the [repo-entry hint](#repo-entry-hint). Read when the file is sourced. |
 | `CLAUDECODE` | `zsh/jj.zsh` | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint. |
 | `GHOSTTY_BIN` | `reload` | The Ghostty binary to validate the config with. Without it, `ghostty` on `PATH`, else `/Applications/Ghostty.app/Contents/MacOS/ghostty`. |
@@ -39,11 +41,11 @@ sets up. `<x>` is required, `[x]` is optional.
 
 A workspace for repo `~/repos/app` named `fix-login` lives at
 `~/repos/app-ws/fix-login`: next to the main checkout, never inside it. The
-main checkout is the workspace named `default`. `jw`, `jwst`, `jsync` and `jwrm` first find
+main checkout is the workspace named `default`. `jw`, `jwst`, `jsync`, `jreview` and `jwrm` first find
 the main checkout with `jj workspace root --name default`, so they work the
 same from the main checkout and from inside any workspace.
 
-Outside a jj repo `jw`, `jwst`, `jsync` and `jwrm` print `not in a jj repo` and return 1. In a
+Outside a jj repo `jw`, `jwst`, `jsync`, `jreview` and `jwrm` print `not in a jj repo` and return 1. In a
 git repo without jj they print
 `git repo without jj — run: jj git init --colocate`. `jwl`, `jws` and
 `jpush` call `jj` directly and show jj's own error instead. Outside a jj
@@ -128,8 +130,9 @@ never makes `jw` fail.
 jwc <name> [rev] [claude args...]
 ```
 
-The second argument is the `rev` for `jw` unless it starts with `-`. Every
-argument after the name and the optional `rev` goes to `claude`:
+The second argument is the `rev` for `jw` unless it starts with `-` or
+contains whitespace. Every argument after the name and the optional `rev`
+goes to `claude`, so a quoted sentence becomes the agent's first prompt:
 
 | Call | Runs |
 | ---- | ---- |
@@ -137,12 +140,56 @@ argument after the name and the optional `rev` goes to `claude`:
 | `jwc feat/x @-` | `jw feat/x @- && claude` |
 | `jwc feat/x --permission-mode plan` | `jw feat/x && claude --permission-mode plan` |
 | `jwc feat/x @- --continue` | `jw feat/x @- && claude --continue` |
+| `jwc fix/x "fix the retry storm"` | `jw fix/x && claude "fix the retry storm"` |
+| `jwc fix/x @- "fix the retry storm"` | `jw fix/x @- && claude "fix the retry storm"` |
+
+A one-word task looks like a rev: `jwc fix/x cleanup` creates the workspace
+at revision `cleanup`. Put a rev first or write the task as a sentence.
+
+`claude` runs with `JW_NAME=<workspace name>` in its environment (`fix-x`
+for `jwc fix/x`), and so does every command it runs. Prefix Kafka topics,
+Redis keys and test databases with it, and two agents running the same tests
+against the shared `infra` stack stay out of each other's data.
 
 `jw` reuses an existing workspace, so `jwc <name> --continue` goes back to an
 agent's last conversation. Claude Code starts in the workspace directory, so it
 inherits that directory's mise `PATH` (see
 [Agents and PATH](../explanation/agents-and-path.md)). It honours
 `JW_NO_SETUP` the same way.
+
+## jreview
+
+```sh
+jreview [name] [focus...]
+```
+
+| Argument | Behaviour |
+| -------- | --------- |
+| name     | The workspace to review. Every `/` becomes `-`, as in `jw`. An unknown name prints `jreview: no workspace named <name>` to stderr and returns 1. |
+| none     | fzf pick (prompt `review> `) over every workspace except `default`. Esc returns 1. |
+| focus    | Appended to the prompt after `Focus:`, for example `jreview feat-x "the retry logic"`. |
+
+`jreview` finds the workspace directory from the main checkout with
+`jj --ignore-working-copy workspace list`, as `jsync` does, so it works from
+the main checkout or from any workspace. Then, in that directory and in a
+subshell, so your own directory does not change:
+
+```sh
+claude -p "<prompt>" \
+  --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
+  --disallowedTools 'Edit,Write,NotebookEdit'
+```
+
+The prompt asks for a review of `jj diff --git -r 'trunk()..@'` against the
+code it touches, a list of problems by severity (blocking, should fix, nit)
+with `file:line` for each, and no edits. `-p` prints the review and exits.
+In `-p` mode a tool call that no rule allows is denied, not asked about, so
+the reviewer can read files and run `jj diff`, `jj log` and `jj show`, and
+nothing else. `Bash(jj diff *)` also matches a bare `jj diff`.
+
+The reviewer's `jj diff` snapshots the workspace like any jj command run in
+it. Run `jreview` while the agent waits for input, not while it is writing
+files, as with `jsync`.
 
 ## jws
 

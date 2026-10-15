@@ -23,11 +23,12 @@ Run `actionlint` after editing `.github/workflows/ci.yml`, because CI doesn't ru
 ## Architecture
 
 - **`install.sh` is the single source of what goes where.** Each `^link <src> <dest>` line is also parsed by `just drift` and by `link_pairs` in `tests/helpers.bash`, so keep that one-line format when adding a link. Besides the links, it:
-  - merges `claude/settings.fragment.json` into `~/.claude/settings.json` with jq. Fragment keys win, and `permissions.allow`/`deny` are unioned.
+  - merges `claude/settings.fragment.json` into `~/.claude/settings.json` with jq. Fragment keys win, and `permissions.allow`/`deny` and each `hooks.<event>` list are unioned, so the user's own hooks survive.
   - appends `zsh/zprofile.snippet` (mise shims) to `~/.zprofile`.
   - writes the identity to `~/.config/jj/conf.d/identity.toml`: one identity, or two using a `[[--scope]]` keyed on `DOTFILES_PERSONAL_DIR`. It mirrors this into git (`includeIf.gitdir`, `~/.config/git/allowed_signers`).
   - writes `~/.config/dotfiles/config` (`DOTFILES_DIR`, `DOTFILES_PERSONAL_DIR`), which `zsh/zshrc` sources. Code and docs must not hard-code the repo path or the personal folder. Use these variables.
 - **`claude/CLAUDE.md` is linked to `~/.claude/CLAUDE.md`.** It is the user's global instructions for every Claude session, not guidance for this repo. Editing it changes every agent's behaviour.
+- **Claude Code hooks** live in `claude/` as linked scripts: `notify.sh` (`Notification` and `Stop`, a notification titled with the workspace name via the `terminalSequence` JSON output, since hooks have no `/dev/tty`) and `guard-push.sh` (`PreToolUse` on `Bash`, exit 2 blocks `git push`/`jj git push` when `.jj/repo` is a file, that is a workspace). `statusline.sh` is the status line. Test them with JSON on stdin in `tests/hooks.bats` and `tests/statusline.bats`.
 - **zsh**: `zsh/zshrc` sources `~/.config/zsh/{jj,sign,infra,reload,navi}.zsh` (the linked copies). The agent workspace commands (`jw`, `jwc`, `jws`, `jwst`, `jnext`, `jwl`, `jwrm`, `jsync`, `jpush`, `jland`) are in `zsh/jj.zsh`. Workspaces go in `<repo>-ws/<name>`, need jj 0.46+, and copy untracked `.env*` files before running the project setup (skipped when `JW_NO_SETUP` is set). `sign-as` is in `sign.zsh`, `infra` (wraps `infra/compose.yaml`) is in `infra.zsh`, `reload` is in `reload.zsh`, and the navi `Ctrl-G` palette and per-project trusted `.navi/` are in `navi.zsh`.
 - **navi cheats** (`navi/*.cheat`) follow rules enforced by `tests/navi.bats`, see CONTRIBUTING.md "Adding a workflow". Pickers run in bash, so they can't call the zsh functions. jj pickers pass `--ignore-working-copy`. Destructive infra entries are prefixed `[LOCAL ONLY]` and target localhost only.
 - **Tests must never touch the real machine.** Every test calls `fake_home` in `setup`, which isolates HOME, git and jj config and unsets `DOTFILES_*`. Use `copy_repo` + `run_install` to run the installer against a copy, and `make_jj_repo`/`add_bare_remote` for jj fixtures under `BATS_TEST_TMPDIR`. Never configure real signing in a test. A known bug gets a `skip "BUG: ..."` test.
@@ -39,3 +40,5 @@ Run `actionlint` after editing `.github/workflows/ci.yml`, because CI doesn't ru
 - **Commits:** jj only, [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) with the area as scope, e.g. `fix(install): ...`, `feat(zsh): ...`, `docs: ...`, `test: ...`, `ci: ...`. Breaking changes use `!` plus a `BREAKING CHANGE:` footer. One scope per commit, signed, no attribution trailers. Full list of types and scopes is in CONTRIBUTING.md.
 - **Prose** (README, CONTRIBUTING, docs): no em dashes, curly quotes, ellipsis characters or semicolons. Check with the human-writing skill's `scripts/check.py`.
 - **`CHANGELOG.md`:** leave it alone, the maintainer writes it at release.
+
+@.claude/wiz-claude.md

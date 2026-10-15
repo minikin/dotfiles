@@ -32,8 +32,9 @@ Kafka. It assumes:
 ## The pieces
 
 Ghostty is the terminal: splits on `cmd+d` and `cmd+shift+d`, 100 MB of
-scrollback, and a system notification when an agent rings the bell or when a
-command that ran longer than 30 seconds finishes in an unfocused split. zsh
+scrollback, a notification named after the workspace when an agent finishes or waits
+for input, and one when a command that ran longer than 30 seconds finishes in
+an unfocused split. zsh
 loads fzf, zoxide, starship and mise, and sources five files of shell
 functions: `jw`, `jwc`, `jws`, `jwst`, `jwl`, `jwrm`, `jsync`, `jpush` and
 `jland` for workspaces,

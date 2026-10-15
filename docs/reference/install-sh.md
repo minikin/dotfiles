@@ -77,6 +77,8 @@ The script prints a `==` header before each step.
 | `mise/config.toml`       | `~/.config/mise/config.toml`          |
 | `claude/CLAUDE.md`       | `~/.claude/CLAUDE.md`                 |
 | `claude/statusline.sh`   | `~/.claude/statusline.sh`             |
+| `claude/notify.sh`       | `~/.claude/notify.sh`                 |
+| `claude/guard-push.sh`   | `~/.claude/guard-push.sh`             |
 
 Each link is an absolute symlink to the file in the checkout. For each
 destination:
@@ -125,13 +127,18 @@ The merge needs `jq`. Without it the script prints
 | ---------------------------- | ------------------------------------------------------------------------ |
 | `permissions.allow`          | Existing list plus the fragment's list, sorted and deduplicated (`unique`). |
 | `permissions.deny`           | Existing list plus the fragment's list, sorted and deduplicated.         |
-| Keys in the fragment         | Deep merge (`jq` `*`): the fragment's value wins. Today `env.JJ_EDITOR` and `statusLine`. |
+| `hooks.<event>`              | For each event in the fragment (`Notification`, `Stop`, `PreToolUse`): your matcher groups plus the fragment's, sorted and deduplicated. Events only you have are kept. |
+| Keys in the fragment         | Deep merge (`jq` `*`): the fragment's value wins. Today `env.JJ_EDITOR`, `statusLine` and `preferredNotifChannel`. |
 | Every other key              | Kept as it was.                                                          |
 
 A missing or empty `settings.json` counts as `{}`. The merge goes to
 `settings.json.tmp` first. If `jq` fails (for example on invalid JSON), the
 temp file is deleted, `settings.json` is left untouched, and the script
 prints `settings merge failed` and exits 1.
+
+Hook groups are deduplicated only when they are equal. After you change a
+group in the fragment, such as its matcher, a re-run adds the new group and
+keeps the old one, so delete the old one from `settings.json` by hand.
 
 If the merged result equals the current file, the temp file is dropped and
 the script prints `ok   ~/.claude/settings.json (unchanged)`. Otherwise an

@@ -5,3 +5,5 @@
 .mdkb/
 # install.sh backups
 *.bak-*
+.codex/**
+.mdkb/**

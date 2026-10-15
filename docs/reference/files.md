@@ -23,8 +23,10 @@ file edits the repo. `just drift` reports the state of each linked file.
 | `jj/identity.example.toml`      | template for `~/.config/jj/conf.d/identity.toml` | Placeholder identity, with the `[signing]` and second-identity `[[--scope]]` blocks commented out. Copied only when `install.sh` has no terminal and no `DOTFILES_NAME`. |
 | `mise/config.toml`              | linked: `~/.config/mise/config.toml`        | Global tools: `node` LTS, `pnpm` latest, `gopls`, `dlv`, `gotestsum`, `govulncheck` (all `latest`). |
 | `claude/CLAUDE.md`              | linked: `~/.claude/CLAUDE.md`               | Rules for every Claude Code session: English only, jj instead of git writes, always `-m`, just and mise tasks, local infra only, authorship and signing. |
-| `claude/statusline.sh`          | linked: `~/.claude/statusline.sh`           | Claude Code status line: `dir · [workspace] change bookmarks description · model`, or `git:<branch>` outside jj. |
-| `claude/settings.fragment.json` | merged into `~/.claude/settings.json`       | Allow list of read-only jj commands, deny `jj *--tool*` and `jj *--config*`, `env.JJ_EDITOR = "false"`, `statusLine`. |
+| `claude/statusline.sh`          | linked: `~/.claude/statusline.sh`           | Claude Code status line: `dir · [workspace] change bookmarks description · model · context % · cost`, or `git:<branch>` outside jj. |
+| `claude/notify.sh`              | linked: `~/.claude/notify.sh`               | `Notification` and `Stop` hook: a desktop notification titled with the workspace name, sent through the hook's `terminalSequence` output. See [Claude Code](../guides/claude-code.md#notifications). |
+| `claude/guard-push.sh`          | linked: `~/.claude/guard-push.sh`           | `PreToolUse` hook on `Bash`: blocks `git push` and `jj git push` from a jj workspace with exit 2. See [Claude Code](../guides/claude-code.md#push-guard). |
+| `claude/settings.fragment.json` | merged into `~/.claude/settings.json`       | Allow list of read-only jj commands, deny `jj *--tool*` and `jj *--config*`, `env.JJ_EDITOR = "false"`, `statusLine`, `preferredNotifChannel = "notifications_disabled"`, and `hooks` for `Notification`, `Stop` and `PreToolUse`. |
 
 ## Files install.sh writes outside the repo
 
@@ -58,9 +60,10 @@ These stay in the repo and are not installed.
 | `.gitignore`               | Keeps `.claude/`, `.wiz/`, `.codex/`, `.mdkb/` and `*.bak-*` out of the repo.                  |
 | `.gitleaks.toml`           | gitleaks default rules plus `personal-email`, `home-path`, `ssh-public-key` and `onepassword-reference`. Ignores `.jj/`. |
 | `tests/helpers.bash`       | Shared bats helpers: fake `HOME`, a copy of the repo to install into, throwaway jj repos.      |
-| `tests/install.bats`       | `install.sh`: dry run, links, second run, backups, settings merge, identity from env and template, one identity only, the second identity's folder and email set together, a folder outside `$HOME`, `~/.config/dotfiles/config`, the template's placeholder folder, a private key file rejected, `allowed_signers` mode 600, a second key without a main key, the git identity read outside the personal folder, the template copy leaving signing off, a symlinked folder stored as its physical path, an empty name or email refused, links repointed after the repo moves. |
+| `tests/install.bats`       | `install.sh`: dry run, links, second run, backups, settings merge, hooks unioned and not duplicated on re-run, identity from env and template, one identity only, the second identity's folder and email set together, a folder outside `$HOME`, `~/.config/dotfiles/config`, the template's placeholder folder, a private key file rejected, `allowed_signers` mode 600, a second key without a main key, the git identity read outside the personal folder, the template copy leaving signing off, a symlinked folder stored as its physical path, an empty name or email refused, links repointed after the repo moves. |
 | `tests/jj.bats`            | `jw`, `jwc`, `jwst`, `jsync`, `jwrm`, `jpush`, `jland` and `jj tug` in temporary jj repos.    |
-| `tests/statusline.bats`    | `claude/statusline.sh` inside and outside jj, empty input, no op log writes.                  |
+| `tests/statusline.bats`    | `claude/statusline.sh` inside and outside jj, empty input, no op log writes, context percentage and its fallback, cost.                  |
+| `tests/hooks.bats`         | `claude/notify.sh` titles, bodies, escaping and JSON output, and `claude/guard-push.sh` in a workspace, a subdirectory, the main checkout and outside jj. |
 | `tests/sign.bats`          | `sign-as personal`, `sign-as work` and `sign-as status` in a temporary jj repo, and failures without `personal.gitconfig` or outside a repo. |
 | `tests/commits.bats`       | `scripts/check-commits.sh`: conventional subjects pass, other subjects fail and are named, commits before the range and merge commits are skipped. |
 | `tests/drift.bats`         | `just drift`: `linked`, `elsewhere` for a link into another clone or a dangling link, `same (copy)`, `DIFFERS` and `missing`, and nothing in `HOME` changes. |

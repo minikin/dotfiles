@@ -48,7 +48,8 @@ Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a 
 | Command | Action |
 |---|---|
 | `jw <name> [rev]` | Create (or reuse) workspace and `cd` in. `rev` defaults to `trunk()`, or `@-` if no remote trunk. `/` in name becomes `-` |
-| `jwc <name> [rev] [claude args...]` | `jw`, then start `claude` in it with the remaining arguments, e.g. `jwc feat/x --permission-mode plan`, `jwc feat-x --continue` |
+| `jwc <name> [rev] [claude args...]` | `jw`, then start `claude` in it with the remaining arguments and `JW_NAME=<name>`, e.g. `jwc feat/x --permission-mode plan`, `jwc feat-x --continue`, `jwc fix/x "fix the retry storm"`. A second argument with a space is the task, not a rev |
+| `jreview [name] [focus...]` | A second Claude reviews the workspace's `trunk()..@` read-only (`claude -p`, only reads and `jj diff`/`log`/`show`) and prints problems by severity. fzf pick if no name |
 | `jnext` | What to do next: one row per agent workspace that needs you (conflicts, behind trunk, not pushed, no work), then `jwst`. Read-only |
 | `jwst` | One row per workspace: latest change, commits behind trunk, pushed, conflicts. Read-only |
 | `jsync [name...]` | Fetch, then rebase each workspace onto trunk, snapshotting and updating it around the rebase (fzf multi-pick if no args) |

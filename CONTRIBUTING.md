@@ -40,7 +40,7 @@ just check       # lint, tests, the secret scan and the commit check, the same a
 
 | Recipe         | Runs                                                                                      |
 | -------------- | ----------------------------------------------------------------------------------------- |
-| `just lint`    | `shellcheck` on `install.sh`, `claude/statusline.sh` and `scripts/*.sh`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, and `lychee --offline` on every Markdown file in the repo. |
+| `just lint`    | `shellcheck` on `install.sh`, `claude/*.sh` and `scripts/*.sh`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, and `lychee --offline` on every Markdown file in the repo. |
 | `just test`    | `bats tests`.                                                                             |
 | `just secrets` | `scripts/check-secrets.sh`, then `gitleaks dir . --config .gitleaks.toml` when gitleaks is installed. |
 | `just commits` | `scripts/check-commits.sh`: every non-merge commit subject in `origin/main..HEAD` (or the range given, `just commits <range>`) follows Conventional Commits. |
@@ -65,7 +65,7 @@ not.
 
 The tests are bats suites in `tests/`, one per area: `install.bats`,
 `jj.bats`, `sign.bats`, `drift.bats`, `statusline.bats`, `infra.bats`,
-`reload.bats`, `navi.bats`, `commits.bats`. Each test calls the helpers in
+`reload.bats`, `navi.bats`, `commits.bats`, `hooks.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 
@@ -115,8 +115,8 @@ and order entries from most to least used.
 - The description is unique across all cheats. Start it with the verb and
   the object you would search for ("Tail Kafka topic") and keep it short.
 - Pickers run in bash, so they never call `jw`, `jwc`, `jws`, `jwst`, `jwl`,
-  `jwrm`, `jsync`, `jnext`, `jpush`, `jland`, `reload`, `infra`, `sign-as`, `z` or
-  `zi`. The command line may.
+  `jwrm`, `jsync`, `jnext`, `jreview`, `jpush`, `jland`, `reload`, `infra`, `sign-as`,
+  `z` or `zi`. The command line may.
 - Every `jj` picker passes `--ignore-working-copy`.
 - An infra entry that deletes topics or Redis keys, resets consumer group
   offsets, flushes Redis or runs `infra reset` starts with `[LOCAL ONLY]`,

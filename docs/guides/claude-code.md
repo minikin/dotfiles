@@ -1,10 +1,11 @@
 # Claude Code
 
 `install.sh` sets up Claude Code in three places: the global rules in
-`~/.claude/CLAUDE.md`, the status line script `~/.claude/statusline.sh`, and
-a merge of `claude/settings.fragment.json` into `~/.claude/settings.json`.
-The first two are links into the repo. The third is merged, so your own
-settings stay. Why the shell matters for tool versions is explained in
+`~/.claude/CLAUDE.md`, three scripts (`~/.claude/statusline.sh`,
+`~/.claude/notify.sh` and `~/.claude/guard-push.sh`), and a merge of
+`claude/settings.fragment.json` into `~/.claude/settings.json`. The rules and
+the scripts are links into the repo. The settings are merged, so your own
+settings and hooks stay. Why the shell matters for tool versions is explained in
 [Agents and PATH](../explanation/agents-and-path.md).
 
 ## Global rules
@@ -34,10 +35,11 @@ Project rules go in the project's own `CLAUDE.md`. Claude Code reads both.
 ## Status line
 
 `~/.claude/statusline.sh` prints the directory, the jj workspace and change,
-and the model, separated by `·`:
+the model, how full the context window is, and the session cost, separated
+by `·`:
 
 ```text
-~/repos/my-service-ws/fix-retry · [fix-retry] yxnm Add retry to the order consumer · Opus
+~/repos/my-service-ws/fix-retry · [fix-retry] yxnm Add retry to the order consumer · Opus · 42% ctx · $1.23
 ```
 
 The change part is the workspace name in brackets, the shortest change ID of
@@ -46,6 +48,15 @@ conflicts, and the first line of the description cut to 30 characters. An
 empty change shows `(empty)`, a change with no description `(no desc)`. Outside a jj repo it shows `git:<branch>`
 instead. Every jj call uses `--ignore-working-copy`, so the refresh never
 snapshots the working copy or adds to the op log.
+
+The context part comes from `context_window.used_percentage`. Early in a
+session that field is `null`, and the script falls back to
+`context_window.total_input_tokens` divided by
+`context_window.context_window_size`. Before the first response both are
+missing or 0 and the part is left out. The cost is
+`cost.total_cost_usd` rounded to cents, Claude Code's estimate at list
+price, and is left out while it rounds to `$0.00`. All four values come from
+one `jq` call.
 
 Test it from a shell:
 
@@ -71,10 +82,68 @@ though the alias expands to `--tool difft`.
 Everything else, such as `jj commit` or `jj git push`, still asks.
 
 When `install.sh` merges the fragment, keys from the fragment win, the
-`permissions.allow` and `permissions.deny` lists are unioned with yours, and
-every other key is kept. The previous file is saved as
+`permissions.allow` and `permissions.deny` lists and each event's list under
+`hooks` are unioned with yours, and every other key is kept. The previous file is saved as
 `settings.json.bak-<timestamp>`. After editing the fragment, run
 `./install.sh` again.
+
+## Notifications
+
+With several agents in splits, a plain bell does not say which agent wants
+you. The fragment runs `~/.claude/notify.sh` on two hook events, and the
+notification's title is the name of the agent's directory: the workspace
+name, such as `fix-retry`, or the repo name in the main checkout.
+
+| Event          | When it fires                                                                    | Body                                     |
+| -------------- | -------------------------------------------------------------------------------- | ---------------------------------------- |
+| `Stop`         | Claude finished its turn.                                                        | `done`                                   |
+| `Notification` | Matcher `permission_prompt\|elicitation_dialog\|elicitation_url_dialog\|agent_needs_input`: Claude waits for a permission or an answer, after about six seconds with no typing. | The hook's `message`, such as `Claude needs your permission to use Bash`, or `waiting for input` when it has none. |
+
+`idle_prompt` is left out, because the `Stop` notification already said the
+agent was done a minute earlier.
+
+Hooks run without a controlling terminal and cannot write to `/dev/tty`. So
+`notify.sh` prints `{"terminalSequence": "..."}` and Claude Code writes the
+sequence to the terminal itself: an OSC 777 desktop notification, which
+Ghostty shows, followed by a bell. The bell no longer shows a notification of
+its own (`bell-features` has no `system`), but it still bounces the dock
+icon, marks the tab title and flashes the split border. Claude Code writes
+the sequence only in an interactive session that is on screen, never with
+`-p`.
+
+The fragment also sets `preferredNotifChannel` to `notifications_disabled`,
+which turns off Claude Code's built-in notification, titled "Claude Code".
+The hooks still fire. Without that you would get two notifications for each
+prompt.
+
+Try it from a shell. `JW_NOTIFY=print` prints `title|body` instead of the JSON:
+
+```sh
+echo '{"hook_event_name":"Stop","cwd":"'$PWD'"}' | JW_NOTIFY=print ~/.claude/notify.sh
+```
+
+## Push guard
+
+The global rules tell agents never to push, and a `PreToolUse` hook on the
+`Bash` tool enforces it for agents in workspaces. `~/.claude/guard-push.sh`
+reads the command and the hook's `cwd`, and exits 2 when both hold:
+
+- the command matches `git push` or `jj git push` at its start or after
+  whitespace, `;`, `&` or `|`
+- the nearest `.jj` above `cwd` holds `repo` as a file, which is how jj marks
+  a second workspace
+
+Exit 2 blocks the call, and Claude sees the message:
+
+```text
+blocked: agents in jj workspaces do not push; the user pushes from the main checkout with jpush/jland
+```
+
+The main checkout, where `.jj/repo` is a directory, and directories outside
+jj may still push, after the usual permission prompt. The guard reads the
+command text and nothing more. `echo git push` is blocked too, and a push
+hidden in a script or written as `git -C dir push` gets through. It is a
+backstop for the global rule, not a sandbox.
 
 ## `JJ_EDITOR=false`
 

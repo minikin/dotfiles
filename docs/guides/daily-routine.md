@@ -48,14 +48,25 @@ jj log -r 'trunk()::feat-export-csv@'    # its stack so far
 jj dft -r feat-export-csv@-              # its last finished step
 ```
 
-Land it as described in [Land the result](#land-the-result).
+When it is done, let a second Claude read the change before you do:
+
+```sh
+jreview feat-export-csv
+```
+
+It reviews `trunk()..feat-export-csv@` read-only and prints problems by
+severity with file and line. Paste the ones you agree with to the agent,
+then review the result yourself and land it as described in [Land the
+result](#land-the-result). Run `jreview` while the agent waits for input:
+its `jj diff` snapshots the workspace like any jj command.
 
 ### Fix a bug
 
-A bug fix starts with a test that fails:
+A bug fix starts with a test that fails. Give the task with the command
+line and the agent starts on it at once:
 
 ```sh
-jwc fix/retry-storm
+jwc fix/retry-storm "consumer retries without backoff after a broker restart, see the log in #142"
 ```
 
 Give the agent the symptom and everything you have: the error, the log
@@ -68,7 +79,8 @@ jj dft -r fix-retry-storm@-
 ```
 
 A test that reproduces the bug is half the review. Then let it fix the code,
-run the tests, and commit the fix on top of the test.
+run the tests, and commit the fix on top of the test. Run
+`jreview fix-retry-storm` before your own review of the fix.
 
 For a fix that must go onto a release branch rather than trunk, start the
 workspace from that branch:
@@ -212,14 +224,17 @@ workspace without running setup and picks up the last conversation there.
 
 ### While agents work
 
-You do not have to watch the splits. A bell from an agent waiting for input
-sends a macOS notification and marks the tab, and a command over 30 seconds
+You do not have to watch the splits. When an agent finishes or waits for
+input, Claude Code sends a macOS notification titled with its workspace name
+and rings the bell, which marks the tab, and a command over 30 seconds
 in an unfocused split notifies when it ends. The status line in each agent
 shows its workspace, change and description.
 
 Leave the files in an agent's workspace to the agent. Tell it what to change
-instead. All agents share the local infra from `infra up`, so ask agents that
-create Kafka topics or Redis keys to prefix them with the workspace name.
+instead. All agents share the local infra from `infra up`. `jwc` starts
+each agent with `JW_NAME` set to its workspace name, so an app or test that
+creates Kafka topics or Redis keys can prefix them with `$JW_NAME`, and two
+agents running the same tests do not read each other's messages.
 `cmd+shift+s` writes the screen to a file and pastes its path, to hand long
 output from one split to another agent.
 

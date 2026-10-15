@@ -49,8 +49,9 @@ jwc add-metrics
 ```
 
 `cmd+alt+h` and `cmd+alt+l` move between the splits, and `cmd+shift+enter`
-zooms one. When an agent stops to ask you something, it rings the bell, and
-Ghostty shows a notification and flashes the split's border. The
+zooms one. When an agent stops to ask you something or finishes, you get a
+notification titled with its workspace name, and Ghostty flashes the split's
+border. The
 [parallel agents](guides/parallel-agents.md) guide has a layout for three or
 more.
 

@@ -99,9 +99,11 @@ per split.
 Ghostty tells you when an agent needs attention, so you can leave the splits
 unattended:
 
-- A bell from any split, such as Claude Code waiting for input, triggers a
-  system notification, a dock bounce, a marker in the tab title and a border
-  flash (`bell-features = system,attention,title,border`).
+- When an agent finishes or waits for input, Claude Code sends a desktop
+  notification titled with the workspace name, such as `fix-retry`, and rings
+  the bell. See [Claude Code](claude-code.md#notifications).
+- A bell from any split triggers a dock bounce, a marker in the tab title and
+  a border flash (`bell-features = attention,title,border`).
 - A command that runs longer than 30 seconds in an unfocused split sends a
   notification and a bell when it finishes
   (`notify-on-command-finish = unfocused`, `notify-on-command-finish-after = 30s`).

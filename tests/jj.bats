@@ -319,6 +319,40 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
 }
 
+@test "jw: installs a pre-push hook that stops agents pushing from a workspace, not you or the main checkout" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  hook="$REPO/.git/hooks/pre-push"
+  [ -x "$hook" ]
+  grep -q 'jw-pre-push' "$hook"
+
+  run env CLAUDECODE=1 git -C "$WS/feat" push "$remote" HEAD:refs/heads/agent
+  [ "$status" -ne 0 ]
+  [[ $output == *"agents in jj workspaces and git worktrees do not push"* ]] || false
+  run env -u CLAUDECODE git -C "$WS/feat" push "$remote" HEAD:refs/heads/me
+  [ "$status" -eq 0 ]
+  run env CLAUDECODE=1 git -C "$REPO" push "$remote" HEAD:refs/heads/main-checkout
+  [ "$status" -eq 0 ]
+}
+
+@test "jw: leaves a pre-push hook of your own and a core.hooksPath setup alone" {
+  mkdir -p "$REPO/.git/hooks"
+  printf '#!/bin/sh\necho mine\n' > "$REPO/.git/hooks/pre-push"
+  run_zsh "cd '$REPO' && jw a"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$REPO/.git/hooks/pre-push")" = $'#!/bin/sh\necho mine' ]
+  [[ $output == *"pre-push"*"not adding"* ]] || false
+
+  rm "$REPO/.git/hooks/pre-push"
+  git -C "$REPO" config core.hooksPath .githooks
+  run_zsh "cd '$REPO' && jw b"
+  [ "$status" -eq 0 ]
+  [ ! -e "$REPO/.git/hooks/pre-push" ]
+  [ ! -e "$REPO/.githooks/pre-push" ]
+}
+
 @test "jwst and jws: workspace names in their where.sh colour, default plain, only with colour on" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   colour=$(bash "$REPO_ROOT/claude/where.sh" --colour app/feat)

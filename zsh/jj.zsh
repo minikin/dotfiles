@@ -37,9 +37,37 @@ jw() {
       git -C $root worktree prune   # drop git's entry for the missing directory
     fi
     jj -R $root workspace add --name "$name" -r "$rev" "$dir" || return 1
+    _jw_pre_push "$root"
     [[ -z ${JW_NO_SETUP:-} ]] && _jw_setup "$root" "$dir"
   fi
   cd "$dir"
+}
+
+# A pre-push hook in the repo's shared git hooks: a Claude Code agent (CLAUDECODE set) cannot
+# git push from a jj workspace or git worktree, even from inside a script or a just recipe,
+# where the guard-push.sh Claude hook cannot see the push. You, and pushes from the main
+# checkout, pass. Never replaces a hook of yours, and does nothing with core.hooksPath set,
+# because that dir usually belongs to the project (husky, lefthook).
+_jw_pre_push() {
+  local root=$1 hook
+  [[ -n $(git -C $root config core.hooksPath 2>/dev/null) ]] && return 0
+  hook=$(git -C $root rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+  hook+=/hooks/pre-push
+  if [[ -e $hook ]] && ! grep -q jw-pre-push $hook; then
+    echo "jw: $hook is your own, not adding the agent push guard to it" >&2
+    return 0
+  fi
+  mkdir -p ${hook:h}
+  cat > $hook <<'EOF'
+#!/bin/sh
+# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): a Claude Code agent must not push
+# from a jj workspace or git worktree. You, and pushes from the main checkout, pass.
+[ -n "$CLAUDECODE" ] || exit 0
+[ "$(git rev-parse --absolute-git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ] && exit 0
+echo "blocked: agents in jj workspaces and git worktrees do not push; the user pushes from the main checkout with jpush/jland" >&2
+exit 1
+EOF
+  chmod +x $hook
 }
 
 # Make a fresh workspace runnable: copy untracked local env files from the main

@@ -100,7 +100,7 @@ Ghostty tells you when an agent needs attention, so you can leave the splits
 unattended:
 
 - When an agent finishes or waits for input, Claude Code sends a desktop
-  notification titled with the workspace name, such as `fix-retry`, and rings
+  notification titled with the repo and workspace, such as `my-service/fix-retry`, and rings
   the bell. See [Claude Code](claude-code.md#notifications).
 - A bell from any split triggers a dock bounce, a marker in the tab title and
   a border flash (`bell-features = attention,title,border`).

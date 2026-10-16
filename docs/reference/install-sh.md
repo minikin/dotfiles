@@ -87,6 +87,8 @@ The script prints a `==` header before each step.
 | `claude/statusline.sh`   | `~/.claude/statusline.sh`             |
 | `claude/notify.sh`       | `~/.claude/notify.sh`                 |
 | `claude/guard-push.sh`   | `~/.claude/guard-push.sh`             |
+| `claude/session-context.sh` | `~/.claude/session-context.sh`     |
+| `claude/where.sh`        | `~/.claude/where.sh`                  |
 
 Each link is an absolute symlink to the file in the checkout. For each
 destination:

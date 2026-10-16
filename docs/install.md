@@ -171,7 +171,8 @@ for f in .zshrc .config/ghostty/config .config/zsh/jj.zsh .config/zsh/sign.zsh \
          .local/share/navi/cheats/dotfiles \
          .config/devinfra/compose.yaml .config/starship.toml \
          .config/jj/config.toml .config/mise/config.toml .claude/CLAUDE.md \
-         .claude/statusline.sh .claude/notify.sh .claude/guard-push.sh; do
+         .claude/statusline.sh .claude/notify.sh .claude/guard-push.sh \
+         .claude/session-context.sh .claude/where.sh; do
   [[ -L $f ]] && rm "$f"
 done
 find ~ -maxdepth 4 -name '*.bak-*' 2>/dev/null
@@ -185,8 +186,8 @@ hand:
 - the mise block at the end of `~/.zprofile`
 - `~/.claude/settings.json`, restored from its `.bak-*` copy or edited to
   drop `statusLine`, `env.JJ_EDITOR`, `preferredNotifChannel`, the jj
-  permission entries and the `hooks` entries that run `~/.claude/notify.sh`
-  and `~/.claude/guard-push.sh`
+  permission entries and the `hooks` entries that run `~/.claude/notify.sh`,
+  `~/.claude/guard-push.sh` and `~/.claude/session-context.sh`
 - `~/.config/jj/conf.d/identity.toml`, `~/.config/dotfiles/config`,
   the per-repo files `sign-as` wrote under `~/.config/jj/repos/`,
   `~/.config/git/allowed_signers` and `~/.config/git/personal.gitconfig`

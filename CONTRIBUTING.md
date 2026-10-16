@@ -65,7 +65,7 @@ not.
 
 The tests are bats suites in `tests/`, one per area: `install.bats`,
 `jj.bats`, `sign.bats`, `drift.bats`, `statusline.bats`, `infra.bats`,
-`reload.bats`, `navi.bats`, `commits.bats`, `hooks.bats`. Each test calls the helpers in
+`reload.bats`, `navi.bats`, `commits.bats`, `hooks.bats`, `where.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 

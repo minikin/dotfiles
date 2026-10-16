@@ -1,8 +1,8 @@
 # Claude Code
 
 `install.sh` sets up Claude Code in three places: the global rules in
-`~/.claude/CLAUDE.md`, three scripts (`~/.claude/statusline.sh`,
-`~/.claude/notify.sh` and `~/.claude/guard-push.sh`), and a merge of
+`~/.claude/CLAUDE.md`, five scripts in `~/.claude/` (`statusline.sh`,
+`notify.sh`, `guard-push.sh`, `session-context.sh` and `where.sh`), and a merge of
 `claude/settings.fragment.json` into `~/.claude/settings.json`. The rules and
 the scripts are links into the repo. The settings are merged, so your own
 settings and hooks stay. Why the shell matters for tool versions is explained in
@@ -34,18 +34,27 @@ Project rules go in the project's own `CLAUDE.md`. Claude Code reads both.
 
 ## Status line
 
-`~/.claude/statusline.sh` prints the directory, the jj workspace and change,
-the model, how full the context window is, and the session cost, separated
-by `·`:
+`~/.claude/statusline.sh` prints where the agent works, the jj change, the
+model, how full the context window is, and the session cost, separated by
+`·`:
 
 ```text
-~/repos/my-service-ws/fix-retry · [fix-retry] yxnm Add retry to the order consumer · Opus · 42% ctx · $1.23
+my-service/fix-retry · yxnm Add retry to the order consumer · Opus · 42% ctx · $1.23
+my-service · kqzv (empty) · Opus · 3% ctx · $0.05
 ```
 
-The change part is the workspace name in brackets, the shortest change ID of
-at least 4 characters, any bookmarks, `CONFLICT` when the change has
-conflicts, and the first line of the description cut to 30 characters. An
-empty change shows `(empty)`, a change with no description `(no desc)`. Outside a jj repo it shows `git:<branch>`
+The first part comes from `~/.claude/where.sh`. In a jj workspace or a git
+worktree it is `<repo>/<workspace>`, bold and in the workspace's colour, the
+same colour as the split's [background tint](../reference/shell-commands.md#tab-title-and-tint).
+In the main checkout it is the bare repo name, without colour. Below the
+workspace root, the subdirectory follows a colon, as in
+`my-service/fix-retry:src/consumer`. Outside a repo it is the directory, such
+as `~/notes`.
+
+The change part is the shortest change ID of at least 4 characters, any
+bookmarks, `CONFLICT` when the change has conflicts, and the first line of
+the description cut to 30 characters. An empty change shows `(empty)`, a
+change with no description `(no desc)`. Outside jj it shows `git:<branch>`
 instead. Every jj call uses `--ignore-working-copy`, so the refresh never
 snapshots the working copy or adds to the op log.
 
@@ -91,8 +100,9 @@ When `install.sh` merges the fragment, keys from the fragment win, the
 
 With several agents in splits, a plain bell does not say which agent wants
 you. The fragment runs `~/.claude/notify.sh` on two hook events, and the
-notification's title is the name of the agent's directory: the workspace
-name, such as `fix-retry`, or the repo name in the main checkout.
+notification's title says where the agent works: `<repo>/<workspace>`,
+such as `my-service/fix-retry`, the repo name in the main checkout, or the
+directory name outside a repo.
 
 | Event          | When it fires                                                                    | Body                                     |
 | -------------- | -------------------------------------------------------------------------------- | ---------------------------------------- |
@@ -121,6 +131,44 @@ Try it from a shell. `JW_NOTIFY=print` prints `title|body` instead of the JSON:
 ```sh
 echo '{"hook_event_name":"Stop","cwd":"'$PWD'"}' | JW_NOTIFY=print ~/.claude/notify.sh
 ```
+
+## Session context
+
+The fragment runs `~/.claude/session-context.sh` on `SessionStart`, which
+fires on startup, resume, `/clear` and after a compaction. It gives the agent
+one sentence of context, so it can say where it works and keeps knowing after
+a compaction:
+
+```text
+This session runs in the jj workspace "fix-retry" of the repo "my-service", rooted at
+~/repos/my-service-ws/fix-retry. Other agents can work in sibling workspaces of the same
+repo, so keep reads and edits inside this root. Call this location my-service/fix-retry
+when you refer to it.
+```
+
+The path is absolute in the real output. In a git worktree it says
+`git worktree`, in the main checkout `main checkout of the repo`. Outside a
+repo it prints nothing. Try it from a shell:
+
+```sh
+echo '{"cwd":"'$PWD'"}' | ~/.claude/session-context.sh
+```
+
+## Where an agent works
+
+`~/.claude/where.sh [dir]` is the one place that decides where a directory
+belongs. It prints five lines: the repo name, the workspace name, the
+workspace root, a colour from 1 to 6, and `jj` or `git`. In the main checkout
+the workspace name and colour are empty. The repo name is the main
+checkout's, also from a workspace. For a jj workspace, the name comes from
+`jj workspace list`, not from the directory. For a git worktree, it is the
+worktree's directory name. When a git worktree sits inside a jj repo, as
+Claude Code's `.claude/worktrees/<name>` does, the deeper root wins and it is
+reported as a git worktree. It runs jj with `--ignore-working-copy`. The
+status line, both hooks above and the zsh tab title and tint call it, and the
+starship prompt reads the `JW_WHERE` that zsh sets from it, so they always
+agree. The colour is a hash of `<repo>/<workspace>`, so a workspace keeps its
+colour, but two workspaces can share one.
 
 ## Push guard
 

@@ -69,7 +69,7 @@ to switch this repo.
 `just check` runs `just lint`, `just test`, `just secrets` and `just commits`, the same steps
 as the `check` job in CI:
 
-- `lint`: `shellcheck` on `install.sh`, `claude/statusline.sh` and
+- `lint`: `shellcheck` on `install.sh`, `claude/*.sh` and
   `scripts/*.sh`, a check that every bats `[[ ]]` and `!` assert ends in
   `|| false`, `zsh -n` on every zsh file, `docker compose config -q` on
   `infra/compose.yaml` when Docker is installed, and an offline `lychee` link

@@ -148,6 +148,25 @@ kafka-ui in a container both reach it. Agents get the same endpoints, and
 `claude/CLAUDE.md` limits their tools to local or dev endpoints and rules out
 `infra reset`, `FLUSHALL` and topic deletion unless you ask.
 
+## Why every split says where it is
+
+With four agents in four splits, the question that costs the most is "which
+one is this?". The directory alone does not answer it. In a workspace the
+prompt showed only `…/fix-retry`, without the repo, and the main checkout
+looked the same. Claude Code titled every tab with its own session title. So
+each place that shows a location now shows the same `<repo>/<workspace>`: the
+status line, the tab title, the prompt, the notification and the agent's own
+context.
+
+One script, `where.sh`, computes it, and every caller asks that script. Five
+copies of "find the main repo from `.jj/repo`" would drift apart, and a split
+whose tab and status line disagree is worse than one with no label. A colour
+from a hash of the name tints the split's background and the status line,
+because a colour is faster to spot than text. It is a hash and not a list
+position, so a workspace keeps its colour when others come and go. The main
+checkout gets no colour: it is the one you work in yourself, and it is the
+place where a missing tint is a signal.
+
 ## Why navi for saved workflows
 
 The commands worth saving are the ones you run once a week and get wrong:

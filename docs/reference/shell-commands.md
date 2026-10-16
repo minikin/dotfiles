@@ -6,7 +6,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | Command            | Defined in       | Arguments            | Does                                                          |
 | ------------------ | ---------------- | -------------------- | ------------------------------------------------------------- |
 | `jw`               | `zsh/jj.zsh`     | `<name> [rev]`       | Create or reuse a workspace at `<repo>-ws/<name>`, `cd` into it. |
-| `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude` there with the remaining arguments and `JW_NAME` set. |
+| `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude -n <repo>/<name>` there with the remaining arguments and `JW_NAME` set. |
 | `jreview`          | `zsh/jj.zsh`     | `[name] [focus...]`  | A second, read-only Claude reviews the workspace's `trunk()..@`. fzf pick without a name. |
 | `jnext`            | `zsh/jj.zsh`     | none                 | What to do next: one row per agent workspace that needs you, most urgent first. |
 | `jwst`             | `zsh/jj.zsh`     | none                 | One row per workspace: latest change, commits behind trunk, pushed, conflicts. |
@@ -29,7 +29,9 @@ sets up. `<x>` is required, `[x]` is optional.
 | `JW_NO_SETUP` | `jw`, `jwc` | Any non-empty value skips the env-file copy and project setup on a new workspace. |
 | `JW_NAME` | your app and tests | Set by `jwc` to the workspace name, in the environment of the `claude` it starts and every command that `claude` runs. Not exported to your shell, not written to a file. |
 | `JW_HINT` | `zsh/jj.zsh` | `0` turns off the [repo-entry hint](#repo-entry-hint). Read when the file is sourced. |
-| `CLAUDECODE` | `zsh/jj.zsh` | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint. |
+| `JW_TINT` | `zsh/jj.zsh` | `0` turns off the background [tint](#tab-title-and-tint). The tab title stays. Read at every prompt. |
+| `JW_WHERE` | starship | Exported by `zsh/jj.zsh` as `<repo>/<workspace>` in a jj workspace or git worktree, unset elsewhere. The prompt shows it. |
+| `CLAUDECODE` | `zsh/jj.zsh` | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint, the tab title and the tint. |
 | `GHOSTTY_BIN` | `reload` | The Ghostty binary to validate the config with. Without it, `ghostty` on `PATH`, else `/Applications/Ghostty.app/Contents/MacOS/ghostty`. |
 | `NAVI_CONFIG_YAML` | navi | Set by `zsh/navi.zsh` to the palette's column layout, unless it is already set or `${NAVI_CONFIG:-~/.config/navi/config.yaml}` exists. |
 | `NAVI_DEFAULT_PATH` | `zsh/navi.zsh` | navi's default cheats folder, first in `NAVI_PATH`. Default `~/.local/share/navi/cheats`. |
@@ -145,6 +147,10 @@ goes to `claude`, so a quoted sentence becomes the agent's first prompt:
 
 A one-word task looks like a rev: `jwc fix/x cleanup` creates the workspace
 at revision `cleanup`. Put a rev first or write the task as a sentence.
+
+`claude` starts with `-n <repo>/<name>`, such as `-n my-service/fix-x`.
+Claude Code shows that name in the tab title and in `/resume`, and
+`claude -r my-service/fix-x` finds the session.
 
 `claude` runs with `JW_NAME=<workspace name>` in its environment (`fix-x`
 for `jwc fix/x`), and so does every command it runs. Prefix Kafka topics,
@@ -298,6 +304,32 @@ per shell, only in the main checkout (where `.jj/repo` is a directory), and
 also for the directory a new shell starts in. `zsh/jj.zsh` registers it as a
 `chpwd` hook only in an interactive shell, when `CLAUDECODE` is empty and
 `JW_HINT` is not `0`.
+
+## Tab title and tint
+
+In an interactive shell, `zsh/jj.zsh` sets the tab title to where you are,
+from [`where.sh`](../guides/claude-code.md#where-an-agent-works):
+`<repo>/<workspace>` in a jj workspace or git worktree, the repo name in the
+main checkout, and the `~`-relative directory outside a repo. While a command
+runs, the title is followed by ` · ` and the first 40 characters of the
+command. `ghostty/config` sets `no-title` in `shell-integration-features`,
+because Ghostty's own title would overwrite this one.
+
+In a workspace or worktree it also tints the split's background in the
+workspace's colour, the same colour as its status line, so splits are easy to
+tell apart. The tint is the Catppuccin colour at 12% over Mocha's background
+in dark mode, and at 10% over Latte's in light mode. The mode is read from
+macOS only when the tint changes, so after switching it, the next workspace
+you enter gets the new shade. Leaving the workspace and exiting the shell
+reset the background (OSC 111). `JW_TINT=0` turns the tint off.
+
+The `chpwd` hook runs `where.sh` and sets `JW_WHERE` for the starship prompt,
+but prints nothing. zsh also runs `chpwd` inside `$(...)` and `( ... )`, where
+the escape codes would end up in the captured output, so it returns at once
+in a subshell. The `precmd` hook writes the title and the tint before each
+prompt, so a `cd` with its output redirected still tints. Control characters
+in a command become spaces in the title. The hooks are registered only in an
+interactive shell when `CLAUDECODE` is empty.
 
 ## jsync
 

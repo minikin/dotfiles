@@ -30,6 +30,8 @@ sets up. `<x>` is required, `[x]` is optional.
 | `JW_NAME` | your app and tests | Set by `jwc` to the workspace name, in the environment of the `claude` it starts and every command that `claude` runs. Not exported to your shell, not written to a file. |
 | `JW_HINT` | `zsh/jj.zsh` | `0` turns off the [repo-entry hint](#repo-entry-hint). Read when the file is sourced. |
 | `JW_TINT` | `zsh/jj.zsh` | `0` turns off the background [tint](#tab-title-and-tint). The tab title stays. Read at every prompt. |
+| `NO_COLOR` | `jwst`, `jws` | Any non-empty value prints workspace names without colour. |
+| `CLICOLOR_FORCE` | `jwst` | `1` keeps the colour when the output is not a terminal. |
 | `JW_WHERE` | starship | Exported by `zsh/jj.zsh` as `<repo>/<workspace>` in a jj workspace or git worktree, unset elsewhere. The prompt shows it. |
 | `CLAUDECODE` | `zsh/jj.zsh` | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint, the tab title and the tint. |
 | `GHOSTTY_BIN` | `reload` | The Ghostty binary to validate the config with. Without it, `ghostty` on `PATH`, else `/Applications/Ghostty.app/Contents/MacOS/ghostty`. |
@@ -43,13 +45,13 @@ sets up. `<x>` is required, `[x]` is optional.
 
 A workspace for repo `~/repos/app` named `fix-login` lives at
 `~/repos/app-ws/fix-login`: next to the main checkout, never inside it. The
-main checkout is the workspace named `default`. `jw`, `jwst`, `jsync`, `jreview` and `jwrm` first find
+main checkout is the workspace named `default`. `jw`, `jws`, `jwst`, `jsync`, `jreview` and `jwrm` first find
 the main checkout with `jj workspace root --name default`, so they work the
 same from the main checkout and from inside any workspace.
 
-Outside a jj repo `jw`, `jwst`, `jsync`, `jreview` and `jwrm` print `not in a jj repo` and return 1. In a
+Outside a jj repo `jw`, `jws`, `jwst`, `jsync`, `jreview` and `jwrm` print `not in a jj repo` and return 1. In a
 git repo without jj they print
-`git repo without jj — run: jj git init --colocate`. `jwl`, `jws` and
+`git repo without jj — run: jj git init --colocate`. `jwl` and
 `jpush` call `jj` directly and show jj's own error instead. Outside a jj
 repo `jland` prints `jland: not in a jj repo` and returns 1. `jnext` behaves
 differently, see [jnext](#jnext).
@@ -74,9 +76,26 @@ Otherwise it:
 2. If jj still lists a workspace with that name (its directory was deleted by
    hand), runs `jj workspace forget <name>` and `git worktree prune`.
 3. Runs `jj workspace add --name <name> -r <rev> <dir>`. On failure it returns 1.
-4. Unless `JW_NO_SETUP` is set, copies local env files and runs the project
+4. Adds the [agent pre-push hook](#agent-pre-push-hook) to the repo.
+5. Unless `JW_NO_SETUP` is set, copies local env files and runs the project
    setup (below).
-5. `cd`s into the workspace.
+6. `cd`s into the workspace.
+
+### Agent pre-push hook
+
+`jw` writes a `pre-push` hook into the repo's shared git hooks
+(`.git/hooks/pre-push` of the main checkout), which every workspace and git
+worktree of the repo uses. The hook rejects a `git push` when `CLAUDECODE` is
+set, so it comes from a Claude Code agent, and the push runs in a jj workspace
+or git worktree. It catches what the [push guard](../guides/claude-code.md#push-guard)
+cannot see, such as a push inside a script or a `just` recipe. Your own
+pushes, and any push from the main checkout, go through.
+
+The hook is marked with a `jw-pre-push` comment, and `jw` rewrites only a hook
+with that mark. With a `pre-push` hook of your own, `jw` leaves it and prints
+`jw: <path> is your own, not adding the agent push guard to it`. With
+`core.hooksPath` set, `jw` adds nothing, because that directory usually
+belongs to the project's hook manager.
 
 ### Env files copied
 
@@ -212,6 +231,8 @@ Lists `jj workspace list` in fzf with the prompt `workspace> `, showing only
 the names. The preview runs
 `jj -R <workspace root> --ignore-working-copy log -r "trunk()::@"` for the
 highlighted workspace. Enter `cd`s into it. Esc leaves you where you are.
+Each name except `default` is bold in its workspace's colour, the colour of
+its [tint](#tab-title-and-tint) and status line. `NO_COLOR` turns that off.
 
 ## jwst
 
@@ -236,6 +257,10 @@ fix-retry-storm  pvptytmu       0  no      yes        fix(consumer): retry with 
 | `PUSHED` | `yes` when the bookmark named after the workspace is on that change at `origin`. A bookmark pushed before the latest change, or before a rebase, shows `no`. |
 | `CONFLICTS` | `yes` when `trunk()..<name>@` has a conflicted change. |
 | `DESCRIPTION` | First line of the change's description, `(no description)` when empty, `(no changes)` when there is no change. |
+
+On a terminal, each `WORKSPACE` name except `default` is bold in its
+workspace's colour, as in `jws`. `CLICOLOR_FORCE=1` keeps the colour in a pipe,
+and `NO_COLOR` turns it off.
 
 Every query runs from the main checkout with `--ignore-working-copy` and
 names the workspace as `<name>@`. `jwst` never opens a workspace's directory,

@@ -148,7 +148,17 @@ when you refer to it.
 
 The path is absolute in the real output. In a git worktree it says
 `git worktree`, in the main checkout `main checkout of the repo`. Outside a
-repo it prints nothing. Try it from a shell:
+repo it prints nothing.
+
+In a workspace or worktree it also returns `sessionTitle`, `<repo>/<workspace>`,
+which names the session like `/rename`. So the tab and `/resume` show
+`my-service/fix-retry` even when you start plain `claude` there instead of
+`jwc`. Claude Code applies a `sessionTitle` on startup, resume and fork, so
+the hook sends it only then. A session that already has a title, from
+`claude -n` (which `jwc` uses) or `/rename`, arrives with `session_title`
+set, and the hook leaves it alone. Needs Claude Code 2.1.152 or later.
+
+Try it from a shell:
 
 ```sh
 echo '{"cwd":"'$PWD'"}' | ~/.claude/session-context.sh
@@ -168,7 +178,9 @@ reported as a git worktree. It runs jj with `--ignore-working-copy`. The
 status line, both hooks above and the zsh tab title and tint call it, and the
 starship prompt reads the `JW_WHERE` that zsh sets from it, so they always
 agree. The colour is a hash of `<repo>/<workspace>`, so a workspace keeps its
-colour, but two workspaces can share one.
+colour, but two workspaces can share one. `where.sh --colour <repo>/<workspace>...`
+prints only the colour of each label, which is how `jwst` and `jws` colour
+their names.
 
 ## Push guard
 
@@ -177,7 +189,8 @@ The global rules tell agents never to push, and a `PreToolUse` hook on the
 reads the command and the hook's `cwd`, and exits 2 when both hold:
 
 - the command matches `git push` or `jj git push` at its start or after
-  whitespace, `;`, `&` or `|`
+  whitespace, `;`, `&` or `|`, also with global options between the words,
+  as in `git -C dir push`, `git -c key=value push` or `jj -R . git push`
 - [`where.sh`](#where-an-agent-works) reports a workspace name for `cwd`:
   a jj workspace, a git worktree, or Claude Code's own
   `.claude/worktrees/<name>`
@@ -190,7 +203,13 @@ blocked: agents in jj workspaces and git worktrees do not push; the user pushes 
 
 The main checkout and directories outside a repo may still push, after the usual permission prompt. The guard reads the
 command text and nothing more. `echo git push` is blocked too, and a push
-hidden in a script or written as `git -C dir push` gets through. It is a
+hidden in a script gets through.
+
+For that case `jw` adds a git `pre-push` hook to the repo (see
+[agent pre-push hook](../reference/shell-commands.md#agent-pre-push-hook)). It
+rejects a `git push` from a workspace or worktree whenever `CLAUDECODE` is set,
+however the push was started. jj 0.46 does not run git hooks, so a
+`jj git push` inside a script still gets through. Together they are a
 backstop for the global rule, not a sandbox.
 
 ## `JJ_EDITOR=false`

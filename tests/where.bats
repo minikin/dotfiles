@@ -106,6 +106,16 @@ $(realpath_of "$HOME/src/plain")
 git" ]
 }
 
+@test "where: --colour gives each label the colour where.sh gives that workspace" {
+  make_workspace
+  colour=$(bash "$WHERE" "$HOME/src/app-ws/feat" | sed -n 4p)
+  run bash "$WHERE" --colour app/feat app/other
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "$colour" ]
+  [[ ${lines[1]} =~ ^[1-6]$ ]] || false
+  [ "${#lines[@]}" -eq 2 ]
+}
+
 @test "where: outside a repo or in a missing dir it prints nothing and exits 1" {
   mkdir -p "$HOME/outside"
   run bash "$WHERE" "$HOME/outside"

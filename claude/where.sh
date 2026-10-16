@@ -2,9 +2,22 @@
 # where.sh [dir]: which repo and which jj workspace or git worktree <dir> (default $PWD) is in.
 # Prints five lines: repo name, workspace name, workspace root, colour 1-6 (ANSI red..cyan), and
 # jj or git. The main checkout has an empty workspace name and colour: it needs no marker.
+# where.sh --colour <repo>/<workspace>...: only the colour of each label, one per line (jwst, jws).
 # Exits 1 outside a repo. The status line, the notify and SessionStart hooks, the zsh title and
 # tint, and through the zsh JW_WHERE variable the starship prompt all use it, so they always agree.
 # jj runs with --ignore-working-copy: this must never snapshot.
+
+colour_of() {
+  local sum
+  sum=$(printf '%s' "$1" | cksum)
+  echo $(( ${sum%% *} % 6 + 1 ))
+}
+
+if [[ ${1:-} == --colour ]]; then
+  shift
+  for label; do colour_of "$label"; done
+  exit 0
+fi
 
 cd "${1:-.}" 2>/dev/null || exit 1
 
@@ -43,8 +56,5 @@ else
 fi
 
 colour=''
-if [[ -n $name ]]; then
-  sum=$(printf '%s/%s' "$repo" "$name" | cksum)
-  colour=$(( ${sum%% *} % 6 + 1 ))
-fi
+[[ -n $name ]] && colour=$(colour_of "$repo/$name")
 printf '%s\n%s\n%s\n%s\n%s\n' "$repo" "$name" "$root" "$colour" "$kind"

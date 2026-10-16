@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# claude/statusline.sh: "dir · [workspace] change desc · model", read-only for jj.
+# claude/statusline.sh: "repo/workspace · change desc · model", read-only for jj.
 
 load helpers
 
@@ -10,29 +10,50 @@ setup() {
   make_jj_repo "$REPO"
 }
 
-# statusline <dir>: feed the Claude Code status JSON for <dir> to the script
+# statusline <dir>: feed the Claude Code status JSON for <dir> to the script.
+# $output has the colour codes stripped, $raw keeps them.
 statusline() {
   run bash "$REPO_ROOT/claude/statusline.sh" <<<"{\"workspace\":{\"current_dir\":\"$1\"},\"model\":{\"display_name\":\"Opus\"}}"
+  raw=$output
+  output=$(sed $'s/\e\\[[0-9;]*m//g' <<<"$output")
 }
 
 op_count() { jj -R "$1" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' | wc -l | tr -d ' '; }
 
-@test "statusline: inside a jj workspace shows dir, [workspace], change, desc and model" {
+@test "statusline: a jj workspace leads with repo/workspace in bold colour, then change, desc and model" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && echo code > login.txt && jj describe -m 'add login' >/dev/null 2>&1"
   [ "$status" -eq 0 ]
-  ws="$HOME/src/app-ws/feat"
-  statusline "$ws"
+  statusline "$HOME/src/app-ws/feat"
   [ "$status" -eq 0 ]
   echo "output: $output"
-  [[ $output =~ ^~/src/app-ws/feat\ ·\ \[feat\]\ [a-z]{4,}\ .*add\ login\ ·\ Opus$ ]] || false
+  [[ $output =~ ^app/feat\ ·\ [a-z]{4,}\ .*add\ login\ ·\ Opus$ ]] || false
+  colour=$(bash "$REPO_ROOT/claude/where.sh" "$HOME/src/app-ws/feat" | sed -n 4p)
+  [[ $raw == $'\e[1;3'"$colour"$'mapp/feat\e[0m · '* ]] || false
 }
 
-@test "statusline: single-workspace repo never prints an empty []" {
+@test "statusline: a subdirectory of a workspace is shown after the label" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  mkdir -p "$HOME/src/app-ws/feat/src/lib"
+  statusline "$HOME/src/app-ws/feat/src/lib"
+  [ "$status" -eq 0 ]
+  echo "output: $output"
+  [[ $output == "app/feat:src/lib · "* ]] || false
+}
+
+@test "statusline: the main checkout shows the bare repo name without colour" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   statusline "$REPO"
   [ "$status" -eq 0 ]
   echo "output: $output"
-  [[ $output != *"[]"* ]] || false
-  [[ $output =~ ^~/src/app\ ·\ .+\ ·\ Opus$ ]] || false
+  [[ $output =~ ^app\ ·\ [a-z]{4,}\ .+\ ·\ Opus$ ]] || false
+  [ "$raw" = "$output" ]
+}
+
+@test "statusline: never prints an empty or bracketed workspace list" {
+  statusline "$REPO"
+  [ "$status" -eq 0 ]
+  echo "output: $output"
+  [[ $output != *"["* ]] || false
 }
 
 @test "statusline: outside a repo prints only dir and model" {
@@ -72,7 +93,26 @@ op_count() { jj -R "$1" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' 
   statusline "$plain"
   [ "$status" -eq 0 ]
   echo "output: $output"
-  [ "$output" = "~/src/plain · git:feature-x · Opus" ]
+  [ "$output" = "plain · git:feature-x · Opus" ]
+}
+
+@test "statusline: a linked git worktree shows repo/worktree and its branch" {
+  plain="$HOME/src/plain"
+  git init --quiet -b main "$plain"
+  git -C "$plain" commit --quiet --allow-empty -m init
+  git -C "$plain" worktree add --quiet -b fix "$HOME/src/plain-wt/fix-x"
+  statusline "$HOME/src/plain-wt/fix-x"
+  [ "$status" -eq 0 ]
+  echo "output: $output"
+  [ "$output" = "plain/fix-x · git:fix · Opus" ]
+}
+
+@test "statusline: a git worktree inside a jj repo shows the worktree and its branch, not the jj change" {
+  git -C "$REPO" worktree add --quiet -b agent1 "$REPO/.claude/worktrees/agent1" 2>/dev/null
+  statusline "$REPO/.claude/worktrees/agent1"
+  [ "$status" -eq 0 ]
+  echo "output: $output"
+  [ "$output" = "app/agent1 · git:agent1 · Opus" ]
 }
 
 @test "statusline: plain git repo on a detached HEAD prints no git segment" {
@@ -82,7 +122,7 @@ op_count() { jj -R "$1" --ignore-working-copy op log --no-graph -T 'id ++ "\n"' 
   git -C "$plain" checkout --quiet --detach
   statusline "$plain"
   [ "$status" -eq 0 ]
-  [ "$output" = "~/src/plain · Opus" ]
+  [ "$output" = "plain · Opus" ]
 }
 
 # statusline_json <json>: feed raw status JSON

@@ -9,6 +9,12 @@ setup() {
 
 NOTIFY() { echo "$REPO_ROOT/claude/notify.sh"; }
 GUARD() { echo "$REPO_ROOT/claude/guard-push.sh"; }
+CONTEXT() { echo "$REPO_ROOT/claude/session-context.sh"; }
+
+# context <cwd> [source]: feed a SessionStart event to session-context.sh
+context() {
+  run bash "$(CONTEXT)" <<<"{\"hook_event_name\":\"SessionStart\",\"cwd\":\"$1\",\"source\":\"${2:-startup}\"}"
+}
 
 # make_workspace: jj repo at ~/src/app with a second workspace at ~/src/app-ws/feat
 make_workspace() {
@@ -25,10 +31,19 @@ guard() {
   run bash "$(GUARD)" <<<"$json"
 }
 
-@test "notify: Stop is titled with the workspace dir and says done" {
+@test "notify: Stop outside a repo is titled with the dir name and says done" {
   JW_NOTIFY=print run bash "$(NOTIFY)" <<<'{"hook_event_name":"Stop","cwd":"/x/app-ws/feat","last_assistant_message":"All set"}'
   [ "$status" -eq 0 ]
   [ "$output" = "feat|done" ]
+}
+
+@test "notify: a real workspace is titled repo/workspace, the main checkout with the repo name" {
+  make_workspace
+  JW_NOTIFY=print run bash "$(NOTIFY)" <<<"{\"hook_event_name\":\"Stop\",\"cwd\":\"$HOME/src/app-ws/feat\"}"
+  [ "$status" -eq 0 ]
+  [ "$output" = "app/feat|done" ]
+  JW_NOTIFY=print run bash "$(NOTIFY)" <<<"{\"hook_event_name\":\"Stop\",\"cwd\":\"$HOME/src/app\"}"
+  [ "$output" = "app|done" ]
 }
 
 @test "notify: Notification uses the hook's message" {
@@ -67,6 +82,45 @@ guard() {
   [ "$status" -eq 0 ]
   run bash "$(NOTIFY)" </dev/null
   [ "$status" -eq 0 ]
+}
+
+@test "session-context: a jj workspace tells the agent its workspace, repo and root" {
+  make_workspace
+  root=$(realpath_of "$HOME/src/app-ws/feat")
+  for src in startup resume compact; do
+    context "$HOME/src/app-ws/feat" "$src"
+    [ "$status" -eq 0 ]
+    jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' <<<"$output"
+    ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
+    echo "ctx: $ctx"
+    [[ $ctx == *'jj workspace "feat" of the repo "app"'* ]] || false
+    [[ $ctx == *"$root"* ]] || false
+    [[ $ctx == *"app/feat"* ]] || false
+  done
+}
+
+@test "session-context: the main checkout and a git worktree are named as such" {
+  make_workspace
+  context "$HOME/src/app"
+  [[ $(jq -r '.hookSpecificOutput.additionalContext' <<<"$output") == *'main checkout of the repo "app"'* ]] || false
+  git init --quiet -b main "$HOME/src/plain"
+  git -C "$HOME/src/plain" commit --quiet --allow-empty -m init
+  git -C "$HOME/src/plain" worktree add --quiet -b fix "$HOME/src/plain-wt/fix-x"
+  context "$HOME/src/plain-wt/fix-x"
+  [[ $(jq -r '.hookSpecificOutput.additionalContext' <<<"$output") == *'git worktree "fix-x" of the repo "plain"'* ]] || false
+  git -C "$HOME/src/app" worktree add --quiet -b agent1 "$HOME/src/app/.claude/worktrees/agent1" 2>/dev/null
+  context "$HOME/src/app/.claude/worktrees/agent1"
+  [[ $(jq -r '.hookSpecificOutput.additionalContext' <<<"$output") == *'git worktree "agent1" of the repo "app"'* ]] || false
+}
+
+@test "session-context: outside a repo or on bad input it prints nothing and exits 0" {
+  mkdir -p "$HOME/outside"
+  context "$HOME/outside"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  run bash "$(CONTEXT)" <<<'not json'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
 }
 
 @test "guard: git push and jj git push from a jj workspace are blocked with exit 2" {

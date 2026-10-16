@@ -173,22 +173,22 @@ colour, but two workspaces can share one.
 ## Push guard
 
 The global rules tell agents never to push, and a `PreToolUse` hook on the
-`Bash` tool enforces it for agents in workspaces. `~/.claude/guard-push.sh`
+`Bash` tool enforces it for agents in workspaces and worktrees. `~/.claude/guard-push.sh`
 reads the command and the hook's `cwd`, and exits 2 when both hold:
 
 - the command matches `git push` or `jj git push` at its start or after
   whitespace, `;`, `&` or `|`
-- the nearest `.jj` above `cwd` holds `repo` as a file, which is how jj marks
-  a second workspace
+- [`where.sh`](#where-an-agent-works) reports a workspace name for `cwd`:
+  a jj workspace, a git worktree, or Claude Code's own
+  `.claude/worktrees/<name>`
 
 Exit 2 blocks the call, and Claude sees the message:
 
 ```text
-blocked: agents in jj workspaces do not push; the user pushes from the main checkout with jpush/jland
+blocked: agents in jj workspaces and git worktrees do not push; the user pushes from the main checkout with jpush/jland
 ```
 
-The main checkout, where `.jj/repo` is a directory, and directories outside
-jj may still push, after the usual permission prompt. The guard reads the
+The main checkout and directories outside a repo may still push, after the usual permission prompt. The guard reads the
 command text and nothing more. `echo git push` is blocked too, and a push
 hidden in a script or written as `git -C dir push` gets through. It is a
 backstop for the global rule, not a sandbox.

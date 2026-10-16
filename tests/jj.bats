@@ -150,31 +150,31 @@ setup() {
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc x 2>/dev/null"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "pwd=$WS/x" ]
-  [ "${lines[1]}" = "args=" ]
+  [ "${lines[1]}" = "args=-n app/x" ]
   [ "$(parent x)" = second ]
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc y @-- 2>/dev/null"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "pwd=$WS/y" ]
-  [ "${lines[1]}" = "args=" ]
+  [ "${lines[1]}" = "args=-n app/y" ]
   [ "$(parent y)" = init ]
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc feat/z --permission-mode plan 2>/dev/null"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "pwd=$WS/feat-z" ]
-  [ "${lines[1]}" = "args=--permission-mode plan" ]
+  [ "${lines[1]}" = "args=-n app/feat-z --permission-mode plan" ]
   [ "$(parent feat-z)" = second ]
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc w @-- --continue 2>/dev/null"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "pwd=$WS/w" ]
-  [ "${lines[1]}" = "args=--continue" ]
+  [ "${lines[1]}" = "args=-n app/w --continue" ]
   [ "$(parent w)" = init ]
 }
 
 @test "jwc: a second argument with whitespace is the task for claude, not a rev" {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
-  printf '#!/bin/sh\nprintf "pwd=%%s\\nargc=%%s\\nfirst=%%s\\n" "$(pwd -P)" "$#" "$1"\n' > "$BATS_TEST_TMPDIR/bin/claude"
+  printf '#!/bin/sh\nprintf "pwd=%%s\\nargc=%%s\\nfirst=%%s\\n" "$(pwd -P)" "$#" "$3"\n' > "$BATS_TEST_TMPDIR/bin/claude"
   chmod +x "$BATS_TEST_TMPDIR/bin/claude"
   (cd "$REPO" && echo two > two.txt && jj commit -m second >/dev/null 2>&1)
   parent() { jj -R "$REPO" --ignore-working-copy log --no-graph -r "$1@-" -T "description.first_line()"; }
@@ -182,14 +182,14 @@ setup() {
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc x 'fix the retry storm' 2>/dev/null"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "pwd=$WS/x" ]
-  [ "${lines[1]}" = "argc=1" ]
+  [ "${lines[1]}" = "argc=3" ]
   [ "${lines[2]}" = "first=fix the retry storm" ]
   [ "$(parent x)" = second ]
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwc y @-- 'add the export button' 2>/dev/null"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "pwd=$WS/y" ]
-  [ "${lines[1]}" = "argc=1" ]
+  [ "${lines[1]}" = "argc=3" ]
   [ "${lines[2]}" = "first=add the export button" ]
   [ "$(parent y)" = init ]
 }
@@ -203,6 +203,65 @@ setup() {
   [ "${lines[0]}" = "JW_NAME=fix-x" ]
   [ "${lines[1]}" = "after=unset" ]
   [ ! -e "$WS/fix-x/.jw_name" ]
+}
+
+# osc <script>: run a zsh script with jj.zsh loaded, escapes made visible (ESC as ^[, BEL as ^G)
+osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
+
+@test "title: a workspace gets the tab title repo/workspace and a tint in its colour" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  osc "cd '$WS/feat' && _jw_where_chpwd && _jw_title_precmd"
+  [ "$status" -eq 0 ]
+  echo "output: $output"
+  [[ $output == *'^[]2;app/feat^G'* ]] || false
+  [[ $output =~ \^\[\]11\;#[0-9a-f]{6}\^G ]] || false
+}
+
+@test "title: the main checkout gets the repo name and no tint, and leaving a workspace resets the tint" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  osc "cd '$REPO' && _jw_where_chpwd && _jw_title_precmd"
+  [ "$status" -eq 0 ]
+  [[ $output == *'^[]2;app^G'* ]] || false
+  [[ $output != *'^[]11'* ]] || false
+  [[ $output != *'^[]111'* ]] || false
+  osc "cd '$WS/feat' && _jw_where_chpwd && _jw_title_precmd && cd '$REPO' && _jw_where_chpwd && _jw_title_precmd"
+  [[ $output == *'^[]111^G'* ]] || false
+  osc "cd '$WS/feat' && _jw_where_chpwd && _jw_title_precmd && _jw_title_precmd"
+  [ "$(grep -o ']11;' <<<"$output" | wc -l | tr -d ' ')" = 1 ]
+}
+
+@test "title: JW_TINT=0 keeps the title but never tints" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  osc "JW_TINT=0; cd '$WS/feat' && _jw_where_chpwd && _jw_title_precmd"
+  [[ $output == *'^[]2;app/feat^G'* ]] || false
+  [[ $output != *'^[]11'* ]] || false
+}
+
+@test "title: outside a repo the title is the ~-relative dir, and a command is appended while it runs" {
+  mkdir -p "$HOME/outside"
+  osc "cd '$HOME/outside' && _jw_where_chpwd && _jw_title_precmd && _jw_title_preexec 'just test'"
+  [[ $output == *'^[]2;~/outside^G'* ]] || false
+  [[ $output == *'^[]2;~/outside · just test^G'* ]] || false
+  osc "cd '$HOME/outside' && _jw_where_chpwd && _jw_title_preexec \$'for x in 1\\n2\\e]0;evil'"
+  echo "output: $output"
+  [ "$output" = '^[]2;~/outside · for x in 1 2 ]0;evil^G' ]
+}
+
+@test "title: JW_WHERE is exported in a workspace and unset in the main checkout" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  run_zsh "cd '$WS/feat' && _jw_where_chpwd && zsh -fc 'print -r -- \${JW_WHERE:-unset}'; cd '$REPO' && _jw_where_chpwd && zsh -fc 'print -r -- \${JW_WHERE:-unset}'"
+  [ "${lines[0]}" = app/feat ]
+  [ "${lines[1]}" = unset ]
+}
+
+@test "title: a cd in \$(...) or with redirected output prints nothing, and the next prompt tints" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  run env -u CLAUDECODE JW_HINT=0 zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; x=\$(cd '$WS/feat' && pwd -P); print -r -- \"x=\$x\"; cd '$WS/feat' >/dev/null; print -r -- tinted=\${_jw_tint_shown:-no}; _jw_title_precmd"
+  output=$(cat -v <<<"$output")
+  echo "output: $output"
+  [ "${lines[0]}" = "x=$WS/feat" ]
+  [[ $output == *"tinted=no"* ]] || false
+  [[ $output =~ \^\[\]11\;#[0-9a-f]{6}\^G ]] || false
 }
 
 @test "jreview: runs a read-only claude -p in the workspace on the trunk()..@ diff" {
@@ -544,7 +603,7 @@ make_agent_states() {
   [ "$output" = 0 ]
 }
 
-@test "repo-entry hint: no chpwd hook outside an interactive shell, under Claude Code or with JW_HINT=0" {
+@test "repo-entry hint: no hint hook outside an interactive shell, under Claude Code or with JW_HINT=0" {
   # The hint also fires for the start directory: start outside any repo, not in this checkout.
   cd "$HOME"
   run zsh -f -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
@@ -552,9 +611,9 @@ make_agent_states() {
   run env CLAUDECODE=1 zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
   [ "$output" = "hooks=" ]
   run env -u CLAUDECODE JW_HINT=0 zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
-  [ "$output" = "hooks=" ]
+  [ "$output" = "hooks=_jw_where_chpwd" ]
   run env -u CLAUDECODE -u JW_HINT zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; print -r -- \"hooks=\${chpwd_functions[*]}\""
-  [ "$output" = "hooks=_jw_hint_chpwd" ]
+  [ "$output" = "hooks=_jw_where_chpwd _jw_hint_chpwd" ]
 }
 
 @test "repo-entry hint: once per repo per shell, in the main checkout only, including the start directory" {

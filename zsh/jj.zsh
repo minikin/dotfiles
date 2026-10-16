@@ -81,11 +81,13 @@ _jw_setup() {
 # jwc <name> [rev] [claude args...] — create (or reuse) a workspace and start Claude Code in it,
 # with JW_NAME=<workspace name> in its environment. The second argument is a rev unless it
 # starts with "-" or contains whitespace: jwc x --continue, jwc x @- --continue, jwc x "fix the bug".
+# The session is named <repo>/<name>: Claude Code shows it in the tab title and /resume,
+# and claude -r <repo>/<name> finds it.
 jwc() {
-  local name=${1:-} rev
+  local name=${1:-} rev root
   (( $# )) && shift
   [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
-  jw "$name" ${rev:+"$rev"} && JW_NAME=${PWD:t} claude "$@"
+  jw "$name" ${rev:+"$rev"} && root=$(_jw_root) && JW_NAME=${PWD:t} claude -n "${root:t}/${PWD:t}" "$@"
 }
 
 # jreview [name] [focus...] — a second Claude reviews a workspace's trunk()..@ read-only:
@@ -326,6 +328,65 @@ jpush() {
     jj git push --named "$name=work()"
   fi
 }
+
+# Tab title and tint: the title is <repo>/<workspace> (the repo in the main checkout, ~/dir
+# outside a repo), with the running command appended. A workspace or git worktree also gets a
+# background tint in its where.sh colour, the same colour as its Claude Code status line, and
+# JW_WHERE=<repo>/<workspace> for the starship prompt.
+# ghostty/config turns off Ghostty's own title, which would overwrite this. JW_TINT=0: no tint.
+# chpwd only computes: zsh runs it in $(...) and ( ... ) too, where output would be captured,
+# and a cd inside a redirected function would lose it. precmd writes to the terminal.
+_jw_where_sh=${${(%):-%x}:A:h:h}/claude/where.sh
+typeset -ga _jw_tint_dark=('#382b3d' '#2e363c' '#38363d' '#2b3046' '#383244' '#2c3642')
+typeset -ga _jw_tint_light=('#ecdae2' '#dee9e1' '#ede7df' '#dae3f5' '#eee5f1' '#d9e8ec')
+typeset -g _jw_title='' _jw_colour='' _jw_tint_shown=''
+
+_jw_where_chpwd() {
+  (( ZSH_SUBSHELL )) && return 0
+  local where
+  local -a w
+  _jw_title='' _jw_colour=''
+  unset JW_WHERE
+  if where=$("$_jw_where_sh" 2>/dev/null); then
+    w=("${(@f)where}")
+    _jw_title=$w[1]${w[2]:+/$w[2]}
+    _jw_colour=$w[4]
+    [[ -n $w[2] ]] && typeset -gx JW_WHERE=$_jw_title
+  fi
+  return 0
+}
+
+_jw_title_set() { print -rn -- $'\e]2;'"${1//[[:cntrl:]]/ }"$'\a'; }
+
+_jw_title_precmd() {
+  local want=$_jw_colour
+  [[ ${JW_TINT:-1} == 0 ]] && want=''
+  _jw_title_set "${_jw_title:-${(%):-%~}}"
+  [[ $want == "$_jw_tint_shown" ]] && return 0
+  if [[ -n $want ]]; then
+    # Ghostty follows the macOS appearance (theme = dark:...,light:...)
+    if [[ $(defaults read -g AppleInterfaceStyle 2>/dev/null) == Dark ]]; then
+      print -rn -- $'\e]11;'"$_jw_tint_dark[want]"$'\a'
+    else
+      print -rn -- $'\e]11;'"$_jw_tint_light[want]"$'\a'
+    fi
+  else
+    print -rn -- $'\e]111\a'
+  fi
+  _jw_tint_shown=$want
+}
+
+_jw_title_preexec() { _jw_title_set "${_jw_title:-${(%):-%~}} · ${${1//[[:cntrl:]]/ }[1,40]}"; }
+_jw_tint_zshexit() { [[ -n $_jw_tint_shown ]] && print -rn -- $'\e]111\a'; return 0; }
+
+if [[ -o interactive && -z ${CLAUDECODE:-} ]]; then
+  autoload -Uz add-zsh-hook
+  add-zsh-hook chpwd _jw_where_chpwd
+  add-zsh-hook precmd _jw_title_precmd
+  add-zsh-hook preexec _jw_title_preexec
+  add-zsh-hook zshexit _jw_tint_zshexit
+  _jw_where_chpwd
+fi
 
 # Repo-entry hint: entering a main checkout (where .jj/repo is a directory, in a workspace
 # it is a file) prints _jw_hint once per repo per shell. Off in Claude Code and with JW_HINT=0.

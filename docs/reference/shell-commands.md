@@ -346,7 +346,9 @@ tell apart. The tint is the Catppuccin colour at 12% over Mocha's background
 in dark mode, and at 10% over Latte's in light mode. The mode is read from
 macOS only when the tint changes, so after switching it, the next workspace
 you enter gets the new shade. Leaving the workspace and exiting the shell
-reset the background (OSC 111). `JW_TINT=0` turns the tint off.
+reset the background (OSC 111). So does the first prompt of a new shell,
+because `reload` replaces the shell with `exec zsh`, which skips the exit hook
+and would leave the old tint on screen. `JW_TINT=0` turns the tint off.
 
 The `chpwd` hook runs `where.sh` and sets `JW_WHERE` for the starship prompt,
 but prints nothing. zsh also runs `chpwd` inside `$(...)` and `( ... )`, where

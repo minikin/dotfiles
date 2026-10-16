@@ -99,6 +99,27 @@ guard() {
   done
 }
 
+@test "session-context: names an unnamed workspace session repo/workspace on startup, resume and fork" {
+  make_workspace
+  for src in startup resume fork; do
+    context "$HOME/src/app-ws/feat" "$src"
+    [ "$(jq -r '.hookSpecificOutput.sessionTitle' <<<"$output")" = app/feat ]
+  done
+  for src in clear compact; do
+    context "$HOME/src/app-ws/feat" "$src"
+    [ "$(jq -r '.hookSpecificOutput | has("sessionTitle")' <<<"$output")" = false ]
+  done
+}
+
+@test "session-context: never renames a session that has a title, or the main checkout" {
+  make_workspace
+  run bash "$(CONTEXT)" <<<"{\"cwd\":\"$HOME/src/app-ws/feat\",\"source\":\"resume\",\"session_title\":\"my rename\"}"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput | has("sessionTitle")' <<<"$output")" = false ]
+  context "$HOME/src/app"
+  [ "$(jq -r '.hookSpecificOutput | has("sessionTitle")' <<<"$output")" = false ]
+}
+
 @test "session-context: the main checkout and a git worktree are named as such" {
   make_workspace
   context "$HOME/src/app"

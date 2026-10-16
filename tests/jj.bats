@@ -319,6 +319,27 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
 }
 
+@test "jwst and jws: workspace names in their where.sh colour, default plain, only with colour on" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  colour=$(bash "$REPO_ROOT/claude/where.sh" --colour app/feat)
+  run_zsh "cd '$REPO' && jwst"
+  [[ $output != *$'\e['* ]] || false
+  CLICOLOR_FORCE=1 run_zsh "cd '$REPO' && jwst"
+  echo "$output" | cat -v
+  [[ ${lines[1]} == default* ]] || false
+  [[ $output == *$'\e[1;3'"$colour"'mfeat'* ]] || false
+  NO_COLOR=1 CLICOLOR_FORCE=1 run_zsh "cd '$REPO' && jwst"
+  [[ $output != *$'\e['* ]] || false
+
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\ncat > "%s/fzf.in"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/fzf"
+  chmod +x "$BATS_TEST_TMPDIR/bin/fzf"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jws"
+  cat -v "$BATS_TEST_TMPDIR/fzf.in"
+  grep -q $'^default\t' "$BATS_TEST_TMPDIR/fzf.in"
+  grep -q $'^\e\\[1;3'"$colour"$'mfeat\e\\[0m\t' "$BATS_TEST_TMPDIR/fzf.in"
+}
+
 @test "jwst: one row per workspace with change, behind count, pushed and conflicts" {
   remote="$BATS_TEST_TMPDIR/remote.git"
   add_bare_remote "$REPO" "$remote"

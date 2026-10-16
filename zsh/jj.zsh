@@ -128,22 +128,47 @@ jwl() { jj workspace list; }
 
 # jws — fuzzy-switch to a workspace
 jws() {
-  local dir
-  dir=$(jj --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"' |
-    fzf --prompt="workspace> " --with-nth=1 --delimiter='\t' --preview 'jj -R {2} --ignore-working-copy log -r "trunk()::@" --color always' |
+  local root dir
+  local -a names roots
+  root=$(_jw_root) || return 1
+  names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"')"})
+  roots=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'self.root() ++ "\n"')"})
+  dir=$(_jw_colour_names ${root:t} 1 $names | paste - <(print -rl -- $roots) |
+    fzf --ansi --prompt="workspace> " --with-nth=1 --delimiter='\t' --preview 'jj -R {2} --ignore-working-copy log -r "trunk()::@" --color always' |
     cut -f2)
   [[ -n $dir ]] && cd "$dir"
+}
+
+# _jw_colour_names <repo> <force> <name>...: each name in its where.sh colour, one per line, so
+# jwst and jws match the tab tint and the status line. default stays plain. Colour only when
+# <force> is 1 or stdout is a terminal, or CLICOLOR_FORCE=1, and never with NO_COLOR.
+_jw_colour_names() {
+  local repo=$1 force=$2 i
+  shift 2
+  local -a colours
+  if [[ -z ${NO_COLOR:-} && ( $force == 1 || -t 1 || ${CLICOLOR_FORCE:-} == 1 ) ]]; then
+    colours=(${(f)"$("$_jw_where_sh" --colour ${repo}/${^@})"})
+  fi
+  for (( i = 1; i <= $#; i++ )); do
+    if [[ ${@[i]} != default && -n ${colours[i]:-} ]]; then
+      print -r -- $'\e[1;3'"${colours[i]}m${@[i]}"$'\e[0m'
+    else
+      print -r -- "${@[i]}"
+    fi
+  done
 }
 
 # jwst — one row per workspace: latest work, commits behind trunk, pushed, conflicts.
 # Queries only the root with --ignore-working-copy: touching a workspace would snapshot it.
 jwst() {
-  local root w work change desc pushed conflicts behind width=9
-  local -a names rows
+  local root w work change desc pushed conflicts behind width=9 i
+  local -a names shown rows
   root=$(_jw_root) || return 1
   names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"')"})
   for w in $names; do (( ${#w} > width )) && width=${#w}; done
-  for w in $names; do
+  shown=(${(f)"$(_jw_colour_names ${root:t} 0 $names)"})
+  for (( i = 1; i <= $#names; i++ )); do
+    w=$names[i]
     work=$(jj -R $root --ignore-working-copy log --no-graph -r "heads(::\"$w\"@ & mutable() & ~empty())" \
       -T 'change_id.short(8) ++ "\t" ++ coalesce(description.first_line(), "(no description)") ++ "\t" ++ if(remote_bookmarks.any(|b| b.name() == "'$w'" && b.remote() == "origin"), "yes", "no")' 2>/dev/null)
     if [[ -n $work ]]; then
@@ -154,7 +179,8 @@ jwst() {
     conflicts=no
     [[ -n $(jj -R $root --ignore-working-copy log --no-graph -r "trunk()..\"$w\"@ & conflicts()" -T '"x"' 2>/dev/null) ]] && conflicts=yes
     behind=$(jj -R $root --ignore-working-copy log --no-graph -r "::trunk() & ~::\"$w\"@" -T '"x"' 2>/dev/null)
-    rows+=("$(printf "%-${width}s  %-8s  %6s  %-6s  %-9s  %s" "$w" "$change" "${#behind}" "$pushed" "$conflicts" "$desc")")
+    # Padded by the plain name's length: escape codes would count towards a %-*s width.
+    rows+=("$(printf "%s%*s  %-8s  %6s  %-6s  %-9s  %s" "$shown[i]" $(( width - ${#w} )) "" "$change" "${#behind}" "$pushed" "$conflicts" "$desc")")
   done
   printf "%-${width}s  %-8s  %6s  %-6s  %-9s  %s\n" WORKSPACE CHANGE BEHIND PUSHED CONFLICTS DESCRIPTION
   print -rl -- $rows

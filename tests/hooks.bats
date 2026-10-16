@@ -157,6 +157,21 @@ guard() {
   [ "$status" -eq 2 ]
 }
 
+@test "guard: global options between git or jj and push do not hide the push" {
+  make_workspace
+  for cmd in "git -C . push" "git -c http.extraHeader=x push origin" "git --no-pager push" \
+             "jj -R . git push" "jj --ignore-working-copy git push -b feat" "cd x && git -C ../y push"; do
+    guard "$HOME/src/app-ws/feat" "$cmd"
+    echo "cmd: $cmd status: $status"
+    [ "$status" -eq 2 ]
+  done
+  for cmd in "git log --grep push" "git commit -m push" "jj log -r push" "git -C . status"; do
+    guard "$HOME/src/app-ws/feat" "$cmd"
+    echo "cmd: $cmd status: $status"
+    [ "$status" -eq 0 ]
+  done
+}
+
 @test "guard: a subdirectory of a workspace is still a workspace" {
   make_workspace
   mkdir -p "$HOME/src/app-ws/feat/sub/dir"

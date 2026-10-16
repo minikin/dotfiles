@@ -63,6 +63,8 @@ link claude/CLAUDE.md         "$HOME/.claude/CLAUDE.md"
 link claude/statusline.sh     "$HOME/.claude/statusline.sh"
 link claude/notify.sh         "$HOME/.claude/notify.sh"
 link claude/guard-push.sh     "$HOME/.claude/guard-push.sh"
+link claude/session-context.sh "$HOME/.claude/session-context.sh"
+link claude/where.sh          "$HOME/.claude/where.sh"
 
 # Ghostty on macOS also reads this file *after* ~/.config/ghostty/config; an empty or stale
 # copy silently overrides settings, so move it aside.

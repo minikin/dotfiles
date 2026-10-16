@@ -130,6 +130,7 @@ JSON
   jq -e '[.hooks.Notification[].hooks[].command] | index("~/.claude/notify.sh")' "$s"
   jq -e '[.hooks.Stop[].hooks[].command] | index("~/.claude/notify.sh")' "$s"
   jq -e '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command == "~/.claude/guard-push.sh"' "$s"
+  jq -e '[.hooks.SessionStart[].hooks[].command] | index("~/.claude/session-context.sh")' "$s"
   jq -e '.hooks.PostToolUse[0].hooks[0].command == "my-linter"' "$s"
 }
 

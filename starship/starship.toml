@@ -7,6 +7,7 @@ $username\
 [](bg:peach fg:red)\
 $directory\
 [](bg:yellow fg:peach)\
+${env_var.JW_WHERE}\
 ${custom.jj}\
 $git_branch\
 $git_status\
@@ -82,6 +83,13 @@ only_attached = true   # jj repos use a detached HEAD; custom.jj shows state the
 symbol = ""
 style = "bg:yellow"
 format = '[[ $symbol $branch ](fg:crust bg:yellow)]($style)'
+
+# repo/workspace in a jj workspace or git worktree, where the directory shows only the workspace
+# dir. zsh/jj.zsh exports JW_WHERE on cd and unsets it in the main checkout, which hides this.
+[env_var.JW_WHERE]
+symbol = "󰙅"
+style = "bg:yellow"
+format = '[[ $symbol $env_value ](fg:crust bg:yellow)]($style)'
 
 # jj: change id, bookmarks, conflict/empty marker, description
 [custom.jj]

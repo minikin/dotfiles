@@ -128,7 +128,7 @@ guard() {
   [ -f "$HOME/src/app-ws/feat/.jj/repo" ]
   guard "$HOME/src/app-ws/feat" "jj git push -b feat"
   [ "$status" -eq 2 ]
-  [[ $output == *"agents in jj workspaces do not push"* ]] || false
+  [[ $output == *"agents in jj workspaces and git worktrees do not push"* ]] || false
   [[ $output == *"jpush/jland"* ]] || false
   guard "$HOME/src/app-ws/feat" "jj st && git push origin HEAD"
   [ "$status" -eq 2 ]
@@ -141,6 +141,26 @@ guard() {
   mkdir -p "$HOME/src/app-ws/feat/sub/dir"
   guard "$HOME/src/app-ws/feat/sub/dir" "git push"
   [ "$status" -eq 2 ]
+}
+
+@test "guard: a git worktree, also one inside a jj repo, is blocked like a workspace" {
+  git init --quiet -b main "$HOME/src/plain"
+  git -C "$HOME/src/plain" commit --quiet --allow-empty -m init
+  git -C "$HOME/src/plain" worktree add --quiet -b fix "$HOME/src/plain-wt/fix-x"
+  guard "$HOME/src/plain-wt/fix-x" "git push origin fix"
+  [ "$status" -eq 2 ]
+  [[ $output == *"git worktrees do not push"* ]] || false
+  make_jj_repo "$HOME/src/app"
+  git -C "$HOME/src/app" worktree add --quiet -b agent1 "$HOME/src/app/.claude/worktrees/agent1" 2>/dev/null
+  guard "$HOME/src/app/.claude/worktrees/agent1" "git push"
+  [ "$status" -eq 2 ]
+}
+
+@test "guard: the main checkout of a plain git repo may push" {
+  git init --quiet -b main "$HOME/src/plain"
+  git -C "$HOME/src/plain" commit --quiet --allow-empty -m init
+  guard "$HOME/src/plain" "git push"
+  [ "$status" -eq 0 ]
 }
 
 @test "guard: the main checkout may push" {

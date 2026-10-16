@@ -23,7 +23,8 @@ notify-on-command-finish-action = notify,bell
 macos-option-as-alt = left
 
 # --- Shell integration ---
-shell-integration-features = cursor,sudo,title,ssh-env,ssh-terminfo,path
+# no-title: zsh/jj.zsh sets the tab title to repo/workspace, and Ghostty's would overwrite it
+shell-integration-features = cursor,sudo,no-title,ssh-env,ssh-terminfo,path
 
 # --- Sessions ---
 window-save-state = always

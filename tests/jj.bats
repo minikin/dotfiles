@@ -217,13 +217,20 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [[ $output =~ \^\[\]11\;#[0-9a-f]{6}\^G ]] || false
 }
 
+@test "title: a new shell's first prompt clears a tint left by the shell it replaced, once" {
+  # reload runs exec zsh, which skips zshexit, so the old shell's tint is still on screen.
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  osc "cd '$REPO' && _jw_where_chpwd && _jw_title_precmd && _jw_title_precmd"
+  [ "$status" -eq 0 ]
+  [ "$(grep -o ']111' <<<"$output" | wc -l | tr -d ' ')" = 1 ]
+}
+
 @test "title: the main checkout gets the repo name and no tint, and leaving a workspace resets the tint" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   osc "cd '$REPO' && _jw_where_chpwd && _jw_title_precmd"
   [ "$status" -eq 0 ]
   [[ $output == *'^[]2;app^G'* ]] || false
-  [[ $output != *'^[]11'* ]] || false
-  [[ $output != *'^[]111'* ]] || false
+  [[ $output != *'^[]11;'* ]] || false
   osc "cd '$WS/feat' && _jw_where_chpwd && _jw_title_precmd && cd '$REPO' && _jw_where_chpwd && _jw_title_precmd"
   [[ $output == *'^[]111^G'* ]] || false
   osc "cd '$WS/feat' && _jw_where_chpwd && _jw_title_precmd && _jw_title_precmd"
@@ -234,7 +241,7 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   osc "JW_TINT=0; cd '$WS/feat' && _jw_where_chpwd && _jw_title_precmd"
   [[ $output == *'^[]2;app/feat^G'* ]] || false
-  [[ $output != *'^[]11'* ]] || false
+  [[ $output != *'^[]11;'* ]] || false
 }
 
 @test "title: outside a repo the title is the ~-relative dir, and a command is appended while it runs" {
@@ -260,7 +267,7 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   output=$(cat -v <<<"$output")
   echo "output: $output"
   [ "${lines[0]}" = "x=$WS/feat" ]
-  [[ $output == *"tinted=no"* ]] || false
+  [[ $output == *"tinted=unknown"* ]] || false
   [[ $output =~ \^\[\]11\;#[0-9a-f]{6}\^G ]] || false
 }
 
@@ -351,6 +358,15 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [ "$status" -eq 0 ]
   [ ! -e "$REPO/.git/hooks/pre-push" ]
   [ ! -e "$REPO/.githooks/pre-push" ]
+}
+
+@test "jwst: colours workspace names when its output is a real terminal" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  colour=$(bash "$REPO_ROOT/claude/where.sh" --colour app/feat)
+  # script(1) gives jwst a pty: the case CLICOLOR_FORCE does not cover.
+  run script -q /dev/null zsh -f -c "source '$REPO_ROOT/zsh/jj.zsh'; cd '$REPO' && jwst" </dev/null
+  echo "$output" | cat -v
+  [[ $output == *$'\e[1;3'"$colour"'mfeat'* ]] || false
 }
 
 @test "jwst and jws: workspace names in their where.sh colour, default plain, only with colour on" {

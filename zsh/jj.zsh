@@ -167,14 +167,15 @@ jws() {
   [[ -n $dir ]] && cd "$dir"
 }
 
-# _jw_colour_names <repo> <force> <name>...: each name in its where.sh colour, one per line, so
-# jwst and jws match the tab tint and the status line. default stays plain. Colour only when
-# <force> is 1 or stdout is a terminal, or CLICOLOR_FORCE=1, and never with NO_COLOR.
+# _jw_colour_names <repo> <colour> <name>...: each name in its where.sh colour, one per line,
+# so jwst and jws match the tab tint and the status line. default stays plain. Colour only
+# when <colour> is 1, and never with NO_COLOR. The caller decides: this runs inside $(...),
+# where stdout is never the terminal.
 _jw_colour_names() {
-  local repo=$1 force=$2 i
+  local repo=$1 colour=$2 i
   shift 2
   local -a colours
-  if [[ -z ${NO_COLOR:-} && ( $force == 1 || -t 1 || ${CLICOLOR_FORCE:-} == 1 ) ]]; then
+  if [[ -z ${NO_COLOR:-} && $colour == 1 ]]; then
     colours=(${(f)"$("$_jw_where_sh" --colour ${repo}/${^@})"})
   fi
   for (( i = 1; i <= $#; i++ )); do
@@ -189,12 +190,13 @@ _jw_colour_names() {
 # jwst — one row per workspace: latest work, commits behind trunk, pushed, conflicts.
 # Queries only the root with --ignore-working-copy: touching a workspace would snapshot it.
 jwst() {
-  local root w work change desc pushed conflicts behind width=9 i
+  local root w work change desc pushed conflicts behind width=9 i colour=0
   local -a names shown rows
+  [[ -t 1 || ${CLICOLOR_FORCE:-} == 1 ]] && colour=1
   root=$(_jw_root) || return 1
   names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"')"})
   for w in $names; do (( ${#w} > width )) && width=${#w}; done
-  shown=(${(f)"$(_jw_colour_names ${root:t} 0 $names)"})
+  shown=(${(f)"$(_jw_colour_names ${root:t} $colour $names)"})
   for (( i = 1; i <= $#names; i++ )); do
     w=$names[i]
     work=$(jj -R $root --ignore-working-copy log --no-graph -r "heads(::\"$w\"@ & mutable() & ~empty())" \
@@ -393,7 +395,9 @@ jpush() {
 _jw_where_sh=${${(%):-%x}:A:h:h}/claude/where.sh
 typeset -ga _jw_tint_dark=('#382b3d' '#2e363c' '#38363d' '#2b3046' '#383244' '#2c3642')
 typeset -ga _jw_tint_light=('#ecdae2' '#dee9e1' '#ede7df' '#dae3f5' '#eee5f1' '#d9e8ec')
-typeset -g _jw_title='' _jw_colour='' _jw_tint_shown=''
+# "unknown", so the first prompt always sets or clears the tint: reload runs exec zsh, which
+# skips zshexit and leaves the old shell's tint on screen.
+typeset -g _jw_title='' _jw_colour='' _jw_tint_shown=unknown
 
 _jw_where_chpwd() {
   (( ZSH_SUBSHELL )) && return 0
@@ -431,7 +435,7 @@ _jw_title_precmd() {
 }
 
 _jw_title_preexec() { _jw_title_set "${_jw_title:-${(%):-%~}} · ${${1//[[:cntrl:]]/ }[1,40]}"; }
-_jw_tint_zshexit() { [[ -n $_jw_tint_shown ]] && print -rn -- $'\e]111\a'; return 0; }
+_jw_tint_zshexit() { [[ -n $_jw_tint_shown && $_jw_tint_shown != unknown ]] && print -rn -- $'\e]111\a'; return 0; }
 
 if [[ -o interactive && -z ${CLAUDECODE:-} ]]; then
   autoload -Uz add-zsh-hook

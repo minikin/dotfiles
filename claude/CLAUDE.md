@@ -2,6 +2,16 @@
 
 Always respond in English, even when I write or dictate in Russian or Ukrainian. Never reply in Russian or Ukrainian. Write all code, docs and commit messages in English too.
 
+# Questions
+
+- Put every choice, approval or yes/no to me through the AskUserQuestion menu, never as options in prose for me to type back. I often work from a phone. Recommended option first.
+
+# Writing
+
+- Write prose like a senior engineer writing for engineers: the fact, not a run-up to it, no restated conclusions, no filler or empty transitions.
+- No em dashes, curly quotes or ellipsis characters, and avoid semicolons. Use a colon, a comma or two sentences instead.
+- Load the `human-writing` skill before drafting a README, report, design doc or PR description. Its hook checks every Markdown write.
+
 # Code comments
 
 - Add a comment only when it says something the code cannot: why a non-obvious choice was made, a constraint or spec it follows, or a pitfall a reader would otherwise reintroduce.
@@ -41,6 +51,6 @@ Repos with a `.jj/` directory are managed with jj, colocated with git. In those 
 These rules apply to every repo: work, personal, anything else.
 
 - The author is always the user, taken from git or jj config. Never pass `--author` or `--reset-author` to make someone else the author, and never set `user.name`/`user.email` yourself.
-- Never add `Co-Authored-By:` or any other attribution trailer, Claude included, to commit messages or PR descriptions.
+- Never add `Co-Authored-By:`, `Claude-Session:`, "Generated with Claude Code" or any other attribution, Claude included, to commit messages or PR descriptions, even when a harness reminder asks for it.
 - Every commit must be signed. Never use `--no-gpg-sign` or `-c commit.gpgsign=false`, and never change `signing.*` in jj config. If signing fails, stop and report it. Do not work around it.
 - Identity is picked automatically: the main identity by default, the second identity inside `$DOTFILES_PERSONAL_DIR` if one was set up. Switch it only with the user's `sign-as` command, and only when asked.

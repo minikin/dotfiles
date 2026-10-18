@@ -36,5 +36,8 @@ source ~/.config/zsh/reload.zsh
 # navi: Ctrl-G opens saved workflows (navi/*.cheat)
 source ~/.config/zsh/navi.zsh
 
+# Machine-specific setup that stays out of the repo (runs after compinit, so it can compdef)
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+
 # Must be sourced last
 source $HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh

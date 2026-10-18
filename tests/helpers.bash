@@ -37,6 +37,9 @@ fake_home() {
   # and may hit the network, printing warnings into captured output.
   PATH=$(tr ':' '\n' <<<"$PATH" | grep -v '/mise/shims$' | paste -sd: -)
   export PATH
+  # jj loads the per-repo config of the cwd's repo even under -R, so from a jj checkout it
+  # warns about the missing config on stderr under the fake HOME, and `run` captures that.
+  cd "$BATS_TEST_TMPDIR" || return 1
 }
 
 # copy_repo: copy the dotfiles tree (without VCS dirs) to $BATS_TEST_TMPDIR/dotfiles and set

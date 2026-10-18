@@ -72,7 +72,9 @@ your machine:
 - `fake_home` points `HOME` and `XDG_CONFIG_HOME` at a directory under
   `BATS_TEST_TMPDIR`. Nothing reads or writes the real home, so no
   `~/.config/jj/conf.d/identity.toml` and no 1Password signing config is
-  ever loaded.
+  ever loaded. It then changes into `BATS_TEST_TMPDIR`: jj loads the
+  per-repo config of the current directory's repo even under `-R`, and from
+  your checkout it would print a missing-config warning into `$output`.
 - jj reads only the repo's `jj/config.toml` (`JJ_CONFIG`), with identity from
   `JJ_USER` and `JJ_EMAIL`. git reads only the fake `~/.gitconfig`
   (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM=1`). Every `DOTFILES_*` variable
@@ -91,6 +93,8 @@ The rules for a new test:
   signing code paths, check what `install.sh` writes, not whether a commit
   verifies.
 - Write files only under `BATS_TEST_TMPDIR`. Remotes are bare repos there.
+- Build paths to repo files from `$REPO_ROOT`. A test runs in its temp
+  directory, so a path relative to the checkout does not resolve.
 - End every `[[ ... ]]` and `! cmd` assert with `|| false`. bats runs under
   macOS's bash 3.2, which ignores those when they fail anywhere but on a
   test's last line. `just lint` checks it.

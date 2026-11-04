@@ -5,7 +5,7 @@
 # and each project's go.mod `toolchain` line picks the version.
 
 [tools]
-node = "lts"
+node = "24"
 pnpm = "latest"
 "go:golang.org/x/tools/gopls" = "latest"
 "go:github.com/go-delve/delve/cmd/dlv" = "latest"

@@ -94,6 +94,7 @@ else
     | ($c * $a)
     | .permissions.allow = ((($c.permissions.allow // []) + ($a.permissions.allow // [])) | unique)
     | .permissions.deny  = ((($c.permissions.deny  // []) + ($a.permissions.deny  // [])) | unique)
+    | .sandbox.network.allowedDomains = ((($c.sandbox.network.allowedDomains // []) + ($a.sandbox.network.allowedDomains // [])) | unique)
     | reduce ($a.hooks // {} | keys[]) as $e (.;
         .hooks[$e] = ((($c.hooks[$e] // []) + $a.hooks[$e]) | unique))
   ' > "$SETTINGS.tmp" || { rm -f "$SETTINGS.tmp"; echo "settings merge failed; $SETTINGS untouched" >&2; exit 1; }

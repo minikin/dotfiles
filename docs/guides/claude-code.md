@@ -90,9 +90,20 @@ programs. The patterns match the command text, so `jj dft` passes even
 though the alias expands to `--tool difft`.
 Everything else, such as `jj commit` or `jj git push`, still asks.
 
+The fragment also turns on the Bash sandbox with `autoAllowBashIfSandboxed`,
+so a command that stays inside it (writes only to the project and the temp
+dir, reaches only the listed hosts) runs without a prompt. That is what keeps
+parallel agents from stopping on every `just test`. `allowedDomains` lists
+GitHub, the npm, Go, crates, PyPI and Docker registries and
+`*.anthropic.com`. `allowLocalBinding` lets dev servers listen on localhost.
+Nothing is excluded from the sandbox: when `go` or `cargo` needs to write its
+cache in `$HOME`, the agent asks to run that one command unsandboxed. Add your own hosts, such as a company Jira, to
+`sandbox.network.allowedDomains` in `~/.claude/settings.json`: the repo is
+public and lists only generic ones.
+
 When `install.sh` merges the fragment, keys from the fragment win, the
-`permissions.allow` and `permissions.deny` lists and each event's list under
-`hooks` are unioned with yours, and every other key is kept. The previous file is saved as
+`permissions.allow` and `permissions.deny` lists, each event's list under
+`hooks` and `sandbox.network.allowedDomains` are unioned with yours, and every other key is kept. The previous file is saved as
 `settings.json.bak-<timestamp>`. After editing the fragment, run
 `./install.sh` again.
 

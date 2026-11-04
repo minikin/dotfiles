@@ -78,5 +78,29 @@
         ]
       }
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "*.github.com",
+        "*.githubusercontent.com",
+        "api.github.com",
+        "*.npmjs.org",
+        "registry.yarnpkg.com",
+        "*.golang.org",
+        "proxy.golang.org",
+        "sum.golang.org",
+        "*.go.dev",
+        "*.crates.io",
+        "*.pypi.org",
+        "*.docker.io",
+        "*.docker.com",
+        "*.anthropic.com"
+      ],
+      "allowLocalBinding": true
+    }
   }
 }

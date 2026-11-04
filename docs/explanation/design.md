@@ -126,7 +126,8 @@ restores the link.
 Two files are deliberately not links. Claude Code writes
 `~/.claude/settings.json` itself, with your own permissions and options, so
 `install.sh` merges the repo's fragment into it instead: the fragment's keys
-win, the allow and deny lists are unioned, and everything else stays.
+win, the allow and deny lists and the sandbox's domains are unioned, and
+everything else stays.
 `~/.zprofile` is a file other installers append to as well, so the repo adds
 its snippet once and leaves the rest alone.
 

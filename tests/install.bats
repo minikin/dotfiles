@@ -109,6 +109,30 @@ JSON
   jq -e --slurpfile f "$frag" '($f[0].permissions.deny - .permissions.deny) == []' "$s"
 }
 
+@test "install: sandbox domains are unioned, other sandbox keys kept" {
+  mkdir -p "$HOME/.claude"
+  cat > "$(SETTINGS)" <<'JSON'
+{
+  "sandbox": {
+    "enabled": false,
+    "allowUnsandboxedCommands": false,
+    "excludedCommands": ["flutter", "go"],
+    "network": { "allowedDomains": ["*.example.com", "github.com"], "allowAllUnixSockets": true }
+  }
+}
+JSON
+  run_install
+  [ "$status" -eq 0 ]
+  s=$(SETTINGS)
+  frag="$DOTFILES/claude/settings.fragment.json"
+  jq -e '.sandbox.enabled == true' "$s"              # fragment keys win
+  jq -e '.sandbox.allowUnsandboxedCommands == false' "$s"
+  jq -e '.sandbox.network.allowAllUnixSockets == true' "$s"
+  jq -e '.sandbox.network.allowedDomains | index("*.example.com")' "$s"
+  jq -e '.sandbox.excludedCommands == ["flutter", "go"]' "$s"
+  jq -e --slurpfile f "$frag" '($f[0].sandbox.network.allowedDomains - .sandbox.network.allowedDomains) == []' "$s"
+}
+
 @test "install: the user's own hooks survive next to the fragment's hooks" {
   mkdir -p "$HOME/.claude"
   cat > "$(SETTINGS)" <<'JSON'

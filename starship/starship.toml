@@ -92,12 +92,13 @@ style = "bg:yellow"
 format = '[[ $symbol $env_value ](fg:crust bg:yellow)]($style)'
 
 # jj: change id, bookmarks, conflict/empty marker, description
+# No `when` check: it would cost a second jj run per prompt. Outside a jj repo the command
+# prints nothing, and the ( ) group hides a module whose $output is empty.
 [custom.jj]
-when = "jj --ignore-working-copy root"
-command = '''jj log --ignore-working-copy --no-graph --color never -r @ -T 'separate(" ", change_id.shortest(4), bookmarks, if(conflict, "conflict"), if(empty, "(empty)"), truncate_end(24, description.first_line(), "…"))''''
-symbol = "󱗆"
+when = true
+command = '''jj log --ignore-working-copy --no-graph --color never -r @ -T 'separate(" ", change_id.shortest(4), bookmarks, if(conflict, "conflict"), if(empty, "(empty)"), truncate_end(24, description.first_line(), "…"))' 2>/dev/null'''
 style = "bg:yellow"
-format = '[[ $symbol $output ](fg:crust bg:yellow)]($style)'
+format = '([[ 󱗆 $output ](fg:crust bg:yellow)]($style))'
 
 [git_status]
 style = "bg:yellow"

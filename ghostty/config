@@ -10,7 +10,7 @@ window-padding-balance = true
 unfocused-split-opacity = 0.6
 
 # --- Agent output: long sessions, big diffs ---
-scrollback-limit = 100000000
+scrollback-limit = 10000000
 
 # --- Know when an agent needs you ---
 desktop-notifications = true

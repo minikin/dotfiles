@@ -91,8 +91,8 @@ ones that matter here:
 
 `unfocused-split-opacity = 0.6` dims the splits you are not in.
 `macos-option-as-alt = left` makes left Option send Alt, which agent TUIs and
-fzf's `Alt-C` need. `scrollback-limit = 100000000` keeps 100 MB of history
-per split.
+fzf's `Alt-C` need. `scrollback-limit = 10000000` keeps 10 MB of history
+per split, about 100k lines.
 
 ## Notifications
 

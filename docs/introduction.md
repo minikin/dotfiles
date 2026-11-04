@@ -31,7 +31,7 @@ Kafka. It assumes:
 
 ## The pieces
 
-Ghostty is the terminal: splits on `cmd+d` and `cmd+shift+d`, 100 MB of
+Ghostty is the terminal: splits on `cmd+d` and `cmd+shift+d`, 10 MB of
 scrollback, a notification named after the workspace when an agent finishes or waits
 for input, and one when a command that ran longer than 30 seconds finishes in
 an unfocused split. zsh

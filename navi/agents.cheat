@@ -18,6 +18,9 @@ jwc <workspace> --continue
 # Drop a spike and remove its workspace
 jj abandon 'trunk()..<workspace>@' && jwrm <workspace>
 
+# Remove finished agent workspaces (no work left, not in use)
+jwrm --merged
+
 $ workspace: jj --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default | while IFS= read -r w; do d=$(jj --ignore-working-copy log --no-graph --limit 1 -r "heads(::\"$w\"@ & mutable() & ~empty())" -T 'coalesce(description.first_line(), "(no description)")'); printf '%s\t%s\n' "$w" "${d:-(no changes)}"; done --- --column 1 --delimiter '\t'
 
 % agents
@@ -30,6 +33,9 @@ jj log -r 'trunk()..<workspace>@' --stat
 
 # Push workspace and open pull request
 jpush <bookmark> && gh pr create --head <bookmark> --fill
+
+# Check, review and push this workspace (run inside it)
+jdone
 
 # Create agent workspaces agent-1..N
 for n in $(seq 1 <count>); do (jw "agent-$n"); done

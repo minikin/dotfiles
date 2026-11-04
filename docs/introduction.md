@@ -36,8 +36,8 @@ scrollback, a notification named after the workspace when an agent finishes or w
 for input, and one when a command that ran longer than 30 seconds finishes in
 an unfocused split. zsh
 loads fzf, zoxide, starship and mise, and sources five files of shell
-functions: `jw`, `jwc`, `jws`, `jwst`, `jwl`, `jwrm`, `jsync`, `jpush` and
-`jland` for workspaces,
+functions: `jw`, `jwc`, `jws`, `jwst`, `jwl`, `jwrm`, `jsync`, `jdone`, `jpush`
+and `jland` for workspaces,
 `sign-as` for the commit identity, `infra` for the local stack, `reload`
 to check every config and restart zsh, and the navi palette on `Ctrl-G`
 with `navi-trust` and `navi-untrust`.

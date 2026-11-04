@@ -13,7 +13,8 @@ sets up. `<x>` is required, `[x]` is optional.
 | `jsync`            | `zsh/jj.zsh`     | `[name...]`          | Fetch, then rebase workspaces onto trunk one at a time. fzf multi-pick without arguments. |
 | `jws`              | `zsh/jj.zsh`     | none                 | Pick a workspace with fzf and `cd` into it.                   |
 | `jwl`              | `zsh/jj.zsh`     | none                 | `jj workspace list`.                                          |
-| `jwrm`             | `zsh/jj.zsh`     | `[name...]`          | Remove workspaces. fzf multi-pick without arguments.          |
+| `jwrm`             | `zsh/jj.zsh`     | `[name...]` or `--merged` | Remove workspaces. fzf multi-pick without arguments. `--merged` removes the ones with no work left. |
+| `jdone`            | `zsh/jj.zsh`     | `[focus...]`         | In a workspace: the project's check, then `jreview`, then `jpush` if both pass. |
 | `jpush`            | `zsh/jj.zsh`     | `[bookmark]`         | Push `work()` as a bookmark named after the workspace.        |
 | `jland`            | `zsh/jj.zsh`     | `[rev]`              | Move the trunk bookmark to `rev` (default `work()`) and push it. |
 | `sign-as`          | `zsh/sign.zsh`   | `[work\|personal\|status]` | Show this repo's commit identity, or switch it between the main and the second identity. |
@@ -32,6 +33,9 @@ sets up. `<x>` is required, `[x]` is optional.
 | `JW_TINT` | `zsh/jj.zsh` | `0` turns off the background [tint](#tab-title-and-tint). The tab title stays. Read at every prompt. |
 | `NO_COLOR` | `jwst`, `jws` | Any non-empty value prints workspace names without colour. |
 | `CLICOLOR_FORCE` | `jwst` | `1` keeps the colour when the output is not a terminal. |
+| `JW_SLOT` | your app and tests | Exported by `zsh/jj.zsh` in a jj workspace: the workspace's [slot](#slots-and-ports), `1` and up. Unset elsewhere. |
+| `JW_PORT_BASE` | your app and tests | Exported with `JW_SLOT`: `10000 + 100 * JW_SLOT`, the first of the workspace's 100 ports. |
+| `PORT` | your app | Exported as `JW_PORT_BASE` in a jj workspace. Leaving it brings back the `PORT` you had, or unsets it. |
 | `JW_WHERE` | starship | Exported by `zsh/jj.zsh` as `<repo>/<workspace>` in a jj workspace or git worktree, unset elsewhere. The prompt shows it. |
 | `CLAUDECODE` | `zsh/jj.zsh` | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint, the tab title and the tint. |
 | `GHOSTTY_BIN` | `reload` | The Ghostty binary to validate the config with. Without it, `ghostty` on `PATH`, else `/Applications/Ghostty.app/Contents/MacOS/ghostty`. |
@@ -176,6 +180,21 @@ for `jwc fix/x`), and so does every command it runs. Prefix Kafka topics,
 Redis keys and test databases with it, and two agents running the same tests
 against the shared `infra` stack stay out of each other's data.
 
+### Slots and ports
+
+Every agent workspace has a slot: `1` for the first one, then the lowest
+number no other workspace of the repo holds. It is stored in
+`<workspace>/.jj/jw-slot`, which jj never snapshots, so a workspace keeps its
+slot while others come and go, and a removed workspace frees its number. The
+main checkout and git worktrees have none.
+
+On `cd` into a workspace the shell exports `JW_SLOT`, `JW_PORT_BASE`
+(`10000 + 100 * JW_SLOT`) and `PORT` (the same as `JW_PORT_BASE`), and
+`claude` started there inherits them. A dev server that reads `PORT` listens
+on 10100 in slot 1 and 10200 in slot 2, so two agents can run the app at the
+same time. A project that needs more ports takes them from
+`JW_PORT_BASE + 1` on. `JW_SLOT` also fits a Redis database number.
+
 `jw` reuses an existing workspace, so `jwc <name> --continue` goes back to an
 agent's last conversation. Claude Code starts in the workspace directory, so it
 inherits that directory's mise `PATH` (see
@@ -212,7 +231,9 @@ claude -p "<prompt>" \
 
 The prompt asks for a review of `jj diff --git -r 'trunk()..@'` against the
 code it touches, a list of problems by severity (blocking, should fix, nit)
-with `file:line` for each, and no edits. `-p` prints the review and exits.
+with `file:line` for each, and no edits, and it ends with one line,
+`VERDICT: BLOCK` when a problem is blocking and `VERDICT: PASS` otherwise,
+which [`jdone`](#jdone) reads. `-p` prints the review and exits.
 In `-p` mode a tool call that no rule allows is denied, not asked about, so
 the reviewer can read files and run `jj diff`, `jj log` and `jj show`, and
 nothing else. `Bash(jj diff *)` also matches a bare `jj diff`.
@@ -220,6 +241,29 @@ nothing else. `Bash(jj diff *)` also matches a bare `jj diff`.
 That check and the reviewer's `jj diff` snapshot the workspace like any jj command run in
 it. Run `jreview` while the agent waits for input, not while it is writing
 files, as with `jsync`.
+
+## jdone
+
+```sh
+jdone [focus...]
+```
+
+The gate before [`jpush`](#jpush). Run it in an agent's jj workspace. In the
+main checkout, a git worktree or outside a repo it prints
+`jdone: run it in an agent's jj workspace` and returns 1. In order, from the
+workspace root:
+
+1. The project's check: `just check` if the justfile has a `check` recipe,
+   else `mise run check` if mise has a `check` task, else nothing, with a
+   note on stderr. A failing check prints
+   `jdone: the check failed, not pushing` and returns 1.
+2. [`jreview`](#jreview) on this workspace, with the focus words. If it fails
+   or its last line is not `VERDICT: PASS`, `jdone` prints
+   `jdone: the review did not pass, not pushing` and returns 1.
+3. `jpush`, with its default bookmark name.
+
+The review runs only after the check passes, so a red build costs no Claude
+call.
 
 ## jws
 
@@ -419,6 +463,14 @@ jwrm [name...]
 | -------- | ---------------------------------------------------------------------- |
 | names    | Removes those workspaces. Every `/` becomes `-`, as in `jw`.            |
 | none     | fzf multi-pick (`Tab` to mark, prompt `remove> `) over every workspace except `default`. Esc returns 1. |
+| `--merged` | Removes every workspace with no work left: no non-empty mutable commit in `::<name>@`, the rows `jnext` shows as `no work`. Prints `jwrm: no finished workspaces` when there is none. |
+
+`--merged` runs `jj log` in each workspace without `--ignore-working-copy`,
+so edits an agent has not snapshotted yet count as work. It skips, with
+`jwrm: <name> is in use, skipped`, a workspace that any process other than
+your shell has as its directory (from `lsof -d cwd`), such as an agent that
+has started but not edited anything. A workspace jj cannot read, such as a
+stale one, is kept.
 
 If the current directory is inside `<repo>-ws/`, `jwrm` first `cd`s to the
 main checkout. It then runs `jj workspace remove <names...>`. jj snapshots

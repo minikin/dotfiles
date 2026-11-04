@@ -261,6 +261,37 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [ "${lines[1]}" = unset ]
 }
 
+@test "slot: workspaces get the lowest free slot, kept in .jj, and a removed one frees it" {
+  run_zsh "cd '$REPO' && jw one >/dev/null 2>&1 && jw two >/dev/null 2>&1"
+  run_zsh "_jw_slot '$WS/one'; _jw_slot '$WS/two'; _jw_slot '$WS/one'"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'1\n2\n1' ]
+  [ "$(cat "$WS/two/.jj/jw-slot")" = 2 ]
+  run jj -R "$WS/two" st
+  [[ $output != *jw-slot* ]] || false
+  run_zsh "cd '$REPO' && jwrm one >/dev/null 2>&1 && jw three >/dev/null 2>&1 && _jw_slot '$WS/three'"
+  [ "$output" = 1 ]
+}
+
+@test "slot: a workspace exports JW_SLOT, JW_PORT_BASE and PORT, leaving it restores your PORT" {
+  run_zsh "cd '$REPO' && jw one >/dev/null 2>&1"
+  run_zsh "export PORT=8080; cd '$WS/one' && _jw_where_chpwd && zsh -fc 'print -r -- \$JW_SLOT \$JW_PORT_BASE \$PORT'; \
+    cd '$REPO' && _jw_where_chpwd && zsh -fc 'print -r -- \${JW_SLOT:-unset} \${JW_PORT_BASE:-unset} \$PORT'"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "1 10100 10100" ]
+  [ "${lines[1]}" = "unset unset 8080" ]
+  run_zsh "cd '$WS/one' && _jw_where_chpwd && cd '$HOME' && _jw_where_chpwd && print -r -- \${PORT:-unset}"
+  [ "$output" = unset ]
+}
+
+@test "slot: the main checkout and a git worktree get no slot" {
+  git -C "$REPO" worktree add -q "$HOME/src/wt" >/dev/null 2>&1
+  run_zsh "cd '$REPO' && _jw_where_chpwd && print -r -- \${JW_SLOT:-none}; cd '$HOME/src/wt' && _jw_where_chpwd && print -r -- \${JW_SLOT:-none}"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'none\nnone' ]
+  [ ! -e "$REPO/.jj/jw-slot" ]
+}
+
 @test "title: a cd in \$(...) or with redirected output prints nothing, and the next prompt tints" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   run env -u CLAUDECODE JW_HINT=0 zsh -f -i -c "source '$REPO_ROOT/zsh/jj.zsh'; x=\$(cd '$WS/feat' && pwd -P); print -r -- \"x=\$x\"; cd '$WS/feat' >/dev/null; print -r -- tinted=\${_jw_tint_shown:-no}; _jw_title_precmd"
@@ -324,6 +355,76 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [ "$status" -eq 1 ]
   [[ $output == *"jreview: idle has no changes since trunk()"* ]] || false
   [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
+}
+
+# stub_gate <check exit> <verdict>: fake just (a check recipe exiting with <check exit>) and a
+# fake claude whose review ends with VERDICT: <verdict>, both logging that they ran.
+stub_gate() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\n[ "$1" = --summary ] && { echo check; exit 0; }\ntouch "%s/check.ran"\nexit %s\n' \
+    "$BATS_TEST_TMPDIR" "$1" > "$BATS_TEST_TMPDIR/bin/just"
+  printf '#!/bin/sh\ntouch "%s/claude.ran"\necho "looks fine"\necho\necho "VERDICT: %s"\n' \
+    "$BATS_TEST_TMPDIR" "$2" > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/just" "$BATS_TEST_TMPDIR/bin/claude"
+}
+
+@test "jdone: outside an agent workspace refuses" {
+  run_zsh "cd '$REPO' && jdone"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jdone: run it in an agent's jj workspace"* ]] || false
+}
+
+@test "jdone: a failing check stops before the review and the push" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  stub_gate 1 PASS
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && touch justfile && echo y > f.txt && jj commit -m feature >/dev/null 2>&1 && jdone"
+  [ "$status" -eq 1 ]
+  [[ $output == *"the check failed"* ]] || false
+  [ -e "$BATS_TEST_TMPDIR/check.ran" ]
+  [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
+  run git -C "$remote" rev-parse --verify -q refs/heads/feat
+  [ "$status" -ne 0 ]
+}
+
+@test "jdone: a blocking review stops the push, a passing one pushes" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  stub_gate 0 BLOCK
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && touch justfile && echo y > f.txt && jj commit -m feature >/dev/null 2>&1 && jdone"
+  [ "$status" -eq 1 ]
+  echo "output: $output"
+  [[ $output == *"VERDICT: BLOCK"* ]] || false
+  [[ $output == *"the review did not pass"* ]] || false
+  run git -C "$remote" rev-parse --verify -q refs/heads/feat
+  [ "$status" -ne 0 ]
+
+  stub_gate 0 PASS
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$WS/feat' && jdone"
+  [ "$status" -eq 0 ]
+  run git -C "$remote" log -1 --format=%s refs/heads/feat
+  [ "$output" = feature ]
+}
+
+@test "jwrm --merged: removes workspaces with no work, keeps ones with work or in use" {
+  add_bare_remote "$REPO" "$BATS_TEST_TMPDIR/remote.git"
+  run_zsh "cd '$REPO' && jw done >/dev/null 2>&1 && jw busy >/dev/null 2>&1 && jw work >/dev/null 2>&1 && echo w > w.txt"
+  [ "$status" -eq 0 ]
+  (cd "$WS/busy" && exec sleep 30) &
+  sleeper=$!
+  run_zsh "cd '$WS/done' && jwrm --merged && pwd -P"
+  kill $sleeper 2>/dev/null || true
+  echo "output: $output"
+  [ "$status" -eq 0 ]
+  [[ $output == *"jwrm: busy is in use, skipped"* ]] || false
+  [ "${lines[${#lines[@]}-1]}" = "$(realpath_of "$REPO")" ]
+  [ ! -e "$WS/done" ]
+  [ -d "$WS/busy" ]
+  [ -d "$WS/work" ]
+  run_zsh "cd '$REPO' && jwrm --merged"
+  [ "$status" -eq 0 ]
+  [ ! -e "$WS/busy" ]
+  [ -d "$WS/work" ]
 }
 
 @test "jw: installs a pre-push hook that stops agents pushing from a workspace, not you or the main checkout" {

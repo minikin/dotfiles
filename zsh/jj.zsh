@@ -143,12 +143,40 @@ jreview() {
   echo "jreview: reviewing $name, this takes a minute or two..." >&2
   prompt="Review the change in this jj workspace. Run jj diff --git -r 'trunk()..@' and read the code it touches. \
 List the problems you find by severity (blocking, should fix, nit), each with file:line and the reason. \
-Do not edit any file."
+Do not edit any file. End with exactly one last line: VERDICT: BLOCK if any problem is blocking, else VERDICT: PASS."
   (( $# )) && prompt+=" Focus: $*"
   # The prompt goes before the tool lists: --allowedTools takes several values and would eat it.
   (cd "$d" && claude -p "$prompt" \
     --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
     --disallowedTools 'Edit,Write,NotebookEdit')
+}
+
+# jdone [focus...]: the gate before jpush, run in an agent's workspace. Runs the project's check
+# (just check, else mise run check), then jreview on this workspace, and pushes with jpush only
+# when the check passes and the review ends with VERDICT: PASS. Focus words go to jreview.
+jdone() {
+  local where out rc
+  local -a w
+  where=$("$_jw_where_sh" 2>/dev/null) && w=("${(@f)where}")
+  [[ -n ${w[2]:-} && ${w[5]:-} == jj ]] || { echo "jdone: run it in an agent's jj workspace" >&2; return 1; }
+  (
+    cd "$w[3]" || exit 1
+    if [[ -f justfile || -f Justfile ]] && just --summary 2>/dev/null | tr ' ' '\n' | grep -qx check; then
+      echo "jdone: just check" >&2; just check
+    elif mise tasks ls 2>/dev/null | grep -qE '^check( |$)'; then
+      echo "jdone: mise run check" >&2; mise run check
+    else
+      echo "jdone: no just or mise check task, skipping the check" >&2
+    fi
+  ) || { echo "jdone: the check failed, not pushing" >&2; return 1; }
+  out=$(jreview "$w[2]" "$@")
+  rc=$?
+  print -r -- "$out"
+  if (( rc )) || [[ ${${(f)out}[-1]} != *'VERDICT: PASS'* ]]; then
+    echo "jdone: the review did not pass, not pushing" >&2
+    return 1
+  fi
+  jpush
 }
 
 # jwl — list workspaces
@@ -335,18 +363,49 @@ jsync() {
 # jwrm [name...] — remove workspaces (fzf multi-pick if no args).
 # jj snapshots the working copy first, so the agent's changes stay in the repo.
 # Only ignored files (node_modules, .env, build output) are lost.
+# jwrm --merged: remove every workspace with no work left (merged or abandoned, the "no work"
+# rows of jnext), but never one a process still has as its directory, such as a running agent
+# that has not edited anything yet.
 jwrm() {
   local root names
   root=$(_jw_root) || return 1
-  if (( $# )); then
+  if [[ ${1:-} == --merged ]]; then
+    _jw_leave_ws $root
+    names=(${(f)"$(_jw_merged $root)"})
+    (( ${#names} )) || { echo "jwrm: no finished workspaces"; return 0; }
+  elif (( $# )); then
     names=(${@//\//-})
   else
     names=(${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -vx default | fzf -m --prompt="remove> ")"})
   fi
   (( ${#names} )) || return 1
-  # jj reports the physical path, $PWD may be logical (symlinks, /tmp -> /private/tmp)
-  [[ ${PWD:A} != ${root:A} && ${PWD:A} == "${root:A:h}/${root:A:t}-ws/"* ]] && cd $root
+  _jw_leave_ws $root
   jj -R $root workspace remove $names
+}
+
+# _jw_leave_ws <root>: cd to the main checkout when inside one of its workspaces.
+# jj reports the physical path, $PWD may be logical (symlinks, /tmp -> /private/tmp).
+_jw_leave_ws() {
+  [[ ${PWD:A} != ${1:A} && ${PWD:A} == "${1:A:h}/${1:A:t}-ws/"* ]] && cd $1
+  return 0
+}
+
+# Names of the workspaces with no work and no process inside, default left out. Unlike jnext
+# this snapshots each one (no --ignore-working-copy): edits an agent has not snapshotted yet
+# are work. A workspace jj cannot read, such as a stale one, counts as busy.
+_jw_merged() {
+  local root=$1 w d p busy out
+  local -a cwds
+  # This shell is left out: jwrm has already moved it to the main checkout.
+  cwds=(${(f)"$(lsof -d cwd -Fpn 2>/dev/null | awk -v me=$$ '/^p/ { p = substr($0, 2) } /^n/ && p != me { print substr($0, 2) }')"})
+  for w d in ${(@ps:\t:)${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"')"}}; do
+    [[ $w == default || ! -d $d ]] && continue
+    busy=0
+    for p in $cwds; do [[ $p == ${d:A} || $p == ${d:A}/* ]] && { busy=1; break; }; done
+    if (( busy )); then echo "jwrm: $w is in use, skipped" >&2; continue; fi
+    out=$(jj -R $d log --no-graph -r 'heads(::@ & mutable() & ~empty())' -T '"x"' 2>/dev/null) || continue
+    [[ -z $out ]] && print -r -- $w
+  done
 }
 
 # jland [rev]: move the trunk bookmark (main) to rev, default work(), and push it. For repos
@@ -410,6 +469,42 @@ _jw_where_chpwd() {
     _jw_title=$w[1]${w[2]:+/$w[2]}
     _jw_colour=$w[4]
     [[ -n $w[2] ]] && typeset -gx JW_WHERE=$_jw_title
+  fi
+  if [[ -n ${w[2]:-} && ${w[5]:-} == jj ]]; then _jw_slot_env $w[3]; else _jw_slot_env; fi
+  return 0
+}
+
+# _jw_slot <workspace root>: the workspace's slot, 1 for the first agent workspace, then the
+# lowest number no other workspace of the repo holds. Kept in <root>/.jj/jw-slot, which jj
+# never snapshots, so it stays put while other workspaces come and go.
+_jw_slot() {
+  local dir=$1 d n=1
+  local -a used
+  [[ -d $dir/.jj ]] || return 1
+  [[ -s $dir/.jj/jw-slot ]] && { print -r -- "$(<$dir/.jj/jw-slot)"; return 0; }
+  for d in ${(f)"$(jj -R $dir --ignore-working-copy workspace list -T 'self.root() ++ "\n"' 2>/dev/null)"}; do
+    [[ -s $d/.jj/jw-slot ]] && used+=("$(<$d/.jj/jw-slot)")
+  done
+  while (( ${used[(Ie)$n]} )); do (( n++ )); done
+  print -r -- $n > $dir/.jj/jw-slot && print -r -- $n
+}
+
+# _jw_slot_env [workspace root]: in a jj workspace, export JW_SLOT, JW_PORT_BASE and PORT, so
+# agents running dev servers side by side do not collide. Anywhere else, drop them again and
+# give back a PORT you had set yourself.
+typeset -gi _jw_slot_on=0 _jw_port_had=0
+typeset -g _jw_port_keep=''
+_jw_slot_env() {
+  local slot
+  if [[ -n ${1:-} ]] && slot=$(_jw_slot $1); then
+    (( _jw_slot_on )) || _jw_port_had=${+PORT} _jw_port_keep=${PORT-}
+    typeset -gx JW_SLOT=$slot JW_PORT_BASE=$(( 10000 + slot * 100 ))
+    typeset -gx PORT=$JW_PORT_BASE
+    _jw_slot_on=1
+  elif (( _jw_slot_on )); then
+    unset JW_SLOT JW_PORT_BASE
+    if (( _jw_port_had )); then typeset -gx PORT=$_jw_port_keep; else unset PORT; fi
+    _jw_slot_on=0
   fi
   return 0
 }

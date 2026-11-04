@@ -44,7 +44,10 @@ _navi_trusted() {
 }
 
 _navi_update_path() {
-  local top main
+  local top main d=$PWD
+  # Most directories have no .navi above them: skip the two git forks there.
+  while [[ ! -d $d/.navi && $d != / ]]; do d=${d:h}; done
+  [[ -d $d/.navi ]] || { unset NAVI_PATH; return }
   top=$(git rev-parse --show-toplevel 2>/dev/null) && main=$(_navi_main_root) &&
     [[ -d $top/.navi ]] && _navi_trusted "$main" &&
     { export NAVI_PATH="$NAVI_DEFAULT_PATH:$top/.navi"; return; }

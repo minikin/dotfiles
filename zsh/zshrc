@@ -8,18 +8,41 @@ path=($HOMEBREW_PREFIX/bin $HOMEBREW_PREFIX/sbin $path)
 # Completions (brew-installed + jj dynamic completion for bookmarks/revisions)
 FPATH=$HOMEBREW_PREFIX/share/zsh/site-functions:$FPATH
 autoload -Uz compinit && compinit -C
-source <(COMPLETE=zsh jj)
+# source reads the .zwc in place of the dump while it is newer. reload and install.sh delete both.
+[[ -s ~/.zcompdump && ! ~/.zcompdump.zwc -nt ~/.zcompdump ]] && zcompile ~/.zcompdump
+
+# _cached_init <cmd> [args]: source the init script <cmd> prints, cached so a new shell skips
+# the fork. The key holds the args and the binary's resolved path and mtime: a Homebrew
+# upgrade changes the Cellar path, and a bottle's files keep their build-time mtimes.
+# Not for mise: its activate output embeds the current PATH.
+zmodload -F zsh/stat b:zstat
+_cached_init() {
+  local bin=${commands[$1]} f=${XDG_CACHE_HOME:-$HOME/.cache}/zsh/init-$1.zsh key line
+  local -a mtime
+  [[ -n $bin ]] || return 0
+  zstat -A mtime +mtime -- $bin 2>/dev/null
+  key="# $* ${bin:A} $mtime[1]"
+  [[ -r $f ]] && read -r line < $f
+  if [[ $line != "$key" ]]; then
+    mkdir -p ${f:h}
+    { print -r -- $key; "$@" } >| $f.$$ 2>/dev/null && mv -f $f.$$ $f || { rm -f $f.$$; return 1 }
+  fi
+  source $f
+}
+COMPLETE=zsh _cached_init jj
 
 source $HOMEBREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 # fzf: Ctrl-T files, Ctrl-R history, Alt-C cd into dir
 export FZF_DEFAULT_OPTS="--height 40% --layout reverse --border"
-source <(fzf --zsh)
+_cached_init fzf --zsh
 
-eval "$(starship init zsh)"
+_cached_init starship init zsh
+# No right_format in starship.toml: an empty RPROMPT saves a starship run on every prompt.
+RPROMPT=
 
 # zoxide: `z <dir>` to jump, `zi` for interactive picker (uses fzf)
-eval "$(zoxide init zsh)"
+_cached_init zoxide init zsh
 
 # Machine settings written by install.sh: DOTFILES_DIR, DOTFILES_PERSONAL_DIR (optional)
 [[ -f ~/.config/dotfiles/config ]] && { set -a; source ~/.config/dotfiles/config; set +a; }

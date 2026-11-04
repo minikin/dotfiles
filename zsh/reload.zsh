@@ -15,7 +15,7 @@ reload() {
   for f in ~/.zshrc ~/.config/zsh/*.zsh(N); do
     zsh -n "$f" 2>/dev/null || { echo "reload: syntax error in $f, see: zsh -n $f" >&2; return 1; }
   done
-  rm -f ~/.zcompdump*(N)
+  rm -f ~/.zcompdump*(N) ${XDG_CACHE_HOME:-$HOME/.cache}/zsh/init-*.zsh(N)
   echo "zsh: restarting"
   exec zsh
 }

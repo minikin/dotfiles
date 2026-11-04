@@ -395,7 +395,8 @@ because `reload` replaces the shell with `exec zsh`, which skips the exit hook
 and would leave the old tint on screen. `JW_TINT=0` turns the tint off.
 
 The `chpwd` hook runs `where.sh` and sets `JW_WHERE` for the starship prompt,
-but prints nothing. zsh also runs `chpwd` inside `$(...)` and `( ... )`, where
+but prints nothing. With no `.jj` or `.git` in the directory or above it, and
+no `GIT_DIR`, it skips `where.sh` and clears the title, colour and `JW_WHERE`. zsh also runs `chpwd` inside `$(...)` and `( ... )`, where
 the escape codes would end up in the captured output, so it returns at once
 in a subshell. The `precmd` hook writes the title and the tint before each
 prompt, so a `cd` with its output redirected still tints. Control characters
@@ -617,7 +618,8 @@ replaces a working shell:
 | `jj config list`, when jj is installed | `reload: jj config is invalid, see: jj config list` |
 | `zsh -n` on `~/.zshrc` and every `~/.config/zsh/*.zsh` | `reload: syntax error in <file>, see: zsh -n <file>` |
 
-Then it deletes `~/.zcompdump*`, so new completions load, prints
+Then it deletes `~/.zcompdump*`, so new completions load, and the init
+script cache `~/.cache/zsh/init-*.zsh` (under `$XDG_CACHE_HOME` when set), prints
 `zsh: restarting` and runs `exec zsh`. Shell variables you set by hand in
 that shell are gone afterwards. Exported variables survive.
 
@@ -643,7 +645,8 @@ return 1.
 | `navi-untrust` | Removes that exact line from `trusted-repos`, if the file exists.                      | `untrusted: <path>`  |
 
 Both then update `NAVI_PATH` at once. `zsh/navi.zsh` sets it on every `cd`
-through a `chpwd` hook and once when it is sourced:
+through a `chpwd` hook and once when it is sourced. It asks git for the top
+level only when a `.navi/` folder exists in the directory or above it:
 
 | Situation                                                        | `NAVI_PATH`                                          |
 | ---------------------------------------------------------------- | ---------------------------------------------------- |
@@ -661,7 +664,7 @@ without defining anything when `navi` is not installed. See
 
 ## z and zi
 
-`zshrc` runs `eval "$(zoxide init zsh)"`, which defines both.
+`zshrc` sources the cached output of `zoxide init zsh`, which defines both.
 
 | Form            | Behaviour                                                         |
 | --------------- | ----------------------------------------------------------------- |

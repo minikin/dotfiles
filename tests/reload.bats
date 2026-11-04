@@ -9,6 +9,7 @@ setup() {
   printf 'true\n' > "$HOME/.zshrc"
   printf 'true\n' > "$HOME/.config/zsh/jj.zsh"
   touch "$HOME/.zcompdump" "$HOME/.zcompdump-host-5.9"
+  mkdir -p "$HOME/.cache/zsh" && touch "$HOME/.cache/zsh/init-starship.zsh"
   # Stub ghostty: records the call, fails when GHOSTTY_FAIL is set.
   cat > "$BATS_TEST_TMPDIR/bin/ghostty" <<'EOF'
 #!/bin/sh
@@ -24,7 +25,7 @@ run_reload() {
   run zsh -f -c "source '$REPO_ROOT/zsh/reload.zsh'; reload; echo AFTER-EXEC" </dev/null
 }
 
-@test "reload: valid configs clear completions and restart zsh" {
+@test "reload: valid configs clear completions and the init cache, and restart zsh" {
   run_reload
   [ "$status" -eq 0 ]
   [[ $output == *"ghostty: config valid, press cmd+shift+, to apply it"* ]] || false
@@ -32,6 +33,7 @@ run_reload() {
   [[ $output != *AFTER-EXEC* ]] || false
   grep -qx 'ghostty +validate-config' "$HOME/ghostty.log"
   ! ls "$HOME"/.zcompdump* 2>/dev/null || false
+  [ ! -e "$HOME/.cache/zsh/init-starship.zsh" ]
 }
 
 @test "reload: a zsh syntax error stops before the restart" {

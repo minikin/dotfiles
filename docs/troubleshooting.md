@@ -38,6 +38,7 @@ rename the file yourself. Reload with `cmd+shift+,`. A few settings, such as
 ```bash
 /usr/bin/time zsh -i -c exit
 rm -f ~/.zcompdump* && exec zsh        # rebuild a stale completion cache (reload does the same)
+rm -f ~/.cache/zsh/init-*.zsh          # regenerate the jj, fzf, starship and zoxide init scripts
 zsh -i -x -c exit 2>&1 | tail -40      # trace startup to find the slow line
 ```
 

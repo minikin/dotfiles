@@ -458,13 +458,25 @@ typeset -ga _jw_tint_light=('#ecdae2' '#dee9e1' '#ede7df' '#dae3f5' '#eee5f1' '#
 # skips zshexit and leaves the old shell's tint on screen.
 typeset -g _jw_title='' _jw_colour='' _jw_tint_shown=unknown
 
+# where.sh forks bash and jj or git, so outside any repo (no .jj or .git above $PWD, no GIT_DIR)
+# the hook skips it. That keeps a new tab in ~ and a cd around ~ fast.
+_jw_in_repo() {
+  [[ -n ${GIT_DIR:-} ]] && return 0
+  local d=$PWD
+  while true; do
+    [[ -e $d/.jj || -e $d/.git ]] && return 0
+    [[ $d == / ]] && return 1
+    d=${d:h}
+  done
+}
+
 _jw_where_chpwd() {
   (( ZSH_SUBSHELL )) && return 0
   local where
   local -a w
   _jw_title='' _jw_colour=''
   unset JW_WHERE
-  if where=$("$_jw_where_sh" 2>/dev/null); then
+  if _jw_in_repo && where=$("$_jw_where_sh" 2>/dev/null); then
     w=("${(@f)where}")
     _jw_title=$w[1]${w[2]:+/$w[2]}
     _jw_colour=$w[4]

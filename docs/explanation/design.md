@@ -199,3 +199,24 @@ second identity's folder (`$DOTFILES_PERSONAL_DIR`) are your own and trusted
 without asking. Any other repo needs one `navi-trust`, and with one identity
 that means every repo. Trust is recorded for the main checkout, so new jj workspaces
 inherit it, as they do for mise.
+
+## Why shell init is cached
+
+Every new tab and split starts a zsh, and an agent setup opens many of them.
+`jj`, `fzf`, `starship` and `zoxide` each print an init script that is the
+same until the tool changes, and forking all four cost about 35 ms per
+shell. `zshrc` keeps each script under `~/.cache/zsh/` and runs the tool
+again only when the arguments, the binary's resolved path or its mtime
+change. The path is in the key because a Homebrew upgrade moves the binary
+to a new Cellar folder while the bottle keeps its build-time mtimes, so an
+mtime check alone can miss the upgrade.
+
+mise is not cached: `mise activate zsh` writes the `PATH` of the shell that
+ran it into its output, and a cached copy would bring back an old `PATH`.
+
+The prompt skips work the same way. The `chpwd` hooks look for `.jj`,
+`.git` or `.navi` with zsh path checks before forking `where.sh` or git, so
+a tab that opens in `~` starts no subprocess for them. `custom.jj` runs one
+jj command instead of a `when` check plus the command, and `RPROMPT` is
+empty because `starship.toml` has no right side, which saves a starship run
+on every prompt.

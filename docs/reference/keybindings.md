@@ -51,7 +51,7 @@ when it ends.
 
 ## Shell
 
-`zshrc` loads fzf's zsh integration with `source <(fzf --zsh)` and sets
+`zshrc` loads fzf's zsh integration, the cached output of `fzf --zsh`, and sets
 `FZF_DEFAULT_OPTS="--height 40% --layout reverse --border"`.
 
 | Key            | Action                                                                 |

@@ -254,6 +254,20 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [ "$output" = '^[]2;~/outside · for x in 1 2 ]0;evil^G' ]
 }
 
+@test "title: outside a repo the hook never runs where.sh, inside one it does" {
+  mkdir -p "$HOME/outside/deep" "$REPO/sub"
+  stub="$BATS_TEST_TMPDIR/where-stub"
+  printf '#!/bin/sh\necho called >> "%s.log"\nexec bash "%s" "$@"\n' "$stub" "$REPO_ROOT/claude/where.sh" > "$stub"
+  chmod +x "$stub"
+  run_zsh "_jw_where_sh='$stub'; cd '$HOME/outside/deep' && _jw_where_chpwd && print -r -- \${JW_WHERE:-unset}"
+  [ "$status" -eq 0 ]
+  [ "$output" = unset ]
+  [ ! -e "$stub.log" ]
+  run_zsh "_jw_where_sh='$stub'; cd '$REPO/sub' && _jw_where_chpwd"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$stub.log" | tr -d ' ')" = 1 ]
+}
+
 @test "title: JW_WHERE is exported in a workspace and unset in the main checkout" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   run_zsh "cd '$WS/feat' && _jw_where_chpwd && zsh -fc 'print -r -- \${JW_WHERE:-unset}'; cd '$REPO' && _jw_where_chpwd && zsh -fc 'print -r -- \${JW_WHERE:-unset}'"

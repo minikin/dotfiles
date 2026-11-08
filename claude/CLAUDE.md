@@ -5,6 +5,7 @@ Always respond in English, even when I write or dictate in Russian or Ukrainian.
 # Questions
 
 - Put every choice, approval or yes/no to me through the AskUserQuestion menu, never as options in prose for me to type back. I often work from a phone. Recommended option first.
+- Every AskUserQuestion menu ends with an option like "I'll say it", for when none of the options fits and I want to answer by voice instead of typing. When I pick it, stop and wait for my next message.
 
 # Writing
 

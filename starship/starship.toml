@@ -1,5 +1,8 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
+# git status on a cold fsmonitor in a large untracked tree takes about 1 s.
+command_timeout = 2000
+
 format = """
 [](red)\
 $os\

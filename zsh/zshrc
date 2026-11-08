@@ -64,3 +64,7 @@ source ~/.config/zsh/navi.zsh
 
 # Must be sourced last
 source $HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+. "$HOME/.atuin/bin/env"
+
+eval "$(atuin init zsh)"

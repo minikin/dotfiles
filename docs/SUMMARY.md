@@ -12,6 +12,7 @@
 - [Review and land](guides/review-and-land.md)
 - [Identity and signing](guides/identity-and-signing.md)
 - [Local infra](guides/local-infra.md)
+- [Phone access with Moshi](guides/phone-access.md)
 - [Project tools and MCP servers](guides/project-tools.md)
 - [Saved workflows (navi)](guides/workflows.md)
 - [Claude Code](guides/claude-code.md)

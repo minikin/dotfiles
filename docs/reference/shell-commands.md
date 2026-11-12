@@ -20,7 +20,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | `sign-as`          | `zsh/sign.zsh`   | `[work\|personal\|status]` | Show this repo's commit identity, or switch it between the main and the second identity. |
 | `infra`            | `zsh/infra.zsh`  | `[subcommand] [args...]` | Drive the local Docker stack.                             |
 | `reload`           | `zsh/reload.zsh` | none                 | Check every config, then restart zsh. Tells you to press `cmd+shift+,` for Ghostty. |
-| `remote-check`     | `zsh/remote.zsh` | none                 | Read-only: check Tailscale, Remote Login, the ssh `PATH`, moshi-hook, osewa and herdr, so the phone can reach this Mac through Moshi. Returns 1 when a line starts with `!!`. |
+| `remote-check`     | `zsh/remote.zsh` | none                 | Read-only: check Tailscale, Remote Login, the ssh `PATH`, moshi-hook, osewa and herdr, so the phone can reach this Mac through [Moshi](../guides/phone-access.md). Returns 1 when a line starts with `!!`. |
 | `navi-trust`       | `zsh/navi.zsh`   | none                 | Load this repo's `.navi/` workflows from now on.              |
 | `navi-untrust`     | `zsh/navi.zsh`   | none                 | Stop loading this repo's `.navi/` workflows.                  |
 | `z`                | zoxide           | `<query...>` or `-`  | Jump to the best-matching directory you visited.              |

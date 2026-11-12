@@ -146,8 +146,9 @@ path=($HOME/.local/bin /opt/homebrew/bin $path)
 
 A command run over ssh, such as `ssh host cmd` or Moshi setting up osewa,
 starts a zsh that is neither a login nor an interactive shell, so it reads
-`~/.zshenv` and nothing else. The append happens once, like the
-`~/.zprofile` one.
+`~/.zshenv` and nothing else, see
+[Phone access with Moshi](../guides/phone-access.md). The append happens
+once, like the `~/.zprofile` one.
 
 ### `~/.claude/settings.json`
 

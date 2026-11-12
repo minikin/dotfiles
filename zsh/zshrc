@@ -55,6 +55,7 @@ source ~/.config/zsh/jj.zsh
 source ~/.config/zsh/sign.zsh
 source ~/.config/zsh/infra.zsh
 source ~/.config/zsh/reload.zsh
+source ~/.config/zsh/remote.zsh
 
 # navi: Ctrl-G opens saved workflows (navi/*.cheat)
 source ~/.config/zsh/navi.zsh

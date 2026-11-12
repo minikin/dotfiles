@@ -14,6 +14,7 @@ file edits the repo. `just drift` reports the state of each linked file.
 | `zsh/sign.zsh`                  | linked: `~/.config/zsh/sign.zsh`            | `sign-as`.                                                                                     |
 | `zsh/infra.zsh`                 | linked: `~/.config/zsh/infra.zsh`           | `infra`.                                                                                       |
 | `zsh/reload.zsh`                | linked: `~/.config/zsh/reload.zsh`          | `reload`.                                                                                      |
+| `zsh/remote.zsh`                | linked: `~/.config/zsh/remote.zsh`          | `remote-check`.                                                                                |
 | `zsh/navi.zsh`                  | linked: `~/.config/zsh/navi.zsh`            | The navi widget on `Ctrl-G`, `navi-trust`, `navi-untrust`, and the `chpwd` hook that sets `NAVI_PATH` for a trusted repo's `.navi/`. See [saved workflows](../guides/workflows.md). |
 | `navi/` (`agents.cheat`, `jj.cheat`, `infra.cheat`, `k8s.cheat`, `dev.cheat`, `dotfiles.cheat`) | linked: `~/.local/share/navi/cheats/dotfiles` (the directory) | The saved workflows `Ctrl-G` offers, in the groups `start`, `agents`, `review`, `jj`, `kafka`, `redis`, `infra`, `k8s`, `go` and `dotfiles`. |
 | `zsh/zprofile.snippet`          | appended once to `~/.zprofile`              | Homebrew `PATH` and `mise activate zsh --shims` for login shells that are not interactive.     |

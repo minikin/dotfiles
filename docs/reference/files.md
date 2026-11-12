@@ -30,7 +30,7 @@ file edits the repo. `just drift` reports the state of each linked file.
 | `claude/guard-push.sh`          | linked: `~/.claude/guard-push.sh`           | `PreToolUse` hook on `Bash`: blocks `git push` and `jj git push` from a jj workspace or git worktree with exit 2. See [Claude Code](../guides/claude-code.md#push-guard). |
 | `claude/session-context.sh`     | linked: `~/.claude/session-context.sh`      | `SessionStart` hook: tells the agent its repo, workspace and root, and titles an untitled workspace session `<repo>/<workspace>`. See [Claude Code](../guides/claude-code.md#session-context). |
 | `claude/where.sh`               | linked: `~/.claude/where.sh`                | Repo, workspace, root and colour of a directory, for the status line, the hooks, the zsh title and tint, and starship. See [Claude Code](../guides/claude-code.md#where-an-agent-works). |
-| `claude/settings.fragment.json` | merged into `~/.claude/settings.json`       | Allow list of read-only jj commands, deny `jj *--tool*` and `jj *--config*`, `env.JJ_EDITOR = "false"`, `statusLine`, `preferredNotifChannel = "notifications_disabled"`, the Bash `sandbox` with auto-allow and generic registry domains, and `hooks` for `Notification`, `Stop` and `PreToolUse`. |
+| `claude/settings.fragment.json` | merged into `~/.claude/settings.json`       | Allow list of read-only jj commands, deny `jj *--tool*` and `jj *--config*`, `env.JJ_EDITOR = "false"`, `statusLine`, `preferredNotifChannel = "notifications_disabled"`, the Bash `sandbox` settings with auto-allow and generic registry domains, left off until you turn it on, and `hooks` for `Notification`, `Stop` and `PreToolUse`. |
 
 ## Files install.sh writes outside the repo
 

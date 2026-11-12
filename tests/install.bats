@@ -140,6 +140,13 @@ JSON
   jq -e --slurpfile f "$frag" '($f[0].permissions.deny - .permissions.deny) == []' "$s"
 }
 
+@test "install: a fresh install configures the sandbox but leaves it off" {
+  run_install
+  [ "$status" -eq 0 ]
+  jq -e '.sandbox.enabled == null' "$(SETTINGS)"
+  jq -e '.sandbox.autoAllowBashIfSandboxed == true' "$(SETTINGS)"
+}
+
 @test "install: sandbox domains are unioned, other sandbox keys kept" {
   mkdir -p "$HOME/.claude"
   cat > "$(SETTINGS)" <<'JSON'
@@ -156,7 +163,7 @@ JSON
   [ "$status" -eq 0 ]
   s=$(SETTINGS)
   frag="$DOTFILES/claude/settings.fragment.json"
-  jq -e '.sandbox.enabled == true' "$s"              # fragment keys win
+  jq -e '.sandbox.enabled == false' "$s"             # the fragment leaves the switch to you
   jq -e '.sandbox.allowUnsandboxedCommands == false' "$s"
   jq -e '.sandbox.network.allowAllUnixSockets == true' "$s"
   jq -e '.sandbox.network.allowedDomains | index("*.example.com")' "$s"

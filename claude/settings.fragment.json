@@ -80,7 +80,6 @@
     ]
   },
   "sandbox": {
-    "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "network": {
       "allowedDomains": [

@@ -90,8 +90,12 @@ programs. The patterns match the command text, so `jj dft` passes even
 though the alias expands to `--tool difft`.
 Everything else, such as `jj commit` or `jj git push`, still asks.
 
-The fragment also turns on the Bash sandbox with `autoAllowBashIfSandboxed`,
-so a command that stays inside it (writes only to the project and the temp
+The fragment configures the Bash sandbox but leaves it off. Turn it on with
+`/sandbox` in Claude Code, or `"enabled": true` under `sandbox` in
+`~/.claude/settings.json`, and `install.sh` keeps that choice. A sandboxed
+command cannot reach the Tailscale or herdr sockets, so `remote-check` from
+[Phone access with Moshi](phone-access.md) reports them as down inside it.
+With the sandbox on, `autoAllowBashIfSandboxed` means a command that stays inside it (writes only to the project and the temp
 dir, reaches only the listed hosts) runs without a prompt. That is what keeps
 parallel agents from stopping on every `just test`. `allowedDomains` lists
 GitHub, the npm, Go, crates, PyPI and Docker registries and

@@ -47,6 +47,37 @@ SETTINGS() { echo "$HOME/.claude/settings.json"; }
   [[ $output != *"+ ln -s"* ]] || false
 }
 
+@test "install: the ssh PATH snippet is appended to .zshenv once, after what is there" {
+  printf 'export EDITOR=vi\n' > "$HOME/.zshenv"
+  run_install
+  [ "$status" -eq 0 ]
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"ok   ~/.zshenv"* ]] || false
+  [ "$(head -1 "$HOME/.zshenv")" = 'export EDITOR=vi' ]
+  [ "$(grep -c 'dotfiles: PATH for non-interactive ssh logins' "$HOME/.zshenv")" -eq 1 ]
+}
+
+@test "install: a non-interactive zsh finds ~/.local/bin and Homebrew tools through .zshenv" {
+  run_install
+  [ "$status" -eq 0 ]
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/bin/sh\n' > "$HOME/.local/bin/osewa"
+  chmod +x "$HOME/.local/bin/osewa"
+  # env -i is what sshd hands a command: no PATH from the parent, only zsh's default.
+  run env -i HOME="$HOME" zsh -c 'command -v osewa; print -rl -- $path'
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "$HOME/.local/bin/osewa" ]
+  [[ $output == *$'\n/opt/homebrew/bin'* ]] || false
+}
+
+@test "install: --dry-run leaves .zshenv alone" {
+  run_install --dry-run
+  [ "$status" -eq 0 ]
+  [[ $output == *"+ append zsh/zshenv.snippet >> ~/.zshenv"* ]] || false
+  [ ! -e "$HOME/.zshenv" ]
+}
+
 @test "install: an existing plain file is backed up before being replaced" {
   printf 'my old zshrc\n' > "$HOME/.zshrc"
   run_install

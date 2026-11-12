@@ -1,0 +1,5 @@
+# dotfiles: PATH for non-interactive ssh logins
+# `ssh host cmd` and Moshi setting up osewa read only ~/.zshenv, not .zprofile or .zshrc,
+# so moshi-hook (Homebrew) and osewa (~/.local/bin) must be on PATH here.
+typeset -U path
+path=($HOME/.local/bin /opt/homebrew/bin $path)

@@ -36,7 +36,7 @@ what the repo's own checks need.
 and a link that is already in place as `ok`. Read the `mv` lines: those are
 the files it would back up. Then run it for real. In order, it symlinks the
 configs into `$HOME`, moves the macOS Ghostty config aside, appends the mise
-line to `~/.zprofile`, merges the Claude Code settings, writes your identity,
+line to `~/.zprofile` and the ssh `PATH` to `~/.zshenv`, merges the Claude Code settings, writes your identity,
 writes the machine settings file `~/.config/dotfiles/config`, mirrors the
 identity into git, and validates the Ghostty config.
 [install.sh](reference/install-sh.md) describes each step.
@@ -184,6 +184,8 @@ than once, the oldest timestamp holds your original file. Then clean up by
 hand:
 
 - the mise block at the end of `~/.zprofile`
+- the block under `dotfiles: PATH for non-interactive ssh logins` at the end
+  of `~/.zshenv`
 - `~/.claude/settings.json`, restored from its `.bak-*` copy or edited to
   drop `statusLine`, `env.JJ_EDITOR`, `preferredNotifChannel`, the jj
   permission entries and the `hooks` entries that run `~/.claude/notify.sh`,

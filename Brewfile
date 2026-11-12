@@ -29,6 +29,11 @@ brew "just"
 # AI
 cask "claude-code@latest"
 
+# Phone access with Moshi (see docs/guides/phone-access.md). osewa comes from its install script.
+tap "rjyo/moshi"
+brew "moshi-hook"         # daemon behind the Moshi app: agent inbox, approvals, osewa setup
+brew "mosh"               # Moshi's fallback transport
+
 # Data / messaging (local services run in Docker: see infra/compose.yaml)
 brew "redis"            # redis-cli (server runs in Docker)
 brew "kcat"             # Kafka produce/consume/metadata

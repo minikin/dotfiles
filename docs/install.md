@@ -29,7 +29,7 @@ exec zsh
 
 `--all` runs `brew bundle` first, which installs everything in the `Brewfile`: Ghostty and the
 JetBrains Mono Nerd Font, Shottr, the shell tools, jj, jjui and difftastic, mise,
-just, Claude Code, `redis-cli` and `kcat`, the API and Kubernetes tools, and
+just, Claude Code, moshi-hook and mosh for the phone, `redis-cli` and `kcat`, the API and Kubernetes tools, and
 what the repo's own checks need.
 
 `--dry-run` prints every command `install.sh` would run, prefixed with `+`,

@@ -6,6 +6,7 @@ Always respond in English, even when I write or dictate in Russian or Ukrainian.
 
 - Put every choice, approval or yes/no to me through the AskUserQuestion menu, never as options in prose for me to type back. I often work from a phone. Recommended option first.
 - Every AskUserQuestion menu ends with an option like "I'll say it", for when none of the options fits and I want to answer by voice instead of typing. When I pick it, stop and wait for my next message.
+- When Moshi is paired (`moshi-hook status` shows paired), send every question, approval or choice to my phone too: run `moshi-hook ask --require-remote --option "<choice 1>" --option "<choice 2>" "<question>"` in the background beside the menu, one `--option` per menu choice (2 to 6), and take the first answer from either. `--options "<choice>" "<choice>"` reads only the first choice and fails with exit 2. Do not pass `--source claude`: the tool rejects it as a built-in name. A plain `moshi-hook notify` does not reach the phone while the app is closed.
 
 # Writing
 

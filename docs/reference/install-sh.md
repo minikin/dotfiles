@@ -1,7 +1,7 @@
 # install.sh
 
 `install.sh` links the configs into `$HOME`, appends the mise line to
-`~/.zprofile`, merges the Claude Code settings, writes the local commit
+`~/.zprofile` and the ssh `PATH` to `~/.zshenv`, merges the Claude Code settings, writes the local commit
 identity and records the machine settings in `~/.config/dotfiles/config`. It is safe to run again: anything already in place prints `ok`.
 
 ## Usage
@@ -60,12 +60,13 @@ The script prints a `==` header before each step.
 | 0    | `== brew bundle`             | Only with `--brew` or `--all`: installs everything in the `Brewfile`.                            |
 | 1    | `== symlinks`                | Links each repo file below into `$HOME`, then moves Ghostty's macOS config aside.               |
 | 2    | `== .zprofile`               | Appends `zsh/zprofile.snippet` to `~/.zprofile` if the mise shims line is missing.               |
-| 3    | `== Claude Code settings`    | Merges `claude/settings.fragment.json` into `~/.claude/settings.json`.                           |
-| 4    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
-| 5    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
-| 6    | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
-| 7    | `== screenshot shortcuts`    | Only with `--shottr`: turns off the macOS screenshot shortcuts.                                  |
-| 8    | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
+| 3    | `== .zshenv`                 | Appends `zsh/zshenv.snippet` to `~/.zshenv` if its marker line is missing.                       |
+| 4    | `== Claude Code settings`    | Merges `claude/settings.fragment.json` into `~/.claude/settings.json`.                           |
+| 5    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
+| 6    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
+| 7    | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
+| 8    | `== screenshot shortcuts`    | Only with `--shottr`: turns off the macOS screenshot shortcuts.                                  |
+| 9    | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
 
 ## Linked files
 
@@ -78,6 +79,7 @@ The script prints a `==` header before each step.
 | `zsh/infra.zsh`          | `~/.config/zsh/infra.zsh`             |
 | `zsh/navi.zsh`           | `~/.config/zsh/navi.zsh`              |
 | `zsh/reload.zsh`         | `~/.config/zsh/reload.zsh`            |
+| `zsh/remote.zsh`         | `~/.config/zsh/remote.zsh`            |
 | `navi/` (directory)      | `~/.local/share/navi/cheats/dotfiles` |
 | `infra/compose.yaml`     | `~/.config/devinfra/compose.yaml`     |
 | `starship/starship.toml` | `~/.config/starship.toml`             |
@@ -127,6 +129,26 @@ eval "$(/opt/homebrew/bin/mise activate zsh --shims)"
 
 The append happens once. Later edits to the snippet do not reach
 `~/.zprofile`.
+
+### `~/.zshenv`
+
+If no line in `~/.zshenv` contains `dotfiles: PATH for non-interactive ssh
+logins`, the script appends an empty line and the contents of
+`zsh/zshenv.snippet`:
+
+```zsh
+# dotfiles: PATH for non-interactive ssh logins
+# `ssh host cmd` and Moshi setting up osewa read only ~/.zshenv, not .zprofile or .zshrc,
+# so moshi-hook (Homebrew) and osewa (~/.local/bin) must be on PATH here.
+typeset -U path
+path=($HOME/.local/bin /opt/homebrew/bin $path)
+```
+
+A command run over ssh, such as `ssh host cmd` or Moshi setting up osewa,
+starts a zsh that is neither a login nor an interactive shell, so it reads
+`~/.zshenv` and nothing else, see
+[Phone access with Moshi](../guides/phone-access.md). The append happens
+once, like the `~/.zprofile` one.
 
 ### `~/.claude/settings.json`
 
@@ -360,7 +382,7 @@ it. The script never deletes a backup.
 | `config.ghostty` under Application Support | It exists.                          |
 | `~/.claude/settings.json`              | It exists and the merge changes it.    |
 
-`~/.zprofile`, `identity.toml`, the git config files and `allowed_signers`
+`~/.zprofile`, `~/.zshenv`, `identity.toml`, the git config files and `allowed_signers`
 are appended to or written in place, without a backup.
 
 ## Exit status
@@ -393,6 +415,7 @@ runs only when `ghostty` is on `PATH` or
 | Links                | `dest -ef src`: already linked, prints `ok`.                           |
 | `config.ghostty`     | Moved on the first run, so it no longer exists.                        |
 | `~/.zprofile`        | `grep` for `mise activate zsh --shims`.                                |
+| `~/.zshenv`          | `grep` for `dotfiles: PATH for non-interactive ssh logins`.            |
 | Claude settings      | `jq` equality of the merged result and the current file.               |
 | Identity             | `identity.toml` exists.                                                |
 | Machine settings     | `cmp` of the new content and the current file, prints `(unchanged)`.   |

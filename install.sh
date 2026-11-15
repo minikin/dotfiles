@@ -54,6 +54,7 @@ link zsh/sign.zsh             "$HOME/.config/zsh/sign.zsh"
 link zsh/infra.zsh            "$HOME/.config/zsh/infra.zsh"
 link zsh/navi.zsh             "$HOME/.config/zsh/navi.zsh"
 link zsh/reload.zsh           "$HOME/.config/zsh/reload.zsh"
+link zsh/remote.zsh           "$HOME/.config/zsh/remote.zsh"
 link navi                     "$HOME/.local/share/navi/cheats/dotfiles"
 link infra/compose.yaml       "$HOME/.config/devinfra/compose.yaml"
 link starship/starship.toml   "$HOME/.config/starship.toml"
@@ -77,6 +78,14 @@ if ! grep -qs 'mise activate zsh --shims' "$HOME/.zprofile"; then
   else { echo; cat "$REPO/zsh/zprofile.snippet"; } >> "$HOME/.zprofile"; fi
 else
   echo "ok   ~/.zprofile"
+fi
+
+echo "== .zshenv (append the PATH for non-interactive ssh logins if missing)"
+if ! grep -qs 'dotfiles: PATH for non-interactive ssh logins' "$HOME/.zshenv"; then
+  if (( DRY )); then echo "+ append zsh/zshenv.snippet >> ~/.zshenv"
+  else { echo; cat "$REPO/zsh/zshenv.snippet"; } >> "$HOME/.zshenv"; fi
+else
+  echo "ok   ~/.zshenv"
 fi
 
 echo "== Claude Code settings (merge; fragment keys win, permission allow/deny lists and hooks are unioned)"

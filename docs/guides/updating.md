@@ -33,7 +33,7 @@ leaves you with a shell that cannot start. It only validates Ghostty: press
 Some Ghostty settings, such as `macos-option-as-alt`, apply only to new
 windows.
 
-Four files are not links, and an edit in the repo does not reach them by
+Five files are not links, and an edit in the repo does not reach them by
 itself:
 
 - `~/.claude/settings.json` is merged from `claude/settings.fragment.json`.
@@ -41,6 +41,8 @@ itself:
 - `~/.zprofile` gets `zsh/zprofile.snippet` appended once, when the
   `mise activate zsh --shims` line is missing. After changing the snippet,
   fix `~/.zprofile` by hand.
+- `~/.zshenv` gets `zsh/zshenv.snippet` appended once, the same way, keyed on
+  its `dotfiles: PATH for non-interactive ssh logins` line.
 - `~/.config/jj/conf.d/identity.toml` is local to the machine and never in
   the repo, see [Identity and signing](identity-and-signing.md).
 - `~/.config/dotfiles/config` is rewritten by every `./install.sh` run. After

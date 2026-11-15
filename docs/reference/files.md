@@ -14,9 +14,11 @@ file edits the repo. `just drift` reports the state of each linked file.
 | `zsh/sign.zsh`                  | linked: `~/.config/zsh/sign.zsh`            | `sign-as`.                                                                                     |
 | `zsh/infra.zsh`                 | linked: `~/.config/zsh/infra.zsh`           | `infra`.                                                                                       |
 | `zsh/reload.zsh`                | linked: `~/.config/zsh/reload.zsh`          | `reload`.                                                                                      |
+| `zsh/remote.zsh`                | linked: `~/.config/zsh/remote.zsh`          | `remote-check`.                                                                                |
 | `zsh/navi.zsh`                  | linked: `~/.config/zsh/navi.zsh`            | The navi widget on `Ctrl-G`, `navi-trust`, `navi-untrust`, and the `chpwd` hook that sets `NAVI_PATH` for a trusted repo's `.navi/`. See [saved workflows](../guides/workflows.md). |
 | `navi/` (`agents.cheat`, `jj.cheat`, `infra.cheat`, `k8s.cheat`, `dev.cheat`, `dotfiles.cheat`) | linked: `~/.local/share/navi/cheats/dotfiles` (the directory) | The saved workflows `Ctrl-G` offers, in the groups `start`, `agents`, `review`, `jj`, `kafka`, `redis`, `infra`, `k8s`, `go` and `dotfiles`. |
 | `zsh/zprofile.snippet`          | appended once to `~/.zprofile`              | Homebrew `PATH` and `mise activate zsh --shims` for login shells that are not interactive.     |
+| `zsh/zshenv.snippet`            | appended once to `~/.zshenv`                | `~/.local/bin` and Homebrew on `PATH` for commands run over ssh, which read only `~/.zshenv`. |
 | `infra/compose.yaml`            | linked: `~/.config/devinfra/compose.yaml`   | Compose project `devinfra`: Redis 8, Apache Kafka 4.1.0 (KRaft, one node), kafka-ui, Jaeger. Loopback ports only. |
 | `starship/starship.toml`        | linked: `~/.config/starship.toml`           | Catppuccin Mocha prompt. `env_var.JW_WHERE` shows `<repo>/<workspace>` in a jj workspace or git worktree. `custom.jj` shows change ID, bookmarks, conflict and empty markers and the description, and hides itself outside a jj repo because its output is empty there. `git_branch` shows only on an attached HEAD. |
 | `jj/config.toml`                | linked: `~/.config/jj/config.toml`          | `ui.default-command`, `work()`, `closest_bookmark()`, `tug`, `stack`, `dft`, `dshow`, the `difft` tool. See [jj configuration](jj-config.md). |
@@ -28,7 +30,7 @@ file edits the repo. `just drift` reports the state of each linked file.
 | `claude/guard-push.sh`          | linked: `~/.claude/guard-push.sh`           | `PreToolUse` hook on `Bash`: blocks `git push` and `jj git push` from a jj workspace or git worktree with exit 2. See [Claude Code](../guides/claude-code.md#push-guard). |
 | `claude/session-context.sh`     | linked: `~/.claude/session-context.sh`      | `SessionStart` hook: tells the agent its repo, workspace and root, and titles an untitled workspace session `<repo>/<workspace>`. See [Claude Code](../guides/claude-code.md#session-context). |
 | `claude/where.sh`               | linked: `~/.claude/where.sh`                | Repo, workspace, root and colour of a directory, for the status line, the hooks, the zsh title and tint, and starship. See [Claude Code](../guides/claude-code.md#where-an-agent-works). |
-| `claude/settings.fragment.json` | merged into `~/.claude/settings.json`       | Allow list of read-only jj commands, deny `jj *--tool*` and `jj *--config*`, `env.JJ_EDITOR = "false"`, `statusLine`, `preferredNotifChannel = "notifications_disabled"`, the Bash `sandbox` with auto-allow and generic registry domains, and `hooks` for `Notification`, `Stop` and `PreToolUse`. |
+| `claude/settings.fragment.json` | merged into `~/.claude/settings.json`       | Allow list of read-only jj commands, deny `jj *--tool*` and `jj *--config*`, `env.JJ_EDITOR = "false"`, `statusLine`, `preferredNotifChannel = "notifications_disabled"`, the Bash `sandbox` settings with auto-allow and generic registry domains, left off until you turn it on, and `hooks` for `Notification`, `Stop` and `PreToolUse`. |
 
 ## Files install.sh writes outside the repo
 
@@ -47,7 +49,7 @@ None of these are in the repo. See [install.sh](install-sh.md#what-it-writes).
 
 | Repo file  | Used by        | Installs                                                                                     |
 | ---------- | -------------- | -------------------------------------------------------------------------------------------- |
-| `Brewfile` | `brew bundle`  | Casks: `ghostty`, `font-jetbrains-mono-nerd-font`, `shottr`, `claude-code@latest`, `redis-insight`. Formulae: `starship`, `zsh-autosuggestions`, `zsh-syntax-highlighting`, `fzf`, `zoxide`, `navi`, `jq`, `ripgrep`, `git`, `jj`, `jjui`, `difftastic`, `gh`, `mise`, `just`, `redis`, `kcat`, `grpcurl`, `xh`, `hurl`, `d2`, `k9s`, `kubectx`, `stern`, `bats-core`, `shellcheck`, `gitleaks`, `lychee`, `actionlint`. |
+| `Brewfile` | `brew bundle`  | Casks: `ghostty`, `font-jetbrains-mono-nerd-font`, `shottr`, `claude-code@latest`, `redis-insight`. Tap: `rjyo/moshi`. Formulae: `starship`, `zsh-autosuggestions`, `zsh-syntax-highlighting`, `fzf`, `zoxide`, `navi`, `jq`, `ripgrep`, `git`, `jj`, `jjui`, `difftastic`, `gh`, `mise`, `just`, `moshi-hook`, `mosh`, `redis`, `kcat`, `grpcurl`, `xh`, `hurl`, `d2`, `k9s`, `kubectx`, `stern`, `bats-core`, `shellcheck`, `gitleaks`, `lychee`, `actionlint`. |
 
 ## Repo tooling
 

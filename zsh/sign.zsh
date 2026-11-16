@@ -52,3 +52,20 @@ sign-as() {
   fi
   echo "git: $(git config user.email)  key …${$(git config user.signingkey)[-12,-1]}"
 }
+
+# gh has no per-folder account setting, so inside $DOTFILES_PERSONAL_DIR this runs gh with the
+# token of the second identity's GitHub user (github.user in personal.gitconfig). Elsewhere gh
+# uses its active account. An explicit GH_TOKEN always wins.
+gh() {
+  local dir=${DOTFILES_PERSONAL_DIR:-} user token
+  if [[ -n $dir && -z ${GH_TOKEN:-} && ( $PWD == $dir || $PWD == $dir/* ) ]]; then
+    user=$(git config -f ~/.config/git/personal.gitconfig github.user 2>/dev/null)
+    token=${user:+$(command gh auth token -h github.com -u "$user" 2>/dev/null)}
+    if [[ -n $token ]]; then
+      GH_TOKEN=$token command gh "$@"
+      return
+    fi
+    [[ -n $user ]] && echo "gh: no login for $user, using the active account (gh auth login)" >&2
+  fi
+  command gh "$@"
+}

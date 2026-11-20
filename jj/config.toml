@@ -16,11 +16,24 @@ tug = ["bookmark", "move", "--from", "closest_bookmark(@)", "--to", "work()"]
 stack = ["log", "-r", "trunk()::@ | @::"]
 dft = ["diff", "--tool", "difft"]
 dshow = ["show", "--tool", "difft"]
+ks = ["diff", "--tool", "ks"]
 
 # difftastic: structural diffs for humans. Opt-in (`jj dft`, `jj dshow`) so agents
 # keep getting normal diffs — difft's side-by-side output is ambiguous without color.
 [merge-tools.difft]
 diff-args = ["--color=always", "$left", "$right"]
+
+# Kaleidoscope: GUI diff and merge tools. Opt-in (`jj ks`, `jj resolve --tool ksdiff`)
+# so plain `jj diff` stays non-interactive for agents and headless runs.
+[merge-tools.ksdiff]
+diff-invocation-mode = "file-by-file"
+diff-args = ["--partial-changeset", "$left", "$right"]
+merge-args = ["--merge", "--output", "$output", "--base", "$base", "$left", "$right"]
+
+[merge-tools.ks]
+program = "ksdiff"
+diff-invocation-mode = "dir"
+diff-args = ["--wait", "$left", "$right"]
 
 # Identity and commit signing live in ~/.config/jj/conf.d/identity.toml (local, not in this repo).
 # install.sh creates it interactively; template: jj/identity.example.toml

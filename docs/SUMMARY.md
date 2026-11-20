@@ -12,6 +12,7 @@
 - [Review and land](guides/review-and-land.md)
 - [Identity and signing](guides/identity-and-signing.md)
 - [Local infra](guides/local-infra.md)
+- [Installing macOS apps](guides/mac-apps.md)
 - [Phone access with Moshi](guides/phone-access.md)
 - [Project tools and MCP servers](guides/project-tools.md)
 - [Saved workflows (navi)](guides/workflows.md)
@@ -26,6 +27,7 @@
 - [Keybindings](reference/keybindings.md)
 - [jj config](reference/jj-config.md)
 - [Files](reference/files.md)
+- [Applications](reference/applications.md)
 - [Cheatsheet](reference/cheatsheet.md)
 
 # Explanation

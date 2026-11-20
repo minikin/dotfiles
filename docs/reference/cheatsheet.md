@@ -148,7 +148,7 @@ redis-cli --scan --pattern 'session:*'                  # iterate keys (never KE
 redis-cli monitor                                       # live command stream
 ```
 
-## Go and TS tools (global via `mise/config.toml`)
+## Global tools (via `mise/config.toml`)
 
 | Tool | Typical use |
 |---|---|
@@ -156,11 +156,15 @@ redis-cli monitor                                       # live command stream
 | `dlv` | `dlv test ./pkg/x`, `dlv debug ./cmd/app -- <args>` |
 | `gotestsum` | `gotestsum --format testname -- ./...`, `gotestsum --watch` |
 | `govulncheck` | `govulncheck ./...` |
-| `node` (LTS), `pnpm` (latest) | `pnpm install --frozen-lockfile`, `pnpm run <script>` |
+| `gremlins` | Go mutation testing, `gremlins unleash` |
+| `staticcheck` | Go static analysis, `staticcheck ./...` |
+| `cargo-*`, `abtop` | Rust inspection, coverage and mutation checks (`cargo audit`, `cargo deny`, `cargo insta`, `cargo llvm-cov`, `cargo mutants`, `cargo semver-checks`, `cargo crap`, `abtop`) |
+| `node` (24), `pnpm`, `npm:prettier` | `pnpm install --frozen-lockfile`, `pnpm run <script>`, `prettier --check .` |
+| `yq`, `helm`, `gcloud`, `pypi:harbor` | YAML querying, Helm charts, Google Cloud CLI and Harbor benchmarks |
 | `mise` | `mise ls`, `mise install`, `mise tasks`, `mise run <task>` |
 | `just` | `just --list`, `just <recipe>` |
 
-Go itself comes from the official installer, and each project's `go.mod` `toolchain` picks the version. CI-pinned tools belong in the project, not globally. See [Per-project tools](../guides/project-tools.md).
+Go (`/usr/local/go`) and Rust (`rustup`) come from their official installers, and each project's `go.mod` `toolchain` or `rust-toolchain.toml` picks the version. CI-pinned tools belong in the project, not globally. See [Per-project tools](../guides/project-tools.md).
 
 ## Kubernetes
 

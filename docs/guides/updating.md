@@ -118,8 +118,11 @@ jj new 'trunk()'
 reload                     # exec zsh if this machine has no reload yet
 ```
 
-New `Brewfile` entries need `brew bundle`. New global tools in
-`mise/config.toml` need `mise install`.
+New `Brewfile` entries need `brew bundle`. If a new cask already exists in
+`/Applications` outside Homebrew, adopt it first with
+`brew install --cask --adopt <cask>`. New global tools in `mise/config.toml`
+need `mise install` (after Go and `rustup` are installed for `go:` and
+`cargo:` entries).
 
 ## Add a new config file
 

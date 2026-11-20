@@ -9,9 +9,29 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
 On an Intel Mac, change `HOMEBREW_PREFIX` in `zsh/zshrc` and the path in
-`zsh/zprofile.snippet` first. Docker Desktop or OrbStack is needed only for
-the [local infra](guides/local-infra.md). Go comes from the official
-installer, not from Homebrew or mise.
+`zsh/zprofile.snippet` first. OrbStack or Docker Desktop is needed only for
+the [local infra](guides/local-infra.md). Go (`/usr/local/go`) and Rust
+(`rustup`) come from their official installers, not from Homebrew or mise.
+
+## New Mac order of steps
+
+Follow these steps in order on a fresh Mac:
+
+1. Install [Homebrew](https://brew.sh) (this also installs Xcode Command Line
+   Tools) and run `eval "$(/opt/homebrew/bin/brew shellenv)"`.
+2. Clone the repo and run `./install.sh --dry-run --all`, then
+   `./install.sh --all` and `exec zsh` (see [By hand](#by-hand), or hand steps
+   2 to 6 to Claude Code with [SETUP_PROMPT.md](../SETUP_PROMPT.md)).
+3. If your commit signing key lives in 1Password, sign into 1Password and turn
+   on **Use the SSH Agent** under Settings, Developer before signing commits.
+4. Install Go (`/usr/local/go`) and Rust (`rustup`) from their official
+   installers, then run `mise install` (see
+   [Language toolchains and global mise tools](#language-toolchains-and-global-mise-tools)).
+5. Install optional desktop casks, `.pkg` casks, Mac App Store (`mas`) apps
+   and manual-only apps, then complete macOS permissions using
+   [Installing macOS apps](guides/mac-apps.md).
+6. Run the commands in [Verify](#verify), restart Ghostty and Claude Code, and
+   add your public SSH key(s) on GitHub as **Signing keys**.
 
 ## By hand
 
@@ -27,10 +47,19 @@ cd ~/src/dotfiles
 exec zsh
 ```
 
-`--all` runs `brew bundle` first, which installs everything in the `Brewfile`: Ghostty and the
-JetBrains Mono Nerd Font, Shottr, the shell tools, jj, jjui and difftastic, mise,
-just, Claude Code, moshi-hook and mosh for the phone, `redis-cli` and `kcat`, the API and Kubernetes tools, and
-what the repo's own checks need.
+`--all` runs `brew bundle` first, which installs everything in the `Brewfile`:
+Ghostty and the JetBrains Mono Nerd Font, terminal and shell tools (`bash`,
+`tmux`, `zellij`, `atuin`, `ripgrep`, `fd`, `delta`, `difftastic`), jj and
+`jjui`, mise, just, `uv`, `pyenv`, `rbenv`, `ruff`, AI tools (`claude-code`,
+`codex`, `opencode`, `ollama`, desktop apps), `moshi-hook`, `mosh` and `herdr`
+for phone access, `libpq`, `redis`, `kcat`, API and Kubernetes tools, desktop
+productivity casks (`1password`, `orbstack`, `zed`, `shottr`, `cleanshot`,
+`kaleidoscope`), `mas` and what the repo's own checks need. On an existing Mac
+that already has non-Homebrew copies of those apps in `/Applications`, adopt
+them first with `brew install --cask --adopt <cask>` so `brew bundle` does not
+stop on existing app bundles. See [Installing macOS apps](guides/mac-apps.md)
+and [Applications](reference/applications.md) for `.pkg` casks, Mac App Store
+(`mas`) and manual-install apps.
 
 `--dry-run` prints every command `install.sh` would run, prefixed with `+`,
 and a link that is already in place as `ok`. Read the `mv` lines: those are
@@ -48,6 +77,23 @@ flags to skip both, or pick one with `--brew` or `--shottr`.
 The live configs end up as symlinks into the repo, so editing `~/.zshrc`
 edits `zsh/zshrc`. [Updating](guides/updating.md) covers committing those
 edits and pulling them on another machine.
+
+## Language toolchains and global mise tools
+
+`install.sh` links `mise/config.toml` to `~/.config/mise/config.toml`, but it
+does not run `mise install`. Because `mise/config.toml` includes `go:` and
+`cargo:` tools, install Go and Rust before running `mise install` on a new Mac:
+
+1. Install Go (`/usr/local/go`) from the official macOS installer.
+2. Install Rust with `rustup` from the official installer.
+3. Restart your shell (`exec zsh`), then install the global mise tools:
+
+```bash
+mise install
+```
+
+See [Project tools and MCP servers](guides/project-tools.md) for what stays
+global versus per project.
 
 ## With Claude Code
 

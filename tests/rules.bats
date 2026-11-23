@@ -51,3 +51,9 @@ MARKER='Shared rules marker: agents-rules-3f9c2a71'
   run grep -xE '@\[[^]]+\]\(~/\.config/dotfiles/AGENTS\.md\)' "$REPO_ROOT/agy/GEMINI.md"
   [ "$status" -eq 0 ]
 }
+
+@test "rules: push to main, merge, tag and publish are OK-gated in the shared file and banned only in agy's part" {
+  ! grep -qE 'Never (push to main|merge)' "$(SHARED)" || false
+  grep -qF 'Push to main, merge, tag or publish only when I ask for that exact action.' "$(SHARED)"
+  grep -qF 'Never push to main. Never merge, tag or publish.' "$REPO_ROOT/agy/GEMINI.md"
+}

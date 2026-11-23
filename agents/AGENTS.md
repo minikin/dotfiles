@@ -89,7 +89,8 @@ Repos with a `.jj/` folder use jj, colocated with git.
   `signing.*` in jj config.
 - Identity is picked automatically per folder. Switch it with `sign-as` only when I ask.
 - Push, open a PR, or move or delete a bookmark only with my explicit OK in chat, for that action
-  or for a task I described. Never push to main. Never merge, tag or publish.
+  or for a task I described.
+- Push to main, merge, tag or publish only when I ask for that exact action.
 - When to commit is in your tool's own part.
 
 ## Projects, gates and tools

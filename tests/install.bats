@@ -11,7 +11,9 @@ setup() {
 
 home_listing() { (cd "$HOME" && find . | LC_ALL=C sort); }
 count_backups() { find "$HOME" "$DOTFILES" -name '*.bak-*' 2>/dev/null | wc -l | tr -d ' '; }
-file_mode() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
+# BSD form first, GNU form second, each captured on its own: GNU stat prints a report for -f
+# before it fails, and that output must not reach the comparison.
+file_mode() { local m; m=$(stat -f %Lp "$1" 2>/dev/null) || m=$(stat -c %a "$1"); echo "$m"; }
 SETTINGS() { echo "$HOME/.claude/settings.json"; }
 
 @test "install: --dry-run changes nothing on disk" {
@@ -734,10 +736,10 @@ JSON
   [ "$(file_mode "$(AGY_HOOKS)")" = "600" ]
 }
 
-@test "install: a GNU stat first on PATH does not break the mode lookup" {
+# make_gnu_stat: a stat in $BATS_TEST_TMPDIR/gnu that behaves like GNU's. It reads -f as "file
+# system", prints a report, then fails on the format string it took for a path.
+make_gnu_stat() {
   mkdir -p "$BATS_TEST_TMPDIR/gnu"
-  # GNU stat reads -f as "file system": it prints a report for the paths it finds, then fails on
-  # the format string it took for a path.
   cat >"$BATS_TEST_TMPDIR/gnu/stat" <<'STUB'
 #!/bin/bash
 if [[ " $* " == *" -f "* ]]; then echo "  File: \"$BATS_TEST_TMPDIR\" ID: 0 Namelen: 255 Type: apfs"; echo "stat: cannot read file system information for '%Lp'" >&2; exit 1; fi
@@ -745,9 +747,21 @@ if [[ " $* " == *" -c %a "* ]]; then exec /usr/bin/stat -L -f %Lp "${@: -1}"; fi
 exec /usr/bin/stat "$@"
 STUB
   chmod +x "$BATS_TEST_TMPDIR/gnu/stat"
+}
+
+@test "install: a GNU stat first on PATH does not break the mode lookup" {
+  make_gnu_stat
   write_agy_hooks
   chmod 640 "$(AGY_HOOKS)"
   PATH="$BATS_TEST_TMPDIR/gnu:$PATH" run_install
   [ "$status" -eq 0 ]
   [ "$(file_mode "$(AGY_HOOKS)")" = "640" ]
+}
+
+@test "install tests: file_mode prints only the mode with a GNU stat first on PATH" {
+  make_gnu_stat
+  echo x >"$BATS_TEST_TMPDIR/f"
+  chmod 640 "$BATS_TEST_TMPDIR/f"
+  PATH="$BATS_TEST_TMPDIR/gnu:$PATH" run file_mode "$BATS_TEST_TMPDIR/f"
+  [ "$output" = "640" ]
 }

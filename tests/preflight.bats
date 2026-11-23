@@ -132,7 +132,7 @@ exit 3
 STUB
   preflight
   [ "$status" -eq 1 ]
-  [[ $output == *"FAIL  env: cannot check launchd (launchctl getenv failed)"* ]] || false
+  [[ $output == *"FAIL  env: cannot check launchd for ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_HOME (launchctl getenv failed)"* ]] || false
   [[ $output != *"no API-key variables in launchd"* ]] || false
 
   rm "$STUBS/launchctl"
@@ -152,4 +152,17 @@ STUB
   STUB_LIMITS='{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":80,"windowDurationMins":300,"resetsAt":1795936747}}}}' \
     preflight --limits
   [[ $output == *"codex limit: no weekly window in the answer"* ]] || false
+}
+
+@test "preflight: a failed launchd lookup still reports the names the other lookups found" {
+  stub launchctl <<'STUB'
+[[ $2 == ANTHROPIC_API_KEY ]] && exit 3
+[[ $2 == OPENAI_API_KEY ]] && echo test-not-a-key
+exit 0
+STUB
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  env: set in launchd: OPENAI_API_KEY"* ]] || false
+  [[ $output == *"FAIL  env: cannot check launchd for ANTHROPIC_API_KEY (launchctl getenv failed)"* ]] || false
+  [[ $output != *test-not-a-key* ]] || false
 }

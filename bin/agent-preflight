@@ -41,21 +41,24 @@ else
   fail "rex: not installed"
 fi
 
-here=() launchd=() launchd_err=''
+here=() launchd=() unchecked=() launchd_err=''
 have launchctl || launchd_err='launchctl not found'
 for v in "${VARS[@]}"; do
   [[ -n ${!v+set} ]] && here+=("$v")
   # GUI apps, and so the Rex server, inherit launchd's environment, not this shell's.
-  [[ -n $launchd_err ]] && continue
-  if ! value=$(launchctl getenv "$v" 2>/dev/null); then launchd_err='launchctl getenv failed'; continue; fi
+  [[ $launchd_err == 'launchctl not found' ]] && continue
+  if ! value=$(launchctl getenv "$v" 2>/dev/null); then
+    launchd_err='launchctl getenv failed'; unchecked+=("$v"); continue
+  fi
   [[ -n $value ]] && launchd+=("$v")
 done
 unset value
 if (( ${#here[@]} )); then fail "env: set in this shell: ${here[*]} (unset them)"
 else ok "env: no API-key variables in this shell"; fi
-if [[ -n $launchd_err ]]; then fail "env: cannot check launchd ($launchd_err)"
-elif (( ${#launchd[@]} )); then fail "env: set in launchd: ${launchd[*]} (launchctl unsetenv <name>)"
-else ok "env: no API-key variables in launchd"; fi
+(( ${#launchd[@]} )) && fail "env: set in launchd: ${launchd[*]} (launchctl unsetenv <name>)"
+if [[ $launchd_err == 'launchctl not found' ]]; then fail "env: cannot check launchd ($launchd_err)"
+elif [[ -n $launchd_err ]]; then fail "env: cannot check launchd for ${unchecked[*]} ($launchd_err)"
+elif (( ! ${#launchd[@]} )); then ok "env: no API-key variables in launchd"; fi
 
 if ! have jq; then
   fail "claude: jq is missing, cannot read claude auth status"

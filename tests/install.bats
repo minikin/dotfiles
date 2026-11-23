@@ -687,3 +687,15 @@ JSON
   [ "$(cat "$(AGY_HOOKS)")" = "$before" ]
   [ ! -e "$HOME/.gemini/GEMINI.md" ]
 }
+
+@test "install: an existing dotfiles-agent-guard entry is replaced whole, so enabled: false cannot survive" {
+  write_agy_hooks
+  jq '. + {"dotfiles-agent-guard": {"enabled": false, "Stop": [{"command": "./old.sh"}]}}' "$(AGY_HOOKS)" >"$BATS_TEST_TMPDIR/h.json"
+  mv "$BATS_TEST_TMPDIR/h.json" "$(AGY_HOOKS)"
+  run_install
+  [ "$status" -eq 0 ]
+  run jq -e --slurpfile f "$DOTFILES/agy/hooks.fragment.json" '."dotfiles-agent-guard" == $f[0]."dotfiles-agent-guard"' "$(AGY_HOOKS)"
+  [ "$status" -eq 0 ]
+  run jq -r 'keys | join(",")' "$(AGY_HOOKS)"
+  [ "$output" = "dotfiles-agent-guard,other-a,other-b" ]
+}

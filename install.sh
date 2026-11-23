@@ -143,16 +143,17 @@ else
   replace_if_changed "$SETTINGS" "$SETTINGS.tmp"
 fi
 
-echo "== agy hooks (merge; the dotfiles hook's key wins, every other named hook stays)"
+echo "== agy hooks (merge; the dotfiles hook's entry is replaced whole, every other named hook stays)"
 AGY_HOOKS=$HOME/.gemini/config/hooks.json
 if (( DRY )); then
   echo "+ merge agy/hooks.fragment.json into $AGY_HOOKS"
 else
   command -v jq >/dev/null || { echo "jq is required — run: brew bundle" >&2; exit 1; }
   mkdir -p "${AGY_HOOKS%/*}"
-  # Top-level keys are hook names, so a deep merge adds or replaces only dotfiles-agent-guard.
+  # Top-level keys are hook names. `+` replaces dotfiles-agent-guard whole, so a stale
+  # "enabled": false in it cannot survive, and keeps every other named hook.
   jq -n --slurpfile cur <(cat "$AGY_HOOKS" 2>/dev/null || true) \
-        --slurpfile add "$REPO/agy/hooks.fragment.json" '($cur[0] // {}) * $add[0]' > "$AGY_HOOKS.tmp" ||
+        --slurpfile add "$REPO/agy/hooks.fragment.json" '($cur[0] // {}) + $add[0]' > "$AGY_HOOKS.tmp" ||
     { rm -f "$AGY_HOOKS.tmp"; echo "agy hooks merge failed; $AGY_HOOKS untouched" >&2; exit 1; }
   replace_if_changed "$AGY_HOOKS" "$AGY_HOOKS.tmp"
 fi

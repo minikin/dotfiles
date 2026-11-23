@@ -318,10 +318,25 @@ sets_guarded() {
     argv=("${(@)argv[2,-1]}")
   done
   case ${argv[1]:t} in
-    (export|declare|typeset|local|readonly|env)
+    (export|declare|typeset|local|readonly)
       for v in "${(@)argv[2,-1]}"; do
         assigns_guarded $v && return 0
-        [[ ${argv[1]} != env ]] && is_guarded $v && { REASON="exports $v"; return 0 }
+        is_guarded $v && { REASON="exports $v"; return 0 }
+      done ;;
+    (env)
+      # Only env's own NAME=value words, up to the child executable: the child's arguments, such
+      # as a prompt reading OPENAI_API_KEY=example, are not assignments.
+      local -i i=2
+      while (( i <= $#argv )); do
+        v=$argv[i]
+        case $v in
+          (-u|--unset|-C|-P|-S|--chdir|--split-string) (( i++ )) ;;
+          (--) break ;;
+          (-*) ;;
+          ([A-Za-z_][A-Za-z0-9_]#=*) assigns_guarded $v && return 0 ;;
+          (*) break ;;
+        esac
+        (( i++ ))
       done ;;
     (launchctl) [[ $argv[2] == setenv ]] && is_guarded "$argv[3]" && { REASON="sets $argv[3] in launchd"; return 0 } ;;
   esac

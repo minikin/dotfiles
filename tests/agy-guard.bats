@@ -360,3 +360,15 @@ EOF
   run_cmd "rex send -b b1 'cd /tmp && env -u OPENAI_API_KEY -u CODEX_HOME codex -p repo'"
   [[ $status -eq 0 && -z $output ]] || false
 }
+
+@test "agy guard: a prompt argument that looks like an assignment is not an env assignment" {
+  local c
+  for c in "rex send -b b1 'env -u OPENAI_API_KEY -u CODEX_HOME codex exec OPENAI_API_KEY=example'" \
+           "rex send -b b1 'env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p ANTHROPIC_API_KEY=x'" \
+           "env -u OPENAI_API_KEY -u CODEX_HOME codex exec OPENAI_API_KEY=example"; do
+    run_cmd "$c"
+    [[ $status -eq 0 && -z $output ]] || { echo "not allowed: $c -> $output" >&3; false; }
+  done
+  run_cmd "rex send -b b1 'env OPENAI_API_KEY=x codex exec y'"
+  is_deny
+}

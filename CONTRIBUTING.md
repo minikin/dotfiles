@@ -40,7 +40,7 @@ just check       # lint, tests, the secret scan and the commit check, the same a
 
 | Recipe         | Runs                                                                                      |
 | -------------- | ----------------------------------------------------------------------------------------- |
-| `just lint`    | `shellcheck` on `install.sh`, `claude/*.sh` and `scripts/*.sh`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, and `lychee --offline` on every Markdown file in the repo. |
+| `just lint`    | `shellcheck` on `install.sh`, `claude/*.sh`, `scripts/*.sh` and `bin/*`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file including `agy/*.zsh`, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, and `lychee --offline` on every Markdown file in the repo. |
 | `just test`    | `bats tests`.                                                                             |
 | `just secrets` | `scripts/check-secrets.sh`, then `gitleaks dir . --config .gitleaks.toml` when gitleaks is installed. |
 | `just commits` | `scripts/check-commits.sh`: every non-merge commit subject in `origin/main..HEAD` (or the range given, `just commits <range>`) follows Conventional Commits. |
@@ -65,7 +65,8 @@ not.
 
 The tests are bats suites in `tests/`, one per area: `install.bats`,
 `jj.bats`, `sign.bats`, `drift.bats`, `statusline.bats`, `infra.bats`,
-`reload.bats`, `navi.bats`, `commits.bats`, `hooks.bats`, `where.bats`. Each test calls the helpers in
+`reload.bats`, `navi.bats`, `commits.bats`, `hooks.bats`, `where.bats`,
+`rules.bats`, `agy-guard.bats`, `preflight.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 
@@ -175,8 +176,8 @@ Messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1
 `<type>(<scope>): <summary>`, with the summary in the imperative and in
 lower case. The type is one of `feat`, `fix`, `docs`, `test`, `ci`,
 `refactor`, `chore` or `perf`. The scope is the area the change touches:
-`ghostty`, `zsh`, `jj`, `install`, `infra`, `claude`, `navi`, `mise`,
-`starship`, `scripts` or `just`. Leave the scope out when the type already names the
+`ghostty`, `zsh`, `jj`, `install`, `infra`, `claude`, `agents`, `agy`,
+`codex`, `navi`, `mise`, `starship`, `scripts` or `just`. Leave the scope out when the type already names the
 area (`docs:`, `ci:`, `test:`). Mark a change that breaks an existing setup
 with `!` after the scope and a `BREAKING CHANGE:` footer that says what to
 do. One change per scope per commit.
@@ -213,7 +214,8 @@ committed.
 | Path                       | What it is                                                    |
 | -------------------------- | ------------------------------------------------------------- |
 | `install.sh`               | The installer: links, settings merge, identity                |
-| `ghostty/`, `zsh/`, `starship/`, `jj/`, `mise/`, `claude/`, `infra/`, `navi/` | The configs it installs |
+| `ghostty/`, `zsh/`, `starship/`, `jj/`, `mise/`, `claude/`, `agents/`, `agy/`, `infra/`, `navi/` | The configs it installs |
+| `bin/`                     | Commands linked into `~/.local/bin`: `agent-preflight`         |
 | `Brewfile`                 | Every package, including the tools the checks need            |
 | `justfile`                 | Every check, local and CI                                     |
 | `scripts/check-secrets.sh` | The personal-data scan                                        |

@@ -131,6 +131,33 @@ everything else stays.
 `~/.zprofile` is a file other installers append to as well, so the repo adds
 its snippet once and leaves the rest alone.
 
+## Why one rules file for three agents
+
+Claude Code, Codex and agy each had their own global rules, and they drifted:
+the same jj and commit rules in three wordings, one of them on an
+iCloud-synced Desktop that macOS can evict. `agents/AGENTS.md` holds what all
+three share, and each tool keeps a short part for what differs, such as when
+it may commit.
+
+The three tools load it three ways because they include files differently.
+Claude resolves `@../agents/AGENTS.md` next to the real file, so the import
+in `claude/CLAUDE.md` works through the link. Codex has no includes, so
+`~/.codex/AGENTS.md` is the shared file itself and its own rules are a
+section of it. agy resolves a relative include next to the link in
+`~/.gemini/`, so its include names `~/.config/dotfiles/AGENTS.md`, a link
+`install.sh` makes. A generated file per tool would have avoided the Codex
+section, but `just drift` would report it as `DIFFERS` after every edit.
+
+An agy plugin could bundle the rules, the hook and the skill in one
+directory, but agy skips a plugin directory that is a link and a plugin whose
+files are links. The hook is merged into `hooks.json` under one key instead,
+like the Claude settings.
+
+The agy hook never answers `allow`. agy treats `allow` as approval and would
+skip its own permission prompt, so the hook either denies or says nothing.
+It tokenises commands with zsh's own lexer (`${(z)...}`), which ships with
+macOS, so it needs no extra parser.
+
 ## Why loopback-only infra
 
 Docker publishes a port on every interface unless told otherwise. On a

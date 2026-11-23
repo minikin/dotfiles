@@ -36,7 +36,7 @@ what the repo's own checks need.
 and a link that is already in place as `ok`. Read the `mv` lines: those are
 the files it would back up. Then run it for real. In order, it symlinks the
 configs into `$HOME`, moves the macOS Ghostty config aside, appends the mise
-line to `~/.zprofile` and the ssh `PATH` to `~/.zshenv`, merges the Claude Code settings, writes your identity,
+line to `~/.zprofile` and the ssh `PATH` to `~/.zshenv`, merges the Claude Code settings and the agy hook, links the Rex orchestrator skill for agy, writes your identity,
 writes the machine settings file `~/.config/dotfiles/config`, mirrors the
 identity into git, and validates the Ghostty config.
 [install.sh](reference/install-sh.md) describes each step.

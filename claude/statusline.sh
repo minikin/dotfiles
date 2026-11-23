@@ -43,7 +43,9 @@ if where=$("$here/where.sh" 2>/dev/null); then
     parts+=("git:$branch")
   fi
 else
-  parts+=("${PWD/#$HOME/~}")
+  # A literal ~ in the replacement is tilde-expanded by bash 5.2+, so it comes from a variable.
+  tilde="~"
+  parts+=("${PWD/#$HOME/$tilde}")
 fi
 [[ -n $model ]] && parts+=("$model")
 [[ -n $ctx ]] && parts+=("$ctx")

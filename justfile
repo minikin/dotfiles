@@ -57,6 +57,7 @@ check: lint test secrets commits
 drift:
     #!/usr/bin/env bash
     set -euo pipefail
+    tilde="~"   # a literal ~ in a replacement is tilde-expanded by bash 5.2+
     grep '^link ' install.sh | while read -r _ src dest _; do
       dest=${dest//\"/}
       dest=${dest/\$HOME/$HOME}
@@ -68,7 +69,7 @@ drift:
       elif [[ -e $dest ]]; then status=DIFFERS
       else status=missing
       fi
-      printf '%-12s %s%s\n' "$status" "${dest/#$HOME/~}" "$target"
+      printf '%-12s %s%s\n' "$status" "${dest/#$HOME/$tilde}" "$target"
     done
 
 # Start the local Redis / Kafka / Jaeger stack and wait until healthy

@@ -8,9 +8,10 @@
 #
 # Inspects run_command's CommandLine and manage_task send_input's Input (text typed into a running
 # process), nothing else, so a toolSummary or a file body that mentions a launch is never blocked.
-# The command is tokenised by zsh's own lexer (${(z)...}) and checked command by command, through
-# env, op run, nohup, timeout and similar wrappers, bash/sh/zsh -c strings, $(...) and backticks,
-# the child after rex's `--` and the text of rex send. Anything it cannot inspect is denied.
+# The command is tokenised by zsh's own lexer (${(Z:C:)...}) and checked command by command,
+# through env, op run, nohup, timeout and similar wrappers, bash/sh/zsh -c strings, $(...) and
+# backticks, and the child after rex's `--`. A rex send message is data. Anything it cannot
+# inspect is denied.
 # Not caught: dynamic command words ($c, eval), aliases, scripts in files, encoded commands.
 
 emulate -L zsh
@@ -106,7 +107,7 @@ strip_heredocs() {
 }
 
 # check_text <shell text> <depth> <typed> <unset names...>: 0 when fine, 1 with REASON set.
-# typed=1 is text typed into another program (rex send, manage_task input, a Rex child string):
+# typed=1 is text typed into another program (manage_task input, a Rex child string):
 # a chat message like "Don't push." does not parse, so it is tokenised and checked anyway instead
 # of denied. A shell runs the lines before a syntax error, which the tokens still show.
 check_text() {
@@ -252,23 +253,23 @@ check_argv() {
       check_argv $depth "$unset_str" "${child[@]}"
       return ;;
     (rex)
+      # Find the subcommand past rex's global options.
+      i=2
+      while (( i <= $#argv )) && [[ $argv[i] == -* ]]; do
+        [[ $argv[i] == (-S|--server|-C|--client|--timeout|--color) ]] && (( i++ ))
+        (( i++ ))
+      done
+      # A rex send message is text for an agent, not a command line: data. Its outer $(...) was
+      # already checked as a word of this command.
+      [[ $argv[i] == (send|send-key) ]] && return 0
       i=${argv[(i)--]}
-      if (( i <= $#argv )); then
-        child=("${(@)argv[i+1,-1]}")
-        (( $#child )) || return 0
-        # The child gets the environment of the Rex server's login shell, not this one.
-        check_argv $depth "" "${child[@]}" || return 1
-        if (( $#child == 1 )) && [[ $child[1] == *[[:space:]]* ]]; then
-          check_text "$child[1]" $(( depth + 1 )) 1 || return 1
-        fi
-        return 0
-      fi
-      if (( ${argv[(Ie)send]} )); then
-        # Text typed into another terminal runs there as a new shell command line.
-        for sub in "${(@)argv[${argv[(i)send]}+1,-1]}"; do
-          [[ $sub == -* ]] && continue
-          check_text "$sub" $(( depth + 1 )) 1 || return 1
-        done
+      (( i <= $#argv )) || return 0
+      child=("${(@)argv[i+1,-1]}")
+      (( $#child )) || return 0
+      # The child gets the environment of the Rex server's login shell, not this one.
+      check_argv $depth "" "${child[@]}" || return 1
+      if (( $#child == 1 )) && [[ $child[1] == *[[:space:]]* ]]; then
+        check_text "$child[1]" $(( depth + 1 )) 1 || return 1
       fi
       return 0 ;;
     (bash|sh|zsh|dash|ksh)

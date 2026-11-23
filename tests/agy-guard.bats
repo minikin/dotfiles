@@ -98,7 +98,6 @@ rex window new a -- env ANTHROPIC_AUTH_TOKEN=x claude
 rex window new a -- 'op run -- claude'
 bash -c 'ANTHROPIC_AUTH_TOKEN=x claude'
 sh -lc "op run -- codex"
-rex send -b b1 'op run -- claude'
 nohup timeout 5 op run -- claude &
 x=1 && cd /tmp && ANTHROPIC_AUTH_TOKEN=t exec claude -p hi
 EOF
@@ -183,8 +182,6 @@ EOF
   send_input "I can't"
   [ -z "$output" ]
   send_input $'op run -- claude\necho "broken'
-  is_deny
-  run_cmd $'rex send -b b1 \'op run -- claude\necho "broken\''
   is_deny
 }
 
@@ -279,5 +276,26 @@ EOF
     run_cmd "$c"
     is_deny || { echo "not denied: $c -> $output" >&3; false; }
     [[ $(jq -r .reason <<<"$output") == *with-api-key* ]] || false
+  done
+}
+
+@test "agy guard: a rex send message is data, even when it names a launch" {
+  local c
+  for c in $'rex send -s s1 -b b1 \'Read the brief.\ncodex --help with examples\nDo not push.\'' \
+           "rex send -b b1 'op run -- claude is what the hook blocks'" \
+           "rex -S host send -b b1 claude" \
+           "rex send -s s1 -b b1 'Do not rename the Rex session. Your brief is in /tmp/b.md.'" \
+           $'rex send -b b1 \'op run -- claude\necho "broken\''; do
+    run_cmd "$c"
+    [[ $status -eq 0 && -z $output ]] || { echo "not allowed: $c -> $output" >&3; false; }
+  done
+}
+
+@test "agy guard: rex still checks expansions in the outer command and the child after --" {
+  local c
+  for c in 'rex send -b b1 "$(op run -- claude)"' 'rex --timeout 5s window new a -- claude' \
+           'rex -S h run -- op run -- claude' 'rex new s -- codex' 'rex split -- env CODEX_HOME=x codex'; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
   done
 }

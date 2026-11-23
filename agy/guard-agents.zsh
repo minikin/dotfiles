@@ -22,7 +22,7 @@ typeset -ga CLAUDE_VARS=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN)
 typeset -ga CODEX_VARS=(OPENAI_API_KEY CODEX_HOME)
 typeset -gi MAX_DEPTH=8
 typeset -g REASON='' HD_TEXT=''
-typeset -ga HD_BODIES subs
+typeset -ga HD_BODIES subs ENV_ARGV
 
 deny() {
   local reason="agent guard: $1"
@@ -82,6 +82,28 @@ extract_subs() {
     fi
     (( i++ ))
   done
+}
+
+# env_split <env argv...>: sets ENV_ARGV to the argv with every -S/--split-string string spliced
+# in as words, the way env itself splits it, so `env -S 'KEY=x claude'` reads as `env KEY=x claude`.
+# Returns 1 past 8 splices.
+env_split() {
+  local -a argv=("$@")
+  local i=2 v str n=0
+  while (( i <= $#argv )); do
+    v=$argv[i] str=''
+    case $v in
+      (-S|--split-string) str=$argv[i+1]; argv[i,i+1]=("${(@Q)${(z)str}}") ;;
+      (-S?*) str=${v#-S}; argv[i]=("${(@Q)${(z)str}}") ;;
+      (--split-string=*) str=${v#--split-string=}; argv[i]=("${(@Q)${(z)str}}") ;;
+      (-u|--unset|-C|-P|--chdir) (( i += 2 )); continue ;;
+      (--) break ;;
+      (-*|[A-Za-z_][A-Za-z0-9_]#=*) (( i++ )); continue ;;
+      (*) break ;;
+    esac
+    (( ++n > 8 )) && return 1
+  done
+  ENV_ARGV=("${argv[@]}")
 }
 
 # strip_heredocs <text>: sets HD_TEXT to the text without heredoc bodies and HD_BODIES to the
@@ -195,6 +217,8 @@ check_argv() {
   exe=${argv[1]:t}
   case $exe in
     (env)
+      env_split "${argv[@]}" || { REASON="env -S nested too deep to inspect"; return 1 }
+      argv=("${ENV_ARGV[@]}")
       i=2
       while (( i <= $#argv )); do
         v=$argv[i]
@@ -203,7 +227,7 @@ check_argv() {
           (-u|--unset) (( i++ )); unset_names+=("$argv[i]") ;;
           (-u?*) unset_names+=("${v#-u}") ;;
           (--unset=*) unset_names+=("${v#--unset=}") ;;
-          (-C|-P|-S|--chdir|--split-string) (( i++ )) ;;
+          (-C|-P|--chdir) (( i++ )) ;;
           (--) (( i++ )); break ;;
           (-*) ;;
           ([A-Za-z_][A-Za-z0-9_]#=*) assigns_guarded $v && return 1 ;;
@@ -326,11 +350,13 @@ sets_guarded() {
     (env)
       # Only env's own NAME=value words, up to the child executable: the child's arguments, such
       # as a prompt reading OPENAI_API_KEY=example, are not assignments.
+      env_split "${argv[@]}" || { REASON="env -S nested too deep to inspect"; return 0 }
+      argv=("${ENV_ARGV[@]}")
       local -i i=2
       while (( i <= $#argv )); do
         v=$argv[i]
         case $v in
-          (-u|--unset|-C|-P|-S|--chdir|--split-string) (( i++ )) ;;
+          (-u|--unset|-C|-P|--chdir) (( i++ )) ;;
           (--) break ;;
           (-*) ;;
           ([A-Za-z_][A-Za-z0-9_]#=*) assigns_guarded $v && return 0 ;;
@@ -382,11 +408,15 @@ real_exe() {
   while (( $#argv )); do
     while (( $#argv )) && [[ $argv[1] == [A-Za-z_][A-Za-z0-9_]#=* ]]; do argv=("${(@)argv[2,-1]}"); done
     (( $#argv )) || return 0
+    if [[ ${argv[1]:t} == env ]]; then
+      env_split "${argv[@]}" || { print -r -- env-split; return 0 }
+      argv=("${ENV_ARGV[@]}")
+    fi
     case ${argv[1]:t} in
       (env|exec|command|nohup|nice|sudo|caffeinate|timeout|xargs|stdbuf)
         i=2
         while (( i <= $#argv )) && [[ $argv[i] == -* || $argv[i] == [A-Za-z_][A-Za-z0-9_]#=* ]]; do
-          [[ $argv[i] == (-u|--unset|-a|-n|-s|-k|-t|-w|-C|-P|-S) ]] && (( i++ ))
+          [[ $argv[i] == (-u|--unset|-a|-n|-s|-k|-t|-w|-C|-P) ]] && (( i++ ))
           (( i++ ))
         done
         [[ ${argv[1]:t} == timeout ]] && (( i++ ))

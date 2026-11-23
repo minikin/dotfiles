@@ -372,3 +372,20 @@ EOF
   run_cmd "rex send -b b1 'env OPENAI_API_KEY=x codex exec y'"
   is_deny
 }
+
+@test "agy guard: env -S strings are split and checked like env's own arguments" {
+  local c
+  for c in "env -S 'ANTHROPIC_API_KEY=x claude'" "env -S'OPENAI_API_KEY=x codex'" \
+           "env --split-string='CODEX_HOME=x codex'" "env --split-string 'claude --model sonnet'" \
+           "env -S 'claude --model sonnet'" "op run -- env -S 'claude'" \
+           "rex send -b b1 \"env -S 'OPENAI_API_KEY=x codex exec y'\"" \
+           "rex window new a -- env -S 'ANTHROPIC_AUTH_TOKEN=t claude'"; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
+  done
+  for c in "env -S 'echo hi'" "env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -S 'claude --model sonnet'" \
+           "env -S '-u OPENAI_API_KEY -u CODEX_HOME codex -p repo'"; do
+    run_cmd "$c"
+    [[ $status -eq 0 && -z $output ]] || { echo "not allowed: $c -> $output" >&3; false; }
+  done
+}

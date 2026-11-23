@@ -10,8 +10,8 @@
 # process), nothing else, so a toolSummary or a file body that mentions a launch is never blocked.
 # The command is tokenised by zsh's own lexer (${(Z:C:)...}) and checked command by command,
 # through env, op run, nohup, timeout and similar wrappers, bash/sh/zsh -c strings, $(...) and
-# backticks, and the child after rex's `--`. A rex send message is data. Anything it cannot
-# inspect is denied.
+# backticks, the child after rex's `--`, and each line of a rex send message that is itself a
+# launch. Anything it cannot inspect is denied.
 # Not caught: dynamic command words ($c, eval), aliases, scripts in files, encoded commands.
 
 emulate -L zsh
@@ -265,9 +265,21 @@ check_argv() {
         [[ $argv[i] == (-S|--server|-C|--client|--timeout|--color) ]] && (( i++ ))
         (( i++ ))
       done
-      # A rex send message is text for an agent, not a command line: data. Its outer $(...) was
-      # already checked as a word of this command.
-      [[ $argv[i] == (send|send-key) ]] && return 0
+      [[ $argv[i] == send-key ]] && return 0
+      if [[ $argv[i] == send ]]; then
+        # The message goes to an agent pane or to a shell. Its outer $(...) was already checked as
+        # a word of this command. Each line is checked for being a launch itself.
+        (( i++ ))
+        while (( i <= $#argv )); do
+          case $argv[i] in
+            (-b|--block|-s|--session|-w|--window|-S|--server|-C|--client|--timeout|--color) (( i += 2 )); continue ;;
+            (-*) ;;
+            (*) check_send_lines "$argv[i]" || return 1 ;;
+          esac
+          (( i++ ))
+        done
+        return 0
+      fi
       i=${argv[(i)--]}
       (( i <= $#argv )) || return 0
       child=("${(@)argv[i+1,-1]}")
@@ -294,6 +306,59 @@ check_argv() {
       check_agent $exe "$unset_str" "${(@)argv[2,-1]}"
       return ;;
   esac
+  return 0
+}
+
+# sets_guarded <argv...>: 0 when this one command assigns or exports a guarded variable.
+sets_guarded() {
+  local -a argv=("$@")
+  local v
+  while (( $#argv )) && [[ $argv[1] == [A-Za-z_][A-Za-z0-9_]#(\+|)=* ]]; do
+    assigns_guarded $argv[1] && return 0
+    argv=("${(@)argv[2,-1]}")
+  done
+  case ${argv[1]:t} in
+    (export|declare|typeset|local|readonly|env)
+      for v in "${(@)argv[2,-1]}"; do
+        assigns_guarded $v && return 0
+        [[ ${argv[1]} != env ]] && is_guarded $v && { REASON="exports $v"; return 0 }
+      done ;;
+    (launchctl) [[ $argv[2] == setenv ]] && is_guarded "$argv[3]" && { REASON="sets $argv[3] in launchd"; return 0 } ;;
+  esac
+  return 1
+}
+
+# check_send_lines <message>: a rex send message may land in a shell pane, which runs each line.
+# A line is denied only when it is itself a forbidden launch: its first command runs claude, codex
+# or op run (checked like any command), or it sets a guarded variable and launches claude or
+# codex. Prose that names a launch mid-sentence passes.
+check_send_lines() {
+  local line w exe sets launches
+  local -a words cur first
+  for line in "${(@f)1}"; do
+    words=("${(Z:C:)line}")
+    cur=() first=() sets='' launches=0
+    for w in "${words[@]}" ';'; do
+      case $w in
+        (';'|';;'|'&&'|'||'|'|'|'|&'|'&'|'&!'|'&|'|'('|')'|'{'|'}'|'()')
+          if (( $#cur )); then
+            (( $#first )) || first=("${cur[@]}")
+            [[ $(real_exe "${cur[@]}") == (claude|codex) ]] && launches=1
+            [[ -z $sets ]] && sets_guarded "${cur[@]}" && sets=$REASON
+          fi
+          cur=(); continue ;;
+      esac
+      cur+=("${(Q)w}")
+    done
+    (( $#first )) || continue
+    exe=$(real_exe "${first[@]}")
+    if [[ $exe == (claude|codex|op) ]]; then
+      check_argv 0 "" "${first[@]}" || { REASON="rex send line: $REASON"; return 1 }
+    fi
+    if [[ -n $sets ]] && (( launches )); then
+      REASON="rex send line $sets and launches an agent"; return 1
+    fi
+  done
   return 0
 }
 

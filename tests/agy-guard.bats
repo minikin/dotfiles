@@ -279,15 +279,33 @@ EOF
   done
 }
 
-@test "agy guard: a rex send message is data, even when it names a launch" {
+@test "agy guard: a rex send message that only mentions a launch mid-sentence passes" {
   local c
-  for c in $'rex send -s s1 -b b1 \'Read the brief.\ncodex --help with examples\nDo not push.\'' \
-           "rex send -b b1 'op run -- claude is what the hook blocks'" \
-           "rex -S host send -b b1 claude" \
+  for c in $'rex send -s s1 -b b1 \'Read the brief.\nUse codex --help for examples.\nDo not push.\'' \
+           "rex send -b b1 'The hook blocks op run -- claude and ANTHROPIC_API_KEY=x claude.'" \
+           "rex send -b b1 'Never set OPENAI_API_KEY before you start codex.'" \
            "rex send -s s1 -b b1 'Do not rename the Rex session. Your brief is in /tmp/b.md.'" \
-           $'rex send -b b1 \'op run -- claude\necho "broken\''; do
+           "rex send -b b1 'Don'\\''t push. # claude'" \
+           "rex send -b b1 'env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude --model haiku'" \
+           "rex send -b b1 'export OPENAI_API_KEY=x'" \
+           "rex send -b b1 'codex login status'"; do
     run_cmd "$c"
     [[ $status -eq 0 && -z $output ]] || { echo "not allowed: $c -> $output" >&3; false; }
+  done
+}
+
+@test "agy guard: a rex send line that is itself a forbidden launch is denied" {
+  local c
+  for c in "rex send -b b1 'op run -- claude'" "rex send -b b1 'claude --model sonnet'" \
+           "rex send -b b1 '  codex -p repo'" "rex send -b b1 'ANTHROPIC_API_KEY=x claude'" \
+           "rex send -b b1 'export OPENAI_API_KEY=x && codex'" \
+           "rex send -b b1 'env -u OPENAI_API_KEY -u CODEX_HOME codex login --with-api-key'" \
+           "rex send -b b1 'nohup op run --env-file .env -- codex exec x'" \
+           $'rex send -s s1 -b b1 \'cd /tmp\ncodex -p repo\'' \
+           "rex -S host --timeout 5s send -b b1 'codex exec x'" \
+           $'rex send -b b1 \'op run -- claude\necho "broken\''; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
   done
 }
 

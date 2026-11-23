@@ -52,10 +52,19 @@ link_to() {  # link_to <absolute target outside the repo> <dest>
   run ln -s "$target" "$dest"
 }
 
-# replace_if_changed <file> <file.tmp>: move tmp over file unless they hold the same JSON, keeping
-# a backup of the old file.
+# merge_tmp <file>: a new private temp file next to <file>, for a merge result. mktemp never opens an
+# existing path, and the same directory keeps the final mv a rename.
+merge_tmp() { mktemp "$1.merge.XXXXXX"; }
+
+# replace_if_changed <file> <tmp>: move tmp over file unless they hold the same JSON, keeping a
+# backup of the old file and its mode. A new file gets the umask's default mode, not mktemp's 600.
 replace_if_changed() {
   local file=$1 tmp=$2
+  if [[ -f $file ]]; then
+    chmod "$(stat -f %Lp "$file" 2>/dev/null || stat -c %a "$file")" "$tmp"
+  else
+    chmod "$(printf '%o' $(( 0666 & ~$(umask) )))" "$tmp"
+  fi
   if [[ -f $file ]] && jq -e --slurpfile n "$tmp" '. == $n[0]' "$file" >/dev/null 2>&1; then
     rm -f "$tmp"; echo "ok   $file (unchanged)"
   elif [[ -f $file ]]; then
@@ -128,6 +137,7 @@ if (( DRY )); then
 else
   command -v jq >/dev/null || { echo "jq is required — run: brew bundle" >&2; exit 1; }
   mkdir -p "$HOME/.claude"
+  tmp=$(merge_tmp "$SETTINGS")
   # Merge into a temp file and only replace on success, so a jq failure (bad JSON,
   # empty file) never leaves settings.json truncated. An empty file counts as {}.
   jq -n --slurpfile cur <(cat "$SETTINGS" 2>/dev/null || true) \
@@ -139,8 +149,8 @@ else
     | .sandbox.network.allowedDomains = ((($c.sandbox.network.allowedDomains // []) + ($a.sandbox.network.allowedDomains // [])) | unique)
     | reduce ($a.hooks // {} | keys[]) as $e (.;
         .hooks[$e] = ((($c.hooks[$e] // []) + $a.hooks[$e]) | unique))
-  ' > "$SETTINGS.tmp" || { rm -f "$SETTINGS.tmp"; echo "settings merge failed; $SETTINGS untouched" >&2; exit 1; }
-  replace_if_changed "$SETTINGS" "$SETTINGS.tmp"
+  ' > "$tmp" || { rm -f "$tmp"; echo "settings merge failed; $SETTINGS untouched" >&2; exit 1; }
+  replace_if_changed "$SETTINGS" "$tmp"
 fi
 
 echo "== agy hooks (merge; the dotfiles hook's entry is replaced whole, every other named hook stays)"
@@ -150,12 +160,13 @@ if (( DRY )); then
 else
   command -v jq >/dev/null || { echo "jq is required — run: brew bundle" >&2; exit 1; }
   mkdir -p "${AGY_HOOKS%/*}"
+  tmp=$(merge_tmp "$AGY_HOOKS")
   # Top-level keys are hook names. `+` replaces dotfiles-agent-guard whole, so a stale
   # "enabled": false in it cannot survive, and keeps every other named hook.
   jq -n --slurpfile cur <(cat "$AGY_HOOKS" 2>/dev/null || true) \
-        --slurpfile add "$REPO/agy/hooks.fragment.json" '($cur[0] // {}) + $add[0]' > "$AGY_HOOKS.tmp" ||
-    { rm -f "$AGY_HOOKS.tmp"; echo "agy hooks merge failed; $AGY_HOOKS untouched" >&2; exit 1; }
-  replace_if_changed "$AGY_HOOKS" "$AGY_HOOKS.tmp"
+        --slurpfile add "$REPO/agy/hooks.fragment.json" '($cur[0] // {}) + $add[0]' > "$tmp" ||
+    { rm -f "$tmp"; echo "agy hooks merge failed; $AGY_HOOKS untouched" >&2; exit 1; }
+  replace_if_changed "$AGY_HOOKS" "$tmp"
 fi
 
 echo "== Rex orchestrator skill for agy (the source Claude's skill links to)"

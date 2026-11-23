@@ -699,3 +699,27 @@ JSON
   run jq -r 'keys | join(",")' "$(AGY_HOOKS)"
   [ "$output" = "dotfiles-agent-guard,other-a,other-b" ]
 }
+
+@test "install: the JSON merges never touch a file at the old fixed .tmp path and leave no temp file" {
+  write_agy_hooks
+  mkdir -p "$HOME/.claude"
+  echo '{"model":"x"}' >"$(SETTINGS)"
+  echo keep-hooks >"$(AGY_HOOKS).tmp"
+  echo keep-settings >"$(SETTINGS).tmp"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(cat "$(AGY_HOOKS).tmp")" = "keep-hooks" ]
+  [ "$(cat "$(SETTINGS).tmp")" = "keep-settings" ]
+  [ -z "$(find "$HOME/.gemini/config" "$HOME/.claude" -name '*.merge.*')" ]
+}
+
+@test "install: the JSON merges keep the original file's mode" {
+  write_agy_hooks
+  mkdir -p "$HOME/.claude"
+  echo '{"model":"x"}' >"$(SETTINGS)"
+  chmod 600 "$(AGY_HOOKS)" "$(SETTINGS)"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$(AGY_HOOKS)")" = "600" ]
+  [ "$(file_mode "$(SETTINGS)")" = "600" ]
+}

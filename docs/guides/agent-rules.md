@@ -62,20 +62,29 @@ running process. It denies:
 - `codex login --with-api-key`
 - any `claude` or `codex` launch without its own prefix:
   `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude ...` or
-  `env -u OPENAI_API_KEY -u CODEX_HOME codex ...`. `--version`, `--help`,
-  `claude auth status` and `codex login status` need no prefix.
+  `env -u OPENAI_API_KEY -u CODEX_HOME codex ...`. Only these exact commands
+  need no prefix: `claude --version`, `claude --help`, `claude auth status`
+  (with `--json` or `--text`), `codex --version`, `codex --help` and
+  `codex login status`. A prompt such as `claude "auth status, then ..."` is a
+  launch.
 
 It looks through `;`, `&&`, pipes, `&`, `if` and loop bodies, functions,
-subshells, `$(...)`, backticks, `env`, `nohup`, `timeout`, `bash -c`
-strings, the command after `--` in `rex window new`, `rex run` and
-`rex split`, and the text of `rex send`. A Rex tab gets the Rex server's
-environment, not agy's, so a prefix in front of `rex` itself does not count.
+subshells, comments, heredocs, `$(...)` and backticks anywhere (also in
+redirect targets and array elements), `env`, `nohup`, `timeout`, `bash -c`
+strings, Codex's global options before `login`, and the command after `--`
+in `rex new`, `rex window new`, `rex run` and `rex split`. A Rex tab gets
+the Rex server's environment, not agy's, so a prefix in front of `rex`
+itself does not count.
 
-Input it cannot inspect is denied: invalid JSON, a missing command, a
+A `rex send` message is data: it is text for the agent in that tab, so a
+brief that mentions `codex --help` or `op run -- claude` passes. A `$(...)`
+in the `rex send` command line itself is still checked.
+
+Input it cannot inspect is denied: anything but exactly one JSON object, a
+missing or malformed tool name, a missing command, a
 `run_command` command that does not parse, nesting deeper than eight levels,
 and the `shell_exec` and `send_command_input` tools, whose payloads are not
-known yet. Text typed into another program (`rex send`, `manage_task`) that
-does not parse, such as a message with one apostrophe, is checked by its
+known yet. Text `manage_task` types into a running process that does not parse, such as a message with one apostrophe, is checked by its
 tokens instead of denied: a shell would not run it past the broken quote. It never answers `allow`, so agy's own permission prompts still apply.
 
 It is a guard rail, not a sandbox. It does not see a command word held in a
@@ -103,10 +112,10 @@ agent-preflight --limits   # also the Codex weekly limit
 | --------------------- | ---------------------------------------------------------- |
 | Moshi paired          | `moshi-hook status` shows `status: paired`                 |
 | Rex answering         | `rex --autostart=false whoami --json` exits 0              |
-| No API-key variables  | none of the four is set in the shell or in `launchctl getenv` |
+| No API-key variables  | none of the four is set in the shell or in `launchctl getenv`. A missing or failing `launchctl` is a `FAIL`, not `ok` |
 | Claude subscription   | `claude auth status`: logged in, `authMethod` `claude.ai`  |
 | Codex subscription    | `codex login status` says `Logged in using ChatGPT`        |
-| Codex limit           | `--limits`: `account/rateLimits/read` through `codex app-server` |
+| Codex limit           | `--limits`: `account/rateLimits/read` through `codex app-server`, the window that is 10,080 minutes long, primary or secondary |
 
 Claude has no command that prints its usage limits. `/usage` inside a
 session shows them. The script prints names, never values, and never the

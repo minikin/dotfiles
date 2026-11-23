@@ -174,8 +174,9 @@ The merge needs `jq`. Without it the script prints
 | Keys in the fragment         | Deep merge (`jq` `*`): the fragment's value wins. Today `env.JJ_EDITOR`, `statusLine` and `preferredNotifChannel`. |
 | Every other key              | Kept as it was.                                                          |
 
-A missing or empty `settings.json` counts as `{}`. The merge goes to
-`settings.json.tmp` first. If `jq` fails (for example on invalid JSON), the
+A missing or empty `settings.json` counts as `{}`. The merge goes to a new
+private temp file next to it first (`mktemp settings.json.merge.XXXXXX`), so
+no existing file is overwritten. If `jq` fails (for example on invalid JSON), the
 temp file is deleted, `settings.json` is left untouched, and the script
 prints `settings merge failed` and exits 1.
 
@@ -186,15 +187,17 @@ keeps the old one, so delete the old one from `settings.json` by hand.
 If the merged result equals the current file, the temp file is dropped and
 the script prints `ok   ~/.claude/settings.json (unchanged)`. Otherwise an
 existing file is copied to `settings.json.bak-<stamp>` and the merged file
-replaces it, and the script prints `updated (backup: <file>)`. With no
+replaces it with the old file's mode, and the script prints
+`updated (backup: <file>)`. With no
 `settings.json` at all it writes the merged fragment and prints `created`.
 
 ### `~/.gemini/config/hooks.json`
 
 agy's hooks file. Each top-level key is a named hook. The merge is
-`($cur[0] // {}) * $add[0]` with `agy/hooks.fragment.json`, so it adds or
-replaces only `dotfiles-agent-guard` and keeps every other named hook as it
-is. A missing or empty file counts as `{}`. Invalid JSON leaves the file
+`($cur[0] // {}) + $add[0]` with `agy/hooks.fragment.json`: it replaces the
+`dotfiles-agent-guard` entry whole, so a stale `"enabled": false` in it does
+not survive, and keeps every other named hook as it is. It uses the same
+private temp file and keeps the file's mode. A missing or empty file counts as `{}`. Invalid JSON leaves the file
 untouched: the script prints `agy hooks merge failed` and exits 1. The
 unchanged, updated and created cases print the same lines as
 `settings.json`, with a `hooks.json.bak-<stamp>` backup.

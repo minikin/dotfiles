@@ -40,3 +40,14 @@ MARKER='Shared rules marker: agents-rules-3f9c2a71'
   [ "$status" -eq 0 ]
   [ -f "$REPO_ROOT/claude/../agents/AGENTS.md" ]
 }
+
+@test "rules: agy's rules with the shared file included stay under agy's 24,000-byte cap" {
+  local size
+  size=$(cat "$REPO_ROOT/agy/GEMINI.md" "$(SHARED)" | wc -c)
+  (( size < 24000 )) || false
+}
+
+@test "rules: agy/GEMINI.md includes the shared file by a home path, since agy resolves relative includes next to the link" {
+  run grep -xE '@\[[^]]+\]\(~/\.config/dotfiles/AGENTS\.md\)' "$REPO_ROOT/agy/GEMINI.md"
+  [ "$status" -eq 0 ]
+}

@@ -248,3 +248,12 @@ EOF
   [ "${lines[0]}" = "*" ]
   [ "${lines[1]}" = "~/.gemini/config/hooks/dotfiles-guard-agents.zsh" ]
 }
+
+@test "agy guard: substitutions in redirect targets and array elements are checked" {
+  local c
+  for c in 'echo hi > "$(op run -- claude)"' 'echo hi >$(op run -- claude)' 'cat < <(op run -- codex)' \
+           'cat 2>`op run -- claude`' 'a=($(op run -- claude))' 'a=(x "$(ANTHROPIC_API_KEY=k claude)")'; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
+  done
+}

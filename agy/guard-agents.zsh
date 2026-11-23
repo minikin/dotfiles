@@ -132,6 +132,11 @@ check_text() {
   # (Z:C:) is the shell's own lexer with comments removed, newlines as ';'.
   words=("${(Z:C:)HD_TEXT}")
   for w in "${words[@]}" ';'; do
+    # Every word's $(...) runs, whatever its role: argument, redirect target or array element.
+    extract_subs "$w"
+    for sub in "${subs[@]}"; do
+      check_text "$sub" $(( depth + 1 )) $typed "${inherited[@]}" || return 1
+    done
     if (( skip_next )); then skip_next=0; continue; fi
     if (( in_array )); then
       [[ $w == ')' ]] && in_array=0
@@ -147,15 +152,11 @@ check_text() {
           check_argv $depth "${(j: :)inherited}" "${cmd[@]}" || return 1
         fi
         cmd=(); continue ;;
-      (<->#(\>|\>\>|\<|\<\<|\<\<\<|\>\||\>\!|\>\&|\<\&|\&\>|\&\>\>|\<\>))
+      ([0-9]#(\>|\>\>|\<|\<\<|\<\<\<|\>\||\>\!|\>\&|\<\&|\&\>|\&\>\>|\<\>))
         skip_next=1; continue ;;
-      (<->#(\>|\>\>|\<|\>\||\>\!|\>\&|\<\&|\&\>|\&\>\>)?*)
+      ([0-9]#(\>|\>\>|\<|\>\||\>\!|\>\&|\<\&|\&\>|\&\>\>)?*)
         continue ;;
     esac
-    extract_subs "$w"
-    for sub in "${subs[@]}"; do
-      check_text "$sub" $(( depth + 1 )) $typed "${inherited[@]}" || return 1
-    done
     cmd+=("${(Q)w}")
   done
   return 0

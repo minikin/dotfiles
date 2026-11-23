@@ -90,9 +90,16 @@ if (( limits )); then
         '{"jsonrpc":"2.0","id":2,"method":"account/rateLimits/read"}'
       sleep "${AGENT_PREFLIGHT_WAIT:-5}"
     } | env -u OPENAI_API_KEY -u CODEX_HOME codex app-server 2>/dev/null | grep -m1 '"id":2')
-    line=$(jq -r '.result.rateLimits.primary // empty
-      | "\(.usedPercent) percent used of \(.windowDurationMins / 1440 | floor)-day window, resets \(.resetsAt | strftime("%Y-%m-%d %H:%M UTC"))"' <<<"$reply" 2>/dev/null)
-    if [[ -n $line ]]; then info "codex limit: $line"; else info "codex limit: no answer from codex app-server"; fi
+    # The weekly window can be primary or secondary (next to a five-hour one): pick it by length.
+    line=$(jq -r '.result.rateLimits // empty
+      | [.primary, .secondary] | map(select(.windowDurationMins? == 10080)) | first
+      | if . == null then "none" else
+          "\(.usedPercent) percent used of 7-day window, resets \(.resetsAt | strftime("%Y-%m-%d %H:%M UTC"))" end' <<<"$reply" 2>/dev/null)
+    case $line in
+      '') info "codex limit: no answer from codex app-server" ;;
+      none) info "codex limit: no weekly window in the answer" ;;
+      *) info "codex limit: $line" ;;
+    esac
   else
     info "codex limit: needs codex and jq"
   fi

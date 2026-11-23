@@ -34,7 +34,7 @@ EOF
 echo "codex $* key=${OPENAI_API_KEY:-unset}" >>"$STUB_LOG"
 if [[ $1 == app-server ]]; then
   cat >/dev/null &
-  echo '{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":36,"windowDurationMins":10080,"resetsAt":1795936747}}}}'
+  echo "${STUB_LIMITS:-{\"id\":2,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":36,\"windowDurationMins\":10080,\"resetsAt\":1795936747}}}}}"
   exit 0
 fi
 [[ -n ${OPENAI_API_KEY:-} ]] && { echo "Logged in using an API key - sk-test"; exit 0; }
@@ -142,4 +142,14 @@ STUB
   PATH="$STUBS:$tools" AGENT_PREFLIGHT_WAIT=0 run /bin/bash "$REPO_ROOT/bin/agent-preflight"
   [ "$status" -eq 1 ]
   [[ $output == *"FAIL  env: cannot check launchd (launchctl not found)"* ]] || false
+}
+
+@test "preflight: --limits picks the weekly window by duration, primary or secondary" {
+  STUB_LIMITS='{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":80,"windowDurationMins":300,"resetsAt":1795936747},"secondary":{"usedPercent":12,"windowDurationMins":10080,"resetsAt":1795936747}}}}' \
+    preflight --limits
+  [[ $output == *"codex limit: 12 percent used of 7-day window"* ]] || false
+  [[ $output != *"0-day"* ]] || false
+  STUB_LIMITS='{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":80,"windowDurationMins":300,"resetsAt":1795936747}}}}' \
+    preflight --limits
+  [[ $output == *"codex limit: no weekly window in the answer"* ]] || false
 }

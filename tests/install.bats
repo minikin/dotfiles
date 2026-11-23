@@ -575,3 +575,115 @@ fake_brew() {
   [[ $output == *"Homebrew is required"* ]] || false
   [ "$(home_listing)" = "$before_home" ]
 }
+
+AGY_HOOKS() { echo "$HOME/.gemini/config/hooks.json"; }
+
+# A made-up hooks.json in agy's layout: named hooks, flat and grouped events.
+write_agy_hooks() {
+  mkdir -p "$HOME/.gemini/config"
+  cat >"$(AGY_HOOKS)" <<'JSON'
+{
+  "other-a": {"PreInvocation": [{"type": "command", "command": "./hooks/a.sh", "timeout": 5}]},
+  "other-b": {"enabled": true, "PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "./hooks/b.sh"}]}]}
+}
+JSON
+}
+
+@test "install: agy hooks merge keeps every other named hook and adds the guard" {
+  write_agy_hooks
+  run_install
+  [ "$status" -eq 0 ]
+  run jq -r 'keys | join(",")' "$(AGY_HOOKS)"
+  [ "$output" = "dotfiles-agent-guard,other-a,other-b" ]
+  run jq -r '."other-b".PreToolUse[0].hooks[0].command, ."dotfiles-agent-guard".PreToolUse[0].hooks[0].command' "$(AGY_HOOKS)"
+  [ "${lines[0]}" = "./hooks/b.sh" ]
+  [ "${lines[1]}" = "~/.gemini/config/hooks/dotfiles-guard-agents.zsh" ]
+  [ "$(find "$HOME/.gemini/config" -name 'hooks.json.bak-*' | wc -l | tr -d ' ')" = "1" ]
+}
+
+@test "install: agy hooks merge is idempotent" {
+  write_agy_hooks
+  run_install
+  before=$(cat "$(AGY_HOOKS)")
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"hooks.json (unchanged)"* ]] || false
+  [ "$(cat "$(AGY_HOOKS)")" = "$before" ]
+  [ "$(find "$HOME/.gemini/config" -name 'hooks.json.bak-*' | wc -l | tr -d ' ')" = "1" ]
+}
+
+@test "install: without an agy hooks.json one is created with only the guard" {
+  run_install
+  [ "$status" -eq 0 ]
+  run jq -r 'keys | join(",")' "$(AGY_HOOKS)"
+  [ "$output" = "dotfiles-agent-guard" ]
+}
+
+@test "install: invalid agy hooks.json is left untouched and install fails" {
+  mkdir -p "$HOME/.gemini/config"
+  printf '{ not json' >"$(AGY_HOOKS)"
+  run_install
+  [ "$status" -ne 0 ]
+  [ "$(cat "$(AGY_HOOKS)")" = "{ not json" ]
+  [[ $output == *"agy hooks merge failed"* ]] || false
+}
+
+@test "install: existing Codex and agy rule files are backed up and replaced by links" {
+  mkdir -p "$HOME/.codex" "$HOME/.gemini"
+  echo old-codex >"$HOME/.codex/AGENTS.md"
+  echo old-agy >"$HOME/.gemini/GEMINI.md"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$HOME/.codex/AGENTS.md" -ef "$DOTFILES/agents/AGENTS.md" ]
+  [ "$HOME/.config/dotfiles/AGENTS.md" -ef "$DOTFILES/agents/AGENTS.md" ]
+  [ "$HOME/.gemini/GEMINI.md" -ef "$DOTFILES/agy/GEMINI.md" ]
+  [ "$(cat "$HOME"/.codex/AGENTS.md.bak-*)" = "old-codex" ]
+  [ "$(cat "$HOME"/.gemini/GEMINI.md.bak-*)" = "old-agy" ]
+}
+
+@test "install: agy's include path is where install.sh links the shared rules" {
+  local inc
+  inc=$(sed -n 's/^@\[[^]]*\](\(~\/[^)]*\))$/\1/p' "$DOTFILES/agy/GEMINI.md")
+  [ -n "$inc" ]
+  link_pairs | grep -qxF "agents/AGENTS.md	${inc/#\~/$HOME}"
+}
+
+@test "install: agy gets the rex-orchestrator skill from the source Claude's skill links to" {
+  mkdir -p "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" "$HOME/.claude/skills"
+  ln -s "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" "$HOME/.claude/skills/rex-orchestrator"
+  run_install
+  [ "$status" -eq 0 ]
+  real=$(cd "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" && pwd -P)
+  [ "$(readlink "$HOME/.gemini/config/skills/rex-orchestrator")" = "$real" ]
+  run_install
+  [[ $output == *"ok   $HOME/.gemini/config/skills/rex-orchestrator"* ]] || false
+}
+
+@test "install: without Claude's rex-orchestrator skill agy's is skipped" {
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"skip $HOME/.claude/skills/rex-orchestrator not found"* ]] || false
+  [ ! -e "$HOME/.gemini/config/skills/rex-orchestrator" ]
+}
+
+@test "install: old agy rule files get a note and are never deleted" {
+  mkdir -p "$HOME/Desktop" "$HOME/.gemini"
+  echo old >"$HOME/Desktop/antigravity-instructions.md"
+  echo old >"$HOME/.gemini/SUBSCRIPTION-AGENTS.md"
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"note $HOME/Desktop/antigravity-instructions.md is no longer loaded by agy"* ]] || false
+  [[ $output == *"note $HOME/.gemini/SUBSCRIPTION-AGENTS.md is no longer loaded by agy"* ]] || false
+  [ "$(cat "$HOME/Desktop/antigravity-instructions.md")" = "old" ]
+  [ "$(cat "$HOME/.gemini/SUBSCRIPTION-AGENTS.md")" = "old" ]
+}
+
+@test "install: --dry-run leaves agy's files alone" {
+  write_agy_hooks
+  before=$(cat "$(AGY_HOOKS)")
+  run_install --dry-run
+  [ "$status" -eq 0 ]
+  [[ $output == *"+ merge agy/hooks.fragment.json into $HOME/.gemini/config/hooks.json"* ]] || false
+  [ "$(cat "$(AGY_HOOKS)")" = "$before" ]
+  [ ! -e "$HOME/.gemini/GEMINI.md" ]
+}

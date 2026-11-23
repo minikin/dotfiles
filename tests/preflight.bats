@@ -125,3 +125,21 @@ preflight() {
   preflight --bogus
   [ "$status" -eq 2 ]
 }
+
+@test "preflight: a launchd check that cannot run fails instead of reporting ok" {
+  stub launchctl <<'STUB'
+exit 3
+STUB
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  env: cannot check launchd (launchctl getenv failed)"* ]] || false
+  [[ $output != *"no API-key variables in launchd"* ]] || false
+
+  rm "$STUBS/launchctl"
+  local tools="$BATS_TEST_TMPDIR/tools" t
+  mkdir -p "$tools"
+  for t in sed head grep env sleep tr cat; do ln -s "$(command -v "$t")" "$tools/$t"; done
+  PATH="$STUBS:$tools" AGENT_PREFLIGHT_WAIT=0 run /bin/bash "$REPO_ROOT/bin/agent-preflight"
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  env: cannot check launchd (launchctl not found)"* ]] || false
+}

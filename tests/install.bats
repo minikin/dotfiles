@@ -723,3 +723,13 @@ JSON
   [ "$(file_mode "$(AGY_HOOKS)")" = "600" ]
   [ "$(file_mode "$(SETTINGS)")" = "600" ]
 }
+
+@test "install: a symlinked hooks.json gets the mode of the file it points to" {
+  write_agy_hooks
+  mv "$(AGY_HOOKS)" "$BATS_TEST_TMPDIR/real-hooks.json"
+  chmod 600 "$BATS_TEST_TMPDIR/real-hooks.json"
+  ln -s "$BATS_TEST_TMPDIR/real-hooks.json" "$(AGY_HOOKS)"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$(AGY_HOOKS)")" = "600" ]
+}

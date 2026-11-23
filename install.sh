@@ -61,7 +61,8 @@ merge_tmp() { mktemp "$1.merge.XXXXXX"; }
 replace_if_changed() {
   local file=$1 tmp=$2
   if [[ -f $file ]]; then
-    chmod "$(stat -f %Lp "$file" 2>/dev/null || stat -c %a "$file")" "$tmp"
+    # -L: the mode of the file a symlinked config points to, not of the link.
+    chmod "$(stat -L -f %Lp "$file" 2>/dev/null || stat -L -c %a "$file")" "$tmp"
   else
     chmod "$(printf '%o' $(( 0666 & ~$(umask) )))" "$tmp"
   fi

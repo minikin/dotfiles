@@ -34,3 +34,9 @@ MARKER='Shared rules marker: agents-rules-3f9c2a71'
   size=$(wc -c <"$(SHARED)")
   (( size < 32768 )) || false
 }
+
+@test "rules: claude/CLAUDE.md imports the shared file by a path relative to itself" {
+  run grep -x '@../agents/AGENTS.md' "$REPO_ROOT/claude/CLAUDE.md"
+  [ "$status" -eq 0 ]
+  [ -f "$REPO_ROOT/claude/../agents/AGENTS.md" ]
+}

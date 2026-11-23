@@ -1,0 +1,3 @@
+# agy include lines such as @[Shared agent rules](~/.config/dotfiles/AGENTS.md) name a path in
+# the home directory, not a file next to the Markdown file.
+^file://.*/~/

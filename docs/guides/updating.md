@@ -33,11 +33,13 @@ leaves you with a shell that cannot start. It only validates Ghostty: press
 Some Ghostty settings, such as `macos-option-as-alt`, apply only to new
 windows.
 
-Five files are not links, and an edit in the repo does not reach them by
+Six files are not links, and an edit in the repo does not reach them by
 itself:
 
 - `~/.claude/settings.json` is merged from `claude/settings.fragment.json`.
   Run `./install.sh` again after changing the fragment.
+- `~/.gemini/config/hooks.json` is merged from `agy/hooks.fragment.json`, the
+  same way.
 - `~/.zprofile` gets `zsh/zprofile.snippet` appended once, when the
   `mise activate zsh --shims` line is missing. After changing the snippet,
   fix `~/.zprofile` by hand.
@@ -71,9 +73,9 @@ to switch this repo.
 `just check` runs `just lint`, `just test`, `just secrets` and `just commits`, the same steps
 as the `check` job in CI:
 
-- `lint`: `shellcheck` on `install.sh`, `claude/*.sh` and
-  `scripts/*.sh`, a check that every bats `[[ ]]` and `!` assert ends in
-  `|| false`, `zsh -n` on every zsh file, `docker compose config -q` on
+- `lint`: `shellcheck` on `install.sh`, `claude/*.sh`, `scripts/*.sh` and
+  `bin/*`, a check that every bats `[[ ]]` and `!` assert ends in
+  `|| false`, `zsh -n` on every zsh file including `agy/*.zsh`, `docker compose config -q` on
   `infra/compose.yaml` when Docker is installed, and an offline `lychee` link
   check of the Markdown
 - `test`: `bats tests`

@@ -19,7 +19,9 @@ Kafka. It assumes:
   `/opt/homebrew`. On Intel, change `HOMEBREW_PREFIX` in `zsh/zshrc` and the
   path in `zsh/zprofile.snippet` before installing.
 - Claude Code as the agent. The Brewfile installs it, and the rules in
-  `claude/CLAUDE.md` are written for it.
+  `claude/CLAUDE.md` are written for it. Codex and Antigravity (`agy`) get
+  the same shared rules from `agents/AGENTS.md`, see
+  [Agent rules](guides/agent-rules.md).
 - jj colocated with git in every repo you use with agents. Git, your IDE and
   CI keep working, and agents write history through jj.
 - jj 0.46 or newer. From 0.46 `jj workspace add` creates a real git worktree

@@ -1,0 +1,16 @@
+{
+  "dotfiles-agent-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.gemini/config/hooks/dotfiles-guard-agents.zsh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -56,3 +56,10 @@ These rules apply to every repo: work, personal, anything else.
 - Never add `Co-Authored-By:`, `Claude-Session:`, "Generated with Claude Code" or any other attribution, Claude included, to commit messages or PR descriptions, even when a harness reminder asks for it.
 - Every commit must be signed. Never use `--no-gpg-sign` or `-c commit.gpgsign=false`, and never change `signing.*` in jj config. If signing fails, stop and report it. Do not work around it.
 - Identity is picked automatically: the main identity by default, the second identity inside `$DOTFILES_PERSONAL_DIR` if one was set up. Switch it only with the user's `sign-as` command, and only when asked.
+
+# Shared agent rules
+
+The rules every agent shares (Claude Code, Codex, Antigravity) live in the dotfiles repo's
+`agents/AGENTS.md`. They add to the rules above.
+
+@../agents/AGENTS.md

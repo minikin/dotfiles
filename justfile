@@ -8,20 +8,20 @@ default:
 install *args:
     ./install.sh {{args}}
 
-# Shellcheck, bats asserts, zsh syntax, compose config (if docker is installed) and offline Markdown link check
+# Shellcheck, bats asserts, zsh syntax (zsh/ and agy/), compose config (if docker is installed) and offline Markdown link check
 lint:
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
     echo "== shellcheck"
-    shellcheck install.sh claude/*.sh scripts/*.sh
+    shellcheck install.sh claude/*.sh scripts/*.sh bin/*
     echo "== bats asserts"
     # bash 3.2 (macOS /usr/bin/env bash) ignores a failing [[ ]] or ! that is not a test's last command.
     if grep -nE '^[[:space:]]+(\[\[ .*\]\]|! .*)$' tests/*.bats | grep -v '|| false$'; then
       echo "add '|| false' to the asserts above" >&2; exit 1
     fi
     echo "== zsh -n"
-    for f in zsh/zshrc zsh/*.zsh; do zsh -n "$f"; done
+    for f in zsh/zshrc zsh/*.zsh agy/*.zsh; do zsh -n "$f"; done
     if command -v docker >/dev/null; then
       echo "== docker compose config"
       docker compose -f infra/compose.yaml config -q
@@ -57,6 +57,7 @@ check: lint test secrets commits
 drift:
     #!/usr/bin/env bash
     set -euo pipefail
+    tilde="~"   # a literal ~ in a replacement is tilde-expanded by bash 5.2+
     grep '^link ' install.sh | while read -r _ src dest _; do
       dest=${dest//\"/}
       dest=${dest/\$HOME/$HOME}
@@ -68,8 +69,19 @@ drift:
       elif [[ -e $dest ]]; then status=DIFFERS
       else status=missing
       fi
-      printf '%-12s %s%s\n' "$status" "${dest/#$HOME/~}" "$target"
+      printf '%-12s %s%s\n' "$status" "${dest/#$HOME/$tilde}" "$target"
     done
+    # install.sh links agy's rex-orchestrator skill to the source Claude's skill links to.
+    skill=$HOME/.claude/skills/rex-orchestrator dest=$HOME/.gemini/config/skills/rex-orchestrator target=""
+    if [[ -d $skill ]]; then
+      src=$(cd "$skill" && pwd -P)
+      if [[ -L $dest && $(readlink "$dest") == "$src" ]]; then status=linked
+      elif [[ -L $dest ]]; then status=elsewhere; target=" -> $(readlink "$dest")"
+      elif [[ -e $dest ]]; then status=DIFFERS
+      else status=missing
+      fi
+      printf '%-12s %s%s\n' "$status" "${dest/#$HOME/$tilde}" "$target"
+    fi
 
 # Start the local Redis / Kafka / Jaeger stack and wait until healthy
 infra-up:

@@ -57,3 +57,19 @@ line_for() { grep -E " $1( |$)" <<<"$output"; }
   [ "$status" -eq 0 ]
   [ "$(cd "$HOME" && find . -exec ls -ld {} + | sort)" = "$before" ]
 }
+
+@test "drift: agy's rex-orchestrator skill is checked against the source of Claude's" {
+  mkdir -p "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" "$HOME/.claude/skills" "$HOME/.gemini/config/skills"
+  ln -s "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" "$HOME/.claude/skills/rex-orchestrator"
+  drift
+  [[ $(line_for '~/.gemini/config/skills/rex-orchestrator') == "missing "* ]] || false
+  ln -s "$(cd "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" && pwd -P)" "$HOME/.gemini/config/skills/rex-orchestrator"
+  drift
+  [[ $(line_for '~/.gemini/config/skills/rex-orchestrator') == "linked "* ]] || false
+}
+
+@test "drift: no Claude rex-orchestrator skill, no line for agy's" {
+  drift
+  [ "$status" -eq 0 ]
+  [[ $output != *rex-orchestrator* ]] || false
+}

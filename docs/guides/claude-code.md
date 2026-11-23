@@ -32,6 +32,9 @@ settings and hooks stay. Why the shell matters for tool versions is explained in
 
 Project rules go in the project's own `CLAUDE.md`. Claude Code reads both.
 
+The rules Claude Code shares with Codex and agy are in `agents/AGENTS.md`,
+which `claude/CLAUDE.md` imports. See [Agent rules](agent-rules.md).
+
 ## Status line
 
 `~/.claude/statusline.sh` prints where the agent works, the jj change, the

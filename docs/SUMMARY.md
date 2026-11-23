@@ -16,6 +16,7 @@
 - [Project tools and MCP servers](guides/project-tools.md)
 - [Saved workflows (navi)](guides/workflows.md)
 - [Claude Code](guides/claude-code.md)
+- [Agent rules for Claude, Codex and agy](guides/agent-rules.md)
 - [Updating](guides/updating.md)
 
 # Reference

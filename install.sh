@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the dotfiles: symlink configs into $HOME (backing up anything in the way),
-# merge Claude Code settings, add the mise line to .zprofile, sync git identity from jj.
+# merge Claude Code settings and the agy hook, add the mise line to .zprofile, sync git identity from jj.
 # Safe to re-run. Usage: ./install.sh [--dry-run] [--brew] [--shottr] [--all] | --help
 # --brew runs brew bundle first. --all is --brew --shottr: everything in one command.
 # --shottr also turns off the macOS screenshot shortcuts (⇧⌘3, ⇧⌘4, ⇧⌘5 and the clipboard
@@ -40,6 +40,47 @@ link() {  # link <repo-relative src> <dest>
   run ln -s "$src" "$dest"
 }
 
+link_to() {  # link_to <absolute target outside the repo> <dest>
+  local target=$1 dest=$2
+  if [[ -L $dest && $(readlink "$dest") == "$target" ]]; then
+    echo "ok   $dest"; return
+  fi
+  run mkdir -p "$(dirname "$dest")"
+  if [[ -e $dest || -L $dest ]]; then
+    run mv "$dest" "$dest.bak-$STAMP"
+  fi
+  run ln -s "$target" "$dest"
+}
+
+# merge_tmp <file>: a new private temp file next to <file>, for a merge result. mktemp never opens an
+# existing path, and the same directory keeps the final mv a rename.
+merge_tmp() { mktemp "$1.merge.XXXXXX"; }
+
+# replace_if_changed <file> <tmp>: move tmp over file unless they hold the same JSON, keeping a
+# backup of the old file and its mode. A new file gets the umask's default mode, not mktemp's 600.
+replace_if_changed() {
+  local file=$1 tmp=$2 mode
+  if [[ -f $file ]]; then
+    # -L: the mode of the file a symlinked config points to, not of the link. Each form is captured
+    # on its own: GNU stat reads -f as "file system" and prints a report before it fails.
+    mode=$(stat -L -f %Lp "$file" 2>/dev/null) || mode=$(stat -L -c %a "$file" 2>/dev/null) ||
+      { rm -f "$tmp"; echo "cannot read the mode of $file; it is untouched" >&2; exit 1; }
+    chmod "$mode" "$tmp"
+  else
+    chmod "$(printf '%o' $(( 0666 & ~$(umask) )))" "$tmp"
+  fi
+  if [[ -f $file ]] && jq -e --slurpfile n "$tmp" '. == $n[0]' "$file" >/dev/null 2>&1; then
+    rm -f "$tmp"; echo "ok   $file (unchanged)"
+  elif [[ -f $file ]]; then
+    cp "$file" "$file.bak-$STAMP"
+    mv "$tmp" "$file"
+    echo "ok   $file updated (backup: $file.bak-$STAMP)"
+  else
+    mv "$tmp" "$file"
+    echo "ok   $file created"
+  fi
+}
+
 if (( BREW )); then
   echo "== brew bundle"
   command -v brew >/dev/null || { echo "Homebrew is required for --brew: https://brew.sh" >&2; exit 1; }
@@ -66,6 +107,11 @@ link claude/notify.sh         "$HOME/.claude/notify.sh"
 link claude/guard-push.sh     "$HOME/.claude/guard-push.sh"
 link claude/session-context.sh "$HOME/.claude/session-context.sh"
 link claude/where.sh          "$HOME/.claude/where.sh"
+link agents/AGENTS.md         "$HOME/.codex/AGENTS.md"
+link agents/AGENTS.md         "$HOME/.config/dotfiles/AGENTS.md"   # agy includes it by this path
+link agy/GEMINI.md            "$HOME/.gemini/GEMINI.md"
+link agy/guard-agents.zsh     "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+link bin/agent-preflight      "$HOME/.local/bin/agent-preflight"
 
 # Ghostty on macOS also reads this file *after* ~/.config/ghostty/config; an empty or stale
 # copy silently overrides settings, so move it aside.
@@ -95,6 +141,7 @@ if (( DRY )); then
 else
   command -v jq >/dev/null || { echo "jq is required — run: brew bundle" >&2; exit 1; }
   mkdir -p "$HOME/.claude"
+  tmp=$(merge_tmp "$SETTINGS")
   # Merge into a temp file and only replace on success, so a jq failure (bad JSON,
   # empty file) never leaves settings.json truncated. An empty file counts as {}.
   jq -n --slurpfile cur <(cat "$SETTINGS" 2>/dev/null || true) \
@@ -106,20 +153,36 @@ else
     | .sandbox.network.allowedDomains = ((($c.sandbox.network.allowedDomains // []) + ($a.sandbox.network.allowedDomains // [])) | unique)
     | reduce ($a.hooks // {} | keys[]) as $e (.;
         .hooks[$e] = ((($c.hooks[$e] // []) + $a.hooks[$e]) | unique))
-  ' > "$SETTINGS.tmp" || { rm -f "$SETTINGS.tmp"; echo "settings merge failed; $SETTINGS untouched" >&2; exit 1; }
-  if [[ -f $SETTINGS ]] && jq -e --slurpfile n "$SETTINGS.tmp" '. == $n[0]' "$SETTINGS" >/dev/null 2>&1; then
-    rm -f "$SETTINGS.tmp"; echo "ok   $SETTINGS (unchanged)"
-  else
-    if [[ -f $SETTINGS ]]; then
-      cp "$SETTINGS" "$SETTINGS.bak-$STAMP"
-      mv "$SETTINGS.tmp" "$SETTINGS"
-      echo "ok   $SETTINGS updated (backup: $SETTINGS.bak-$STAMP)"
-    else
-      mv "$SETTINGS.tmp" "$SETTINGS"
-      echo "ok   $SETTINGS created"
-    fi
-  fi
+  ' > "$tmp" || { rm -f "$tmp"; echo "settings merge failed; $SETTINGS untouched" >&2; exit 1; }
+  replace_if_changed "$SETTINGS" "$tmp"
 fi
+
+echo "== agy hooks (merge; the dotfiles hook's entry is replaced whole, every other named hook stays)"
+AGY_HOOKS=$HOME/.gemini/config/hooks.json
+if (( DRY )); then
+  echo "+ merge agy/hooks.fragment.json into $AGY_HOOKS"
+else
+  command -v jq >/dev/null || { echo "jq is required — run: brew bundle" >&2; exit 1; }
+  mkdir -p "${AGY_HOOKS%/*}"
+  tmp=$(merge_tmp "$AGY_HOOKS")
+  # Top-level keys are hook names. `+` replaces dotfiles-agent-guard whole, so a stale
+  # "enabled": false in it cannot survive, and keeps every other named hook.
+  jq -n --slurpfile cur <(cat "$AGY_HOOKS" 2>/dev/null || true) \
+        --slurpfile add "$REPO/agy/hooks.fragment.json" '($cur[0] // {}) + $add[0]' > "$tmp" ||
+    { rm -f "$tmp"; echo "agy hooks merge failed; $AGY_HOOKS untouched" >&2; exit 1; }
+  replace_if_changed "$AGY_HOOKS" "$tmp"
+fi
+
+echo "== Rex orchestrator skill for agy (the source Claude's skill links to)"
+REX_SKILL=$HOME/.claude/skills/rex-orchestrator
+if [[ -d $REX_SKILL ]]; then
+  link_to "$(cd "$REX_SKILL" && pwd -P)" "$HOME/.gemini/config/skills/rex-orchestrator"
+else
+  echo "skip $REX_SKILL not found: agy gets no rex-orchestrator skill"
+fi
+for old in "$HOME/Desktop/antigravity-instructions.md" "$HOME/.gemini/SUBSCRIPTION-AGENTS.md"; do
+  [[ -e $old ]] && echo "note $old is no longer loaded by agy. Remove it once agy quotes the shared rules marker (docs/guides/agent-rules.md)."
+done
 
 echo "== identity (local only: ~/.config/jj/conf.d/identity.toml — never in this repo)"
 IDENTITY=$HOME/.config/jj/conf.d/identity.toml

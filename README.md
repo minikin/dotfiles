@@ -15,8 +15,9 @@ change they make is visible from the main checkout, where you review it and
 push it as a bookmark named after the workspace.
 
 The repo holds the configs for Ghostty, zsh, starship, jj (Jujutsu), mise,
-just and Claude Code, plus a Docker Compose file for a local Redis, Kafka and
-Jaeger stack. `install.sh` symlinks them into `$HOME`, so editing `~/.zshrc`
+just and Claude Code, one rules file that Claude Code, Codex and Antigravity
+(`agy`) share, plus a Docker Compose file for a local Redis, Kafka and Jaeger
+stack. `install.sh` symlinks them into `$HOME`, so editing `~/.zshrc`
 edits the repo. Your name, emails and signing keys never go into the repo:
 they live in a local file that `install.sh` writes on the first run.
 

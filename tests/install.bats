@@ -11,7 +11,9 @@ setup() {
 
 home_listing() { (cd "$HOME" && find . | LC_ALL=C sort); }
 count_backups() { find "$HOME" "$DOTFILES" -name '*.bak-*' 2>/dev/null | wc -l | tr -d ' '; }
-file_mode() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
+# BSD form first, GNU form second, each captured on its own: GNU stat prints a report for -f
+# before it fails, and that output must not reach the comparison.
+file_mode() { local m; m=$(stat -f %Lp "$1" 2>/dev/null) || m=$(stat -c %a "$1"); echo "$m"; }
 SETTINGS() { echo "$HOME/.claude/settings.json"; }
 
 @test "install: --dry-run changes nothing on disk" {
@@ -574,4 +576,192 @@ fake_brew() {
   [ "$status" -eq 1 ]
   [[ $output == *"Homebrew is required"* ]] || false
   [ "$(home_listing)" = "$before_home" ]
+}
+
+AGY_HOOKS() { echo "$HOME/.gemini/config/hooks.json"; }
+
+# A made-up hooks.json in agy's layout: named hooks, flat and grouped events.
+write_agy_hooks() {
+  mkdir -p "$HOME/.gemini/config"
+  cat >"$(AGY_HOOKS)" <<'JSON'
+{
+  "other-a": {"PreInvocation": [{"type": "command", "command": "./hooks/a.sh", "timeout": 5}]},
+  "other-b": {"enabled": true, "PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "./hooks/b.sh"}]}]}
+}
+JSON
+}
+
+@test "install: agy hooks merge keeps every other named hook and adds the guard" {
+  write_agy_hooks
+  run_install
+  [ "$status" -eq 0 ]
+  run jq -r 'keys | join(",")' "$(AGY_HOOKS)"
+  [ "$output" = "dotfiles-agent-guard,other-a,other-b" ]
+  run jq -r '."other-b".PreToolUse[0].hooks[0].command, ."dotfiles-agent-guard".PreToolUse[0].hooks[0].command' "$(AGY_HOOKS)"
+  [ "${lines[0]}" = "./hooks/b.sh" ]
+  [ "${lines[1]}" = "~/.gemini/config/hooks/dotfiles-guard-agents.zsh" ]
+  [ "$(find "$HOME/.gemini/config" -name 'hooks.json.bak-*' | wc -l | tr -d ' ')" = "1" ]
+}
+
+@test "install: agy hooks merge is idempotent" {
+  write_agy_hooks
+  run_install
+  before=$(cat "$(AGY_HOOKS)")
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"hooks.json (unchanged)"* ]] || false
+  [ "$(cat "$(AGY_HOOKS)")" = "$before" ]
+  [ "$(find "$HOME/.gemini/config" -name 'hooks.json.bak-*' | wc -l | tr -d ' ')" = "1" ]
+}
+
+@test "install: without an agy hooks.json one is created with only the guard" {
+  run_install
+  [ "$status" -eq 0 ]
+  run jq -r 'keys | join(",")' "$(AGY_HOOKS)"
+  [ "$output" = "dotfiles-agent-guard" ]
+}
+
+@test "install: invalid agy hooks.json is left untouched and install fails" {
+  mkdir -p "$HOME/.gemini/config"
+  printf '{ not json' >"$(AGY_HOOKS)"
+  run_install
+  [ "$status" -ne 0 ]
+  [ "$(cat "$(AGY_HOOKS)")" = "{ not json" ]
+  [[ $output == *"agy hooks merge failed"* ]] || false
+}
+
+@test "install: existing Codex and agy rule files are backed up and replaced by links" {
+  mkdir -p "$HOME/.codex" "$HOME/.gemini"
+  echo old-codex >"$HOME/.codex/AGENTS.md"
+  echo old-agy >"$HOME/.gemini/GEMINI.md"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$HOME/.codex/AGENTS.md" -ef "$DOTFILES/agents/AGENTS.md" ]
+  [ "$HOME/.config/dotfiles/AGENTS.md" -ef "$DOTFILES/agents/AGENTS.md" ]
+  [ "$HOME/.gemini/GEMINI.md" -ef "$DOTFILES/agy/GEMINI.md" ]
+  [ "$(cat "$HOME"/.codex/AGENTS.md.bak-*)" = "old-codex" ]
+  [ "$(cat "$HOME"/.gemini/GEMINI.md.bak-*)" = "old-agy" ]
+}
+
+@test "install: agy's include path is where install.sh links the shared rules" {
+  local inc
+  inc=$(sed -n 's/^@\[[^]]*\](\(~\/[^)]*\))$/\1/p' "$DOTFILES/agy/GEMINI.md")
+  [ -n "$inc" ]
+  link_pairs | grep -qxF "agents/AGENTS.md	${inc/#\~/$HOME}"
+}
+
+@test "install: agy gets the rex-orchestrator skill from the source Claude's skill links to" {
+  mkdir -p "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" "$HOME/.claude/skills"
+  ln -s "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" "$HOME/.claude/skills/rex-orchestrator"
+  run_install
+  [ "$status" -eq 0 ]
+  real=$(cd "$BATS_TEST_TMPDIR/skills-repo/rex-orchestrator" && pwd -P)
+  [ "$(readlink "$HOME/.gemini/config/skills/rex-orchestrator")" = "$real" ]
+  run_install
+  [[ $output == *"ok   $HOME/.gemini/config/skills/rex-orchestrator"* ]] || false
+}
+
+@test "install: without Claude's rex-orchestrator skill agy's is skipped" {
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"skip $HOME/.claude/skills/rex-orchestrator not found"* ]] || false
+  [ ! -e "$HOME/.gemini/config/skills/rex-orchestrator" ]
+}
+
+@test "install: old agy rule files get a note and are never deleted" {
+  mkdir -p "$HOME/Desktop" "$HOME/.gemini"
+  echo old >"$HOME/Desktop/antigravity-instructions.md"
+  echo old >"$HOME/.gemini/SUBSCRIPTION-AGENTS.md"
+  run_install
+  [ "$status" -eq 0 ]
+  [[ $output == *"note $HOME/Desktop/antigravity-instructions.md is no longer loaded by agy"* ]] || false
+  [[ $output == *"note $HOME/.gemini/SUBSCRIPTION-AGENTS.md is no longer loaded by agy"* ]] || false
+  [ "$(cat "$HOME/Desktop/antigravity-instructions.md")" = "old" ]
+  [ "$(cat "$HOME/.gemini/SUBSCRIPTION-AGENTS.md")" = "old" ]
+}
+
+@test "install: --dry-run leaves agy's files alone" {
+  write_agy_hooks
+  before=$(cat "$(AGY_HOOKS)")
+  run_install --dry-run
+  [ "$status" -eq 0 ]
+  [[ $output == *"+ merge agy/hooks.fragment.json into $HOME/.gemini/config/hooks.json"* ]] || false
+  [ "$(cat "$(AGY_HOOKS)")" = "$before" ]
+  [ ! -e "$HOME/.gemini/GEMINI.md" ]
+}
+
+@test "install: an existing dotfiles-agent-guard entry is replaced whole, so enabled: false cannot survive" {
+  write_agy_hooks
+  jq '. + {"dotfiles-agent-guard": {"enabled": false, "Stop": [{"command": "./old.sh"}]}}' "$(AGY_HOOKS)" >"$BATS_TEST_TMPDIR/h.json"
+  mv "$BATS_TEST_TMPDIR/h.json" "$(AGY_HOOKS)"
+  run_install
+  [ "$status" -eq 0 ]
+  run jq -e --slurpfile f "$DOTFILES/agy/hooks.fragment.json" '."dotfiles-agent-guard" == $f[0]."dotfiles-agent-guard"' "$(AGY_HOOKS)"
+  [ "$status" -eq 0 ]
+  run jq -r 'keys | join(",")' "$(AGY_HOOKS)"
+  [ "$output" = "dotfiles-agent-guard,other-a,other-b" ]
+}
+
+@test "install: the JSON merges never touch a file at the old fixed .tmp path and leave no temp file" {
+  write_agy_hooks
+  mkdir -p "$HOME/.claude"
+  echo '{"model":"x"}' >"$(SETTINGS)"
+  echo keep-hooks >"$(AGY_HOOKS).tmp"
+  echo keep-settings >"$(SETTINGS).tmp"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(cat "$(AGY_HOOKS).tmp")" = "keep-hooks" ]
+  [ "$(cat "$(SETTINGS).tmp")" = "keep-settings" ]
+  [ -z "$(find "$HOME/.gemini/config" "$HOME/.claude" -name '*.merge.*')" ]
+}
+
+@test "install: the JSON merges keep the original file's mode" {
+  write_agy_hooks
+  mkdir -p "$HOME/.claude"
+  echo '{"model":"x"}' >"$(SETTINGS)"
+  chmod 600 "$(AGY_HOOKS)" "$(SETTINGS)"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$(AGY_HOOKS)")" = "600" ]
+  [ "$(file_mode "$(SETTINGS)")" = "600" ]
+}
+
+@test "install: a symlinked hooks.json gets the mode of the file it points to" {
+  write_agy_hooks
+  mv "$(AGY_HOOKS)" "$BATS_TEST_TMPDIR/real-hooks.json"
+  chmod 600 "$BATS_TEST_TMPDIR/real-hooks.json"
+  ln -s "$BATS_TEST_TMPDIR/real-hooks.json" "$(AGY_HOOKS)"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$(AGY_HOOKS)")" = "600" ]
+}
+
+# make_gnu_stat: a stat in $BATS_TEST_TMPDIR/gnu that behaves like GNU's. It reads -f as "file
+# system", prints a report, then fails on the format string it took for a path.
+make_gnu_stat() {
+  mkdir -p "$BATS_TEST_TMPDIR/gnu"
+  cat >"$BATS_TEST_TMPDIR/gnu/stat" <<'STUB'
+#!/bin/bash
+if [[ " $* " == *" -f "* ]]; then echo "  File: \"$BATS_TEST_TMPDIR\" ID: 0 Namelen: 255 Type: apfs"; echo "stat: cannot read file system information for '%Lp'" >&2; exit 1; fi
+if [[ " $* " == *" -c %a "* ]]; then exec /usr/bin/stat -L -f %Lp "${@: -1}"; fi
+exec /usr/bin/stat "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/gnu/stat"
+}
+
+@test "install: a GNU stat first on PATH does not break the mode lookup" {
+  make_gnu_stat
+  write_agy_hooks
+  chmod 640 "$(AGY_HOOKS)"
+  PATH="$BATS_TEST_TMPDIR/gnu:$PATH" run_install
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$(AGY_HOOKS)")" = "640" ]
+}
+
+@test "install tests: file_mode prints only the mode with a GNU stat first on PATH" {
+  make_gnu_stat
+  echo x >"$BATS_TEST_TMPDIR/f"
+  chmod 640 "$BATS_TEST_TMPDIR/f"
+  PATH="$BATS_TEST_TMPDIR/gnu:$PATH" run file_mode "$BATS_TEST_TMPDIR/f"
+  [ "$output" = "640" ]
 }

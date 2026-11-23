@@ -1,7 +1,8 @@
 # install.sh
 
 `install.sh` links the configs into `$HOME`, appends the mise line to
-`~/.zprofile` and the ssh `PATH` to `~/.zshenv`, merges the Claude Code settings, writes the local commit
+`~/.zprofile` and the ssh `PATH` to `~/.zshenv`, merges the Claude Code settings and the agy hook, links the
+Rex orchestrator skill for agy, writes the local commit
 identity and records the machine settings in `~/.config/dotfiles/config`. It is safe to run again: anything already in place prints `ok`.
 
 ## Usage
@@ -62,11 +63,13 @@ The script prints a `==` header before each step.
 | 2    | `== .zprofile`               | Appends `zsh/zprofile.snippet` to `~/.zprofile` if the mise shims line is missing.               |
 | 3    | `== .zshenv`                 | Appends `zsh/zshenv.snippet` to `~/.zshenv` if its marker line is missing.                       |
 | 4    | `== Claude Code settings`    | Merges `claude/settings.fragment.json` into `~/.claude/settings.json`.                           |
-| 5    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
-| 6    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
-| 7    | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
-| 8    | `== screenshot shortcuts`    | Only with `--shottr`: turns off the macOS screenshot shortcuts.                                  |
-| 9    | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
+| 5    | `== agy hooks`               | Merges `agy/hooks.fragment.json` into `~/.gemini/config/hooks.json`.                             |
+| 6    | `== Rex orchestrator skill for agy` | Links `~/.gemini/config/skills/rex-orchestrator` to the directory `~/.claude/skills/rex-orchestrator` resolves to, and prints a `note` for old agy rule files. |
+| 7    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
+| 8    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
+| 9    | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
+| 10   | `== screenshot shortcuts`    | Only with `--shottr`: turns off the macOS screenshot shortcuts.                                  |
+| 11   | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
 
 ## Linked files
 
@@ -91,6 +94,11 @@ The script prints a `==` header before each step.
 | `claude/guard-push.sh`   | `~/.claude/guard-push.sh`             |
 | `claude/session-context.sh` | `~/.claude/session-context.sh`     |
 | `claude/where.sh`        | `~/.claude/where.sh`                  |
+| `agents/AGENTS.md`       | `~/.codex/AGENTS.md`                  |
+| `agents/AGENTS.md`       | `~/.config/dotfiles/AGENTS.md` (the path `agy/GEMINI.md` includes) |
+| `agy/GEMINI.md`          | `~/.gemini/GEMINI.md`                 |
+| `agy/guard-agents.zsh`   | `~/.gemini/config/hooks/dotfiles-guard-agents.zsh` |
+| `bin/agent-preflight`    | `~/.local/bin/agent-preflight`        |
 
 Each link is an absolute symlink to the file in the checkout. For each
 destination:
@@ -110,7 +118,10 @@ it is moved to `config.ghostty.bak-<stamp>`. Ghostty reads that file after
 
 `just drift` reads the same `link` lines and reports each destination as
 `linked`, `elsewhere` (a symlink that does not resolve to the repo file,
-printed with its target), `same (copy)`, `DIFFERS` or `missing`.
+printed with its target), `same (copy)`, `DIFFERS` or `missing`. When
+`~/.claude/skills/rex-orchestrator` exists it also reports
+`~/.gemini/config/skills/rex-orchestrator` against the directory that skill
+resolves to.
 
 ## What it writes
 
@@ -163,8 +174,9 @@ The merge needs `jq`. Without it the script prints
 | Keys in the fragment         | Deep merge (`jq` `*`): the fragment's value wins. Today `env.JJ_EDITOR`, `statusLine` and `preferredNotifChannel`. |
 | Every other key              | Kept as it was.                                                          |
 
-A missing or empty `settings.json` counts as `{}`. The merge goes to
-`settings.json.tmp` first. If `jq` fails (for example on invalid JSON), the
+A missing or empty `settings.json` counts as `{}`. The merge goes to a new
+private temp file next to it first (`mktemp settings.json.merge.XXXXXX`), so
+no existing file is overwritten. If `jq` fails (for example on invalid JSON), the
 temp file is deleted, `settings.json` is left untouched, and the script
 prints `settings merge failed` and exits 1.
 
@@ -175,8 +187,37 @@ keeps the old one, so delete the old one from `settings.json` by hand.
 If the merged result equals the current file, the temp file is dropped and
 the script prints `ok   ~/.claude/settings.json (unchanged)`. Otherwise an
 existing file is copied to `settings.json.bak-<stamp>` and the merged file
-replaces it, and the script prints `updated (backup: <file>)`. With no
+replaces it with the old file's mode (read through a symlink, with BSD or GNU `stat`), and the script prints
+`updated (backup: <file>)`. With no
 `settings.json` at all it writes the merged fragment and prints `created`.
+
+### `~/.gemini/config/hooks.json`
+
+agy's hooks file. Each top-level key is a named hook. The merge is
+`($cur[0] // {}) + $add[0]` with `agy/hooks.fragment.json`: it replaces the
+`dotfiles-agent-guard` entry whole, so a stale `"enabled": false` in it does
+not survive, and keeps every other named hook as it is. It uses the same
+private temp file and keeps the file's mode. A missing or empty file counts as `{}`. Invalid JSON leaves the file
+untouched: the script prints `agy hooks merge failed` and exits 1. The
+unchanged, updated and created cases print the same lines as
+`settings.json`, with a `hooks.json.bak-<stamp>` backup.
+
+| Fragment key           | Event        | Matcher | Command                                              |
+| ---------------------- | ------------ | ------- | ---------------------------------------------------- |
+| `dotfiles-agent-guard` | `PreToolUse` | `*`     | `~/.gemini/config/hooks/dotfiles-guard-agents.zsh`, timeout 10 s |
+
+### `~/.gemini/config/skills/rex-orchestrator`
+
+When `~/.claude/skills/rex-orchestrator` is a directory (usually a link into
+a separate skills repo), the script links agy's skill to the physical path
+it resolves to (`pwd -P`), so both tools load one source. No path to that
+repo is in this one. Without Claude's skill it prints `skip`. An existing
+link to the same target prints `ok`, anything else is moved to
+`.bak-<stamp>` first.
+
+When `~/Desktop/antigravity-instructions.md` or
+`~/.gemini/SUBSCRIPTION-AGENTS.md` exists, the script prints a `note` that
+agy no longer loads it. It never deletes either file.
 
 ### `~/.config/jj/conf.d/identity.toml`
 

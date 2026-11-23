@@ -10,6 +10,20 @@ directory shows what the session should see. If mise refuses the config, run
 `mise trust` in the main checkout, and the workspaces inherit it.
 [Agents and PATH](explanation/agents-and-path.md) has the full story.
 
+**agy ignores the shared rules.** Check that `~/.gemini/GEMINI.md` and
+`~/.config/dotfiles/AGENTS.md` are links into the repo (`just drift`). agy
+resolves a relative include next to the link, so the include in
+`agy/GEMINI.md` must stay a `~/` path. Over 24,000 bytes after includes, agy
+truncates the file. [Agent rules](guides/agent-rules.md) has the check that
+proves each tool loads the file.
+
+**agy says "tool call denied by pre-tool hook: agent guard: ...".** The
+launch guard blocked a `claude` or `codex` command. The reason names the
+cause: put `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN` in front of
+`claude`, `env -u OPENAI_API_KEY -u CODEX_HOME` in front of `codex`, inside
+`rex window new ... --` as well. "does not parse" means a quote or bracket is
+unbalanced.
+
 **jj says "The working copy is stale" in a workspace.** Another workspace
 rewrote the change this one has checked out, for example by squashing or
 rebasing it from the main checkout. Bring the workspace up to date:

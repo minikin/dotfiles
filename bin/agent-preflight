@@ -1,0 +1,112 @@
+#!/bin/bash
+# agent-preflight: start-of-session checks before running Claude and Codex agents on the
+# subscriptions. Moshi paired, Rex answering, no API-key variables, Claude and Codex logged in to
+# their subscriptions. Prints one line per check and exits 1 when any check fails.
+# Usage: agent-preflight [--limits] | --help
+#   --limits  also print the Codex weekly limit (through the experimental codex app-server).
+#             Claude has no command for its limits: /usage in a session shows them.
+# Never prints a variable's value, an email or the Moshi host name.
+set -uo pipefail
+
+limits=0
+for arg in "$@"; do
+  case $arg in
+    --limits) limits=1 ;;
+    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown argument: $arg (usage: agent-preflight [--limits] | --help)" >&2; exit 2 ;;
+  esac
+done
+
+VARS=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_HOME)
+failed=0
+ok()   { printf 'ok    %s\n' "$*"; }
+fail() { printf 'FAIL  %s\n' "$*"; failed=1; }
+info() { printf 'info  %s\n' "$*"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+if have moshi-hook; then
+  # Only the state line: the rest of `moshi-hook status` names the host and its owner.
+  state=$(moshi-hook status 2>/dev/null | sed -n 's/^status:[[:space:]]*//p' | head -1)
+  if [[ $state == paired ]]; then ok "moshi: paired"
+  else fail "moshi: ${state:-no status} (pair it with moshi-hook pair)"; fi
+else
+  fail "moshi: moshi-hook is not installed"
+fi
+
+if have rex; then
+  # rex starts a missing local server by default, which would make this check pass.
+  if rex --autostart=false whoami --json >/dev/null 2>&1; then ok "rex: server answers"
+  else fail "rex: no server answers (start Rex)"; fi
+else
+  fail "rex: not installed"
+fi
+
+here=() launchd=() unchecked=() launchd_err=''
+have launchctl || launchd_err='launchctl not found'
+for v in "${VARS[@]}"; do
+  [[ -n ${!v+set} ]] && here+=("$v")
+  # GUI apps, and so the Rex server, inherit launchd's environment, not this shell's.
+  [[ $launchd_err == 'launchctl not found' ]] && continue
+  if ! value=$(launchctl getenv "$v" 2>/dev/null); then
+    launchd_err='launchctl getenv failed'; unchecked+=("$v"); continue
+  fi
+  [[ -n $value ]] && launchd+=("$v")
+done
+unset value
+if (( ${#here[@]} )); then fail "env: set in this shell: ${here[*]} (unset them)"
+else ok "env: no API-key variables in this shell"; fi
+(( ${#launchd[@]} )) && fail "env: set in launchd: ${launchd[*]} (launchctl unsetenv <name>)"
+if [[ $launchd_err == 'launchctl not found' ]]; then fail "env: cannot check launchd ($launchd_err)"
+elif [[ -n $launchd_err ]]; then fail "env: cannot check launchd for ${unchecked[*]} ($launchd_err)"
+elif (( ! ${#launchd[@]} )); then ok "env: no API-key variables in launchd"; fi
+
+if ! have jq; then
+  fail "claude: jq is missing, cannot read claude auth status"
+elif ! have claude; then
+  fail "claude: not installed"
+else
+  status_json=$(env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude auth status 2>/dev/null)
+  fields=$(jq -r '"\(.loggedIn // false)\t\(.authMethod // "none")\t\(.subscriptionType // "unknown")"' <<<"$status_json" 2>/dev/null)
+  IFS=$'\t' read -r logged method plan <<<"$fields"
+  if [[ $logged == true && $method == claude.ai ]]; then ok "claude: logged in to claude.ai ($plan)"
+  elif [[ $logged == true ]]; then fail "claude: logged in with $method, not the claude.ai subscription (claude auth login)"
+  else fail "claude: not logged in (claude auth login)"; fi
+fi
+
+if have codex; then
+  if env -u OPENAI_API_KEY -u CODEX_HOME codex login status 2>&1 | grep -q '^Logged in using ChatGPT'; then
+    ok "codex: logged in with ChatGPT"
+  else
+    fail "codex: not logged in with ChatGPT (codex login)"
+  fi
+else
+  fail "codex: not installed"
+fi
+
+if (( limits )); then
+  if have codex && have jq; then
+    # JSON-RPC over stdio. The sleep keeps stdin open long enough for the answer.
+    reply=$({
+      printf '%s\n' \
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"agent-preflight","version":"1"}}}' \
+        '{"jsonrpc":"2.0","method":"initialized"}' \
+        '{"jsonrpc":"2.0","id":2,"method":"account/rateLimits/read"}'
+      sleep "${AGENT_PREFLIGHT_WAIT:-5}"
+    } | env -u OPENAI_API_KEY -u CODEX_HOME codex app-server 2>/dev/null | grep -m1 '"id":2')
+    # The weekly window can be primary or secondary (next to a five-hour one): pick it by length.
+    line=$(jq -r '.result.rateLimits // empty
+      | [.primary, .secondary] | map(select(.windowDurationMins? == 10080)) | first
+      | if . == null then "none" else
+          "\(.usedPercent) percent used of 7-day window, resets \(.resetsAt | strftime("%Y-%m-%d %H:%M UTC"))" end' <<<"$reply" 2>/dev/null)
+    case $line in
+      '') info "codex limit: no answer from codex app-server" ;;
+      none) info "codex limit: no weekly window in the answer" ;;
+      *) info "codex limit: $line" ;;
+    esac
+  else
+    info "codex limit: needs codex and jq"
+  fi
+  info "claude limit: no command reads it, use /usage in a Claude session"
+fi
+
+exit "$failed"

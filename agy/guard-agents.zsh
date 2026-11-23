@@ -329,32 +329,30 @@ sets_guarded() {
 }
 
 # check_send_lines <message>: a rex send message may land in a shell pane, which runs each line.
-# A line is denied only when it is itself a forbidden launch: its first command runs claude, codex
-# or op run (checked like any command), or it sets a guarded variable and launches claude or
-# codex. Prose that names a launch mid-sentence passes.
+# A line is denied only when it is itself a forbidden launch: one of its commands (split on ;, &&,
+# ||, | and &) runs claude, codex or op run and fails the full check, or the line sets a guarded
+# variable and launches claude or codex. Prose that names a launch mid-sentence passes.
 check_send_lines() {
   local line w exe sets launches
-  local -a words cur first
+  local -a words cur
   for line in "${(@f)1}"; do
     words=("${(Z:C:)line}")
-    cur=() first=() sets='' launches=0
+    cur=() sets='' launches=0
     for w in "${words[@]}" ';'; do
       case $w in
         (';'|';;'|'&&'|'||'|'|'|'|&'|'&'|'&!'|'&|'|'('|')'|'{'|'}'|'()')
           if (( $#cur )); then
-            (( $#first )) || first=("${cur[@]}")
-            [[ $(real_exe "${cur[@]}") == (claude|codex) ]] && launches=1
+            exe=$(real_exe "${cur[@]}")
+            [[ $exe == (claude|codex) ]] && launches=1
+            if [[ $exe == (claude|codex|op) ]]; then
+              check_argv 0 "" "${cur[@]}" || { REASON="rex send line: $REASON"; return 1 }
+            fi
             [[ -z $sets ]] && sets_guarded "${cur[@]}" && sets=$REASON
           fi
           cur=(); continue ;;
       esac
       cur+=("${(Q)w}")
     done
-    (( $#first )) || continue
-    exe=$(real_exe "${first[@]}")
-    if [[ $exe == (claude|codex|op) ]]; then
-      check_argv 0 "" "${first[@]}" || { REASON="rex send line: $REASON"; return 1 }
-    fi
     if [[ -n $sets ]] && (( launches )); then
       REASON="rex send line $sets and launches an agent"; return 1
     fi

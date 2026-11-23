@@ -348,3 +348,15 @@ EOF
     grep -qF "\`$c\`" "$guide" || { echo "guide misses $c" >&3; false; }
   done
 }
+
+@test "agy guard: every command of a compound rex send line gets the full launch check" {
+  local c
+  for c in "rex send -b b1 'cd /tmp && codex -p repo'" "rex send -b b1 'echo hi; op run -- claude'" \
+           "rex send -b b1 'true | claude --model opus'" "rex send -b b1 'ls & codex exec x'" \
+           "rex send -b b1 'false || env -u OPENAI_API_KEY -u CODEX_HOME codex login --with-api-key'"; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
+  done
+  run_cmd "rex send -b b1 'cd /tmp && env -u OPENAI_API_KEY -u CODEX_HOME codex -p repo'"
+  [[ $status -eq 0 && -z $output ]] || false
+}

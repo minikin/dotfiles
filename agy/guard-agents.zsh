@@ -353,9 +353,13 @@ check_agent() {
 (( $+commands[jq] )) || deny "jq is missing, cannot inspect the command"
 input=$(cat)
 [[ -n ${input//[[:space:]]/} ]] || deny "empty hook input"
-jq -e 'type == "object"' >/dev/null 2>&1 <<<"$input" || deny "hook input is not a JSON object"
+# Exactly one event object: jq reads a stream of values, and a second object must not slip past.
+jq -e -s 'length == 1 and (.[0] | type) == "object"' >/dev/null 2>&1 <<<"$input" ||
+  deny "hook input is not exactly one JSON object"
+input=$(jq -c '.' <<<"$input")
 tool=$(jq -r '.toolCall.name // empty | strings' <<<"$input")
 [[ -n $tool ]] || deny "hook input has no tool name"
+[[ $tool == [A-Za-z0-9_.:-]## ]] || deny "hook input has a malformed tool name"
 
 case $tool in
   (run_command) field=CommandLine typed=0 ;;

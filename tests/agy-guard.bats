@@ -299,3 +299,14 @@ EOF
     is_deny || { echo "not denied: $c -> $output" >&3; false; }
   done
 }
+
+@test "agy guard: a stream of several JSON values is denied, not let through" {
+  raw $'{"toolCall":{"name":"run_command","args":{"CommandLine":"ls"}}}\n{"toolCall":{"name":"run_command","args":{"CommandLine":"op run -- claude"}}}'
+  is_deny
+  raw '{"toolCall":{"name":"x"}} {"toolCall":{"name":"y"}}'
+  is_deny
+  raw '[{"toolCall":{"name":"run_command","args":{"CommandLine":"ls"}}}]'
+  is_deny
+  raw '{"toolCall":{"name":"run\ncommand","args":{"CommandLine":"ls"}}}'
+  is_deny
+}

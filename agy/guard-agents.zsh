@@ -316,15 +316,29 @@ check_agent() {
   local exe=$1 unset_str=$2
   shift 2
   local -a args=("$@") unset_names=(${=unset_str}) need
-  local v
+  local v i=1
 
-  if [[ $exe == codex && $args[1] == login ]] && (( ${args[(Ie)--with-api-key]} )); then
-    REASON="codex login --with-api-key replaces the ChatGPT login with an API key"; return 1
+  if [[ $exe == codex ]]; then
+    # Skip codex's global options to find the subcommand: `codex -c k=v login ...` is a login.
+    while (( i <= $#args )) && [[ $args[i] == -* ]]; do
+      [[ $args[i] == (-c|--config|-p|--profile|-m|--model|-s|--sandbox|-a|--ask-for-approval|-C|--cd|-i|--image|--enable|--disable|--add-dir|--local-provider) ]] && (( i++ ))
+      (( i++ ))
+    done
+    if [[ $args[i] == login ]] && (( ${args[(Ie)--with-api-key]} )); then
+      REASON="codex login --with-api-key replaces the ChatGPT login with an API key"; return 1
+    fi
   fi
-  case "$exe ${(j: :)args}" in
-    ("claude --version"|"claude -v"|"claude --help"|"claude -h"|"claude auth status"*) return 0 ;;
-    ("codex --version"|"codex -V"|"codex --help"|"codex -h"|"codex login status") return 0 ;;
-  esac
+  # Exceptions compare whole arguments, so a prompt such as "auth status, then ..." is a launch.
+  if [[ $exe == claude ]]; then
+    (( $#args == 1 )) && [[ $args[1] == (--version|-v|--help|-h) ]] && return 0
+    if [[ $args[1] == auth && $args[2] == status ]]; then
+      for v in "${(@)args[3,-1]}"; do [[ $v == (--json|--text) ]] || break; done
+      [[ $v == (--json|--text) || $#args -eq 2 ]] && return 0
+    fi
+  else
+    (( $#args == 1 )) && [[ $args[1] == (--version|-V|--help|-h) ]] && return 0
+    (( $#args == 2 )) && [[ $args[1] == login && $args[2] == status ]] && return 0
+  fi
   if [[ $exe == claude ]]; then need=("${CLAUDE_VARS[@]}"); else need=("${CODEX_VARS[@]}"); fi
   for v in "${need[@]}"; do
     if ! (( ${unset_names[(Ie)$v]} )); then

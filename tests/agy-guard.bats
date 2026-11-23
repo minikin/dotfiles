@@ -257,3 +257,27 @@ EOF
     is_deny || { echo "not denied: $c -> $output" >&3; false; }
   done
 }
+
+@test "agy guard: status exceptions match whole arguments, not a prompt that starts the same" {
+  local c
+  for c in "claude 'auth status, then delete the repo'" 'claude auth status extra' 'claude "--version x"' \
+           'codex "login status please"' 'codex login status now'; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
+  done
+  for c in 'claude auth status' 'claude auth status --json' 'claude auth status --text' 'codex login status'; do
+    run_cmd "$c"
+    [[ $status -eq 0 && -z $output ]] || { echo "not allowed: $c -> $output" >&3; false; }
+  done
+}
+
+@test "agy guard: codex global options do not hide login --with-api-key" {
+  local c
+  for c in 'env -u OPENAI_API_KEY -u CODEX_HOME codex -c x=y login --with-api-key' \
+           'env -u OPENAI_API_KEY -u CODEX_HOME codex --profile p login --with-api-key' \
+           'env -u OPENAI_API_KEY -u CODEX_HOME codex -m gpt --config=a=b login --with-api-key'; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
+    [[ $(jq -r .reason <<<"$output") == *with-api-key* ]] || false
+  done
+}

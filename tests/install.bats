@@ -733,3 +733,21 @@ JSON
   [ "$status" -eq 0 ]
   [ "$(file_mode "$(AGY_HOOKS)")" = "600" ]
 }
+
+@test "install: a GNU stat first on PATH does not break the mode lookup" {
+  mkdir -p "$BATS_TEST_TMPDIR/gnu"
+  # GNU stat reads -f as "file system": it prints a report for the paths it finds, then fails on
+  # the format string it took for a path.
+  cat >"$BATS_TEST_TMPDIR/gnu/stat" <<'STUB'
+#!/bin/bash
+if [[ " $* " == *" -f "* ]]; then echo "  File: \"$BATS_TEST_TMPDIR\" ID: 0 Namelen: 255 Type: apfs"; echo "stat: cannot read file system information for '%Lp'" >&2; exit 1; fi
+if [[ " $* " == *" -c %a "* ]]; then exec /usr/bin/stat -L -f %Lp "${@: -1}"; fi
+exec /usr/bin/stat "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/gnu/stat"
+  write_agy_hooks
+  chmod 640 "$(AGY_HOOKS)"
+  PATH="$BATS_TEST_TMPDIR/gnu:$PATH" run_install
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$(AGY_HOOKS)")" = "640" ]
+}

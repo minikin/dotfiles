@@ -59,10 +59,13 @@ merge_tmp() { mktemp "$1.merge.XXXXXX"; }
 # replace_if_changed <file> <tmp>: move tmp over file unless they hold the same JSON, keeping a
 # backup of the old file and its mode. A new file gets the umask's default mode, not mktemp's 600.
 replace_if_changed() {
-  local file=$1 tmp=$2
+  local file=$1 tmp=$2 mode
   if [[ -f $file ]]; then
-    # -L: the mode of the file a symlinked config points to, not of the link.
-    chmod "$(stat -L -f %Lp "$file" 2>/dev/null || stat -L -c %a "$file")" "$tmp"
+    # -L: the mode of the file a symlinked config points to, not of the link. Each form is captured
+    # on its own: GNU stat reads -f as "file system" and prints a report before it fails.
+    mode=$(stat -L -f %Lp "$file" 2>/dev/null) || mode=$(stat -L -c %a "$file" 2>/dev/null) ||
+      { rm -f "$tmp"; echo "cannot read the mode of $file; it is untouched" >&2; exit 1; }
+    chmod "$mode" "$tmp"
   else
     chmod "$(printf '%o' $(( 0666 & ~$(umask) )))" "$tmp"
   fi

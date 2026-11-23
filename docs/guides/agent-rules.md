@@ -63,8 +63,9 @@ running process. It denies:
 - any `claude` or `codex` launch without its own prefix:
   `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude ...` or
   `env -u OPENAI_API_KEY -u CODEX_HOME codex ...`. Only these exact commands
-  need no prefix: `claude --version`, `claude --help`, `claude auth status`
-  (with `--json` or `--text`), `codex --version`, `codex --help` and
+  need no prefix: `claude --version`, `claude -v`, `claude --help`,
+  `claude -h`, `claude auth status` (with `--json` or `--text`),
+  `codex --version`, `codex -V`, `codex --help`, `codex -h` and
   `codex login status`. A prompt such as `claude "auth status, then ..."` is a
   launch.
 
@@ -76,16 +77,23 @@ in `rex new`, `rex window new`, `rex run` and `rex split`. A Rex tab gets
 the Rex server's environment, not agy's, so a prefix in front of `rex`
 itself does not count.
 
-A `rex send` message is data: it is text for the agent in that tab, so a
-brief that mentions `codex --help` or `op run -- claude` passes. A `$(...)`
-in the `rex send` command line itself is still checked.
+A `rex send` message can land in an agent tab or in a plain shell, which
+runs each line. So each line of the message is denied only when it is itself
+a forbidden launch: its first command runs `claude` or `codex` without the
+prefix, `op run` wrapping one of them, or `codex login --with-api-key`, or the
+line sets one of the four variables and launches `claude` or `codex`. Prose
+that names these mid-sentence, such as "Use codex --help for examples",
+passes. A line that starts with `claude` or `codex` is read as a launch. A
+`$(...)` in the `rex send` command line itself is checked as well.
 
 Input it cannot inspect is denied: anything but exactly one JSON object, a
 missing or malformed tool name, a missing command, a
 `run_command` command that does not parse, nesting deeper than eight levels,
 and the `shell_exec` and `send_command_input` tools, whose payloads are not
-known yet. Text `manage_task` types into a running process that does not parse, such as a message with one apostrophe, is checked by its
-tokens instead of denied: a shell would not run it past the broken quote. It never answers `allow`, so agy's own permission prompts still apply.
+known yet. Text `manage_task` types into a running process that does not
+parse, such as a message with one apostrophe, is checked by its tokens
+instead of denied: a shell would not run it past the broken quote. It never
+answers `allow`, so agy's own permission prompts still apply.
 
 It is a guard rail, not a sandbox. It does not see a command word held in a
 variable (`c=claude; $c`), `eval`, aliases, a script file that launches an

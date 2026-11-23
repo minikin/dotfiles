@@ -187,7 +187,7 @@ keeps the old one, so delete the old one from `settings.json` by hand.
 If the merged result equals the current file, the temp file is dropped and
 the script prints `ok   ~/.claude/settings.json (unchanged)`. Otherwise an
 existing file is copied to `settings.json.bak-<stamp>` and the merged file
-replaces it with the old file's mode, and the script prints
+replaces it with the old file's mode (read through a symlink, with BSD or GNU `stat`), and the script prints
 `updated (backup: <file>)`. With no
 `settings.json` at all it writes the merged fragment and prints `created`.
 

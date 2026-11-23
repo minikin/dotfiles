@@ -338,3 +338,13 @@ EOF
   run_cmd 'echo "today'\''s-$(date)"'
   [[ $status -eq 0 && -z $output ]] || false
 }
+
+@test "agy guard: the guide lists every launch the guard lets through without a prefix" {
+  local guide="$REPO_ROOT/docs/guides/agent-rules.md" c
+  for c in 'claude --version' 'claude -v' 'claude --help' 'claude -h' 'claude auth status' \
+           'codex --version' 'codex -V' 'codex --help' 'codex -h' 'codex login status'; do
+    run_cmd "$c"
+    [[ $status -eq 0 && -z $output ]] || { echo "guard denies $c" >&3; false; }
+    grep -qF "\`$c\`" "$guide" || { echo "guide misses $c" >&3; false; }
+  done
+}

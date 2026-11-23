@@ -78,13 +78,21 @@ the Rex server's environment, not agy's, so a prefix in front of `rex`
 itself does not count.
 
 A `rex send` message can land in an agent tab or in a plain shell, which
-runs each line. So each line of the message is denied only when it is itself
-a forbidden launch: its first command runs `claude` or `codex` without the
-prefix, `op run` wrapping one of them, or `codex login --with-api-key`, or the
-line sets one of the four variables and launches `claude` or `codex`. Prose
+runs each line, and the guard does not tell the two apart. So each line of
+the message is denied only when it is itself a forbidden launch: one of its
+commands, split on `;`, `&&`, `||`, `|` and `&`, runs `claude` or `codex`
+without the prefix, `op run` wrapping one of them, or
+`codex login --with-api-key`, or the line sets one of the four variables and
+launches `claude` or `codex`. An `env` assignment counts only before the
+child program, so a prompt that reads `OPENAI_API_KEY=example` passes. Prose
 that names these mid-sentence, such as "Use codex --help for examples",
-passes. A line that starts with `claude` or `codex` is read as a launch. A
-`$(...)` in the `rex send` command line itself is checked as well.
+passes. A `$(...)` in the `rex send` command line itself is checked as well.
+
+A brief line that starts with `claude` or `codex`, or has one after a `;`,
+is denied, even when it is prose for an agent. That is accepted on purpose:
+a brief longer than a few sentences goes in a file, and the message only
+says where the file is. Reword a short message so the line starts with
+another word.
 
 Input it cannot inspect is denied: anything but exactly one JSON object, a
 missing or malformed tool name, a missing command, a

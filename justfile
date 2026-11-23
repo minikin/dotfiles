@@ -8,20 +8,20 @@ default:
 install *args:
     ./install.sh {{args}}
 
-# Shellcheck, bats asserts, zsh syntax, compose config (if docker is installed) and offline Markdown link check
+# Shellcheck, bats asserts, zsh syntax (zsh/ and agy/), compose config (if docker is installed) and offline Markdown link check
 lint:
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
     echo "== shellcheck"
-    shellcheck install.sh claude/*.sh scripts/*.sh
+    shellcheck install.sh claude/*.sh scripts/*.sh bin/*
     echo "== bats asserts"
     # bash 3.2 (macOS /usr/bin/env bash) ignores a failing [[ ]] or ! that is not a test's last command.
     if grep -nE '^[[:space:]]+(\[\[ .*\]\]|! .*)$' tests/*.bats | grep -v '|| false$'; then
       echo "add '|| false' to the asserts above" >&2; exit 1
     fi
     echo "== zsh -n"
-    for f in zsh/zshrc zsh/*.zsh; do zsh -n "$f"; done
+    for f in zsh/zshrc zsh/*.zsh agy/*.zsh; do zsh -n "$f"; done
     if command -v docker >/dev/null; then
       echo "== docker compose config"
       docker compose -f infra/compose.yaml config -q

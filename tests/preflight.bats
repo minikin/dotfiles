@@ -34,7 +34,8 @@ EOF
 echo "codex $* key=${OPENAI_API_KEY:-unset}" >>"$STUB_LOG"
 if [[ $1 == app-server ]]; then
   cat >/dev/null &
-  echo "${STUB_LIMITS:-{\"id\":2,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":36,\"windowDurationMins\":10080,\"resetsAt\":1795936747}}}}}"
+  default='{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":36,"windowDurationMins":10080,"resetsAt":1795936747}}}}'
+  echo "${STUB_LIMITS:-$default}"
   exit 0
 fi
 [[ -n ${OPENAI_API_KEY:-} ]] && { echo "Logged in using an API key - sk-test"; exit 0; }
@@ -165,4 +166,11 @@ STUB
   [[ $output == *"FAIL  env: set in launchd: OPENAI_API_KEY"* ]] || false
   [[ $output == *"FAIL  env: cannot check launchd for ANTHROPIC_API_KEY (launchctl getenv failed)"* ]] || false
   [[ $output != *test-not-a-key* ]] || false
+}
+
+@test "preflight: the codex app-server stub prints one valid JSON value, default or custom" {
+  run bash -c '"$1" app-server </dev/null | jq -e -s "length == 1 and .[0].id == 2"' _ "$STUBS/codex"
+  [ "$status" -eq 0 ]
+  STUB_LIMITS='{"id":2,"result":{}}' run bash -c '"$1" app-server </dev/null | jq -e -s "length == 1 and .[0].id == 2"' _ "$STUBS/codex"
+  [ "$status" -eq 0 ]
 }

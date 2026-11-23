@@ -310,3 +310,13 @@ EOF
   raw '{"toolCall":{"name":"run\ncommand","args":{"CommandLine":"ls"}}}'
   is_deny
 }
+
+@test "agy guard: an apostrophe inside double quotes does not hide a substitution" {
+  local c
+  for c in 'echo "today'\''s-$(op run -- claude)"' 'echo "it'\''s" $(op run -- codex)' 'echo "a'\''b `op run -- claude`"'; do
+    run_cmd "$c"
+    is_deny || { echo "not denied: $c -> $output" >&3; false; }
+  done
+  run_cmd 'echo "today'\''s-$(date)"'
+  [[ $status -eq 0 && -z $output ]] || false
+}

@@ -46,16 +46,22 @@ assigns_guarded() {
 }
 
 # Every $(...), <(...), >(...) and `...` body in a raw (still quoted) word, one per line in the
-# array `subs`. Single-quoted text is skipped: the shell does not expand it.
+# array `subs`. Single-quoted text is skipped: the shell does not expand it. Double-quoted text
+# is scanned.
 extract_subs() {
   local w=$1 i=1 n=${#1} c depth start q=''
   subs=()
   while (( i <= n )); do
     c=$w[i]
+    # Inside double quotes an apostrophe is literal, and $(...) and backticks still run.
     if [[ -z $q && $c == "'" ]]; then
       q="'"; (( i++ )); continue
     elif [[ $q == "'" ]]; then
       [[ $c == "'" ]] && q=''; (( i++ )); continue
+    fi
+    if [[ $c == '"' ]]; then
+      if [[ $q == '"' ]]; then q=''; else q='"'; fi
+      (( i++ )); continue
     fi
     if [[ $c == '\' ]]; then (( i += 2 )); continue; fi
     if [[ $c == [\$\<\>] && $w[i+1] == '(' ]]; then

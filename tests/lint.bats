@@ -68,6 +68,27 @@ EOF
   [ "$output" = "hr.md:3: semicolon" ]
 }
 
+@test "prose: a leading --- with no closing --- is a rule, not frontmatter" {
+  printf -- '---\ntext\nsemi; here\n' >lead.md
+  prose lead.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "lead.md:3: semicolon" ]
+}
+
+@test "prose: a line starting with an inline triple-backtick span is not a fence" {
+  printf '```a; b``` and; then\nnext; line\n' >tick.md
+  prose tick.md
+  [ "$status" -eq 1 ]
+  [ "$output" = $'tick.md:1: semicolon\ntick.md:2: semicolon' ]
+}
+
+@test "prose: a code span over two lines of a paragraph is code, and an unclosed one is text" {
+  printf 'text `multi\nline; code` after\nafter; that\n\nopen `tick; here\n\nnew `para; graph\n' >span.md
+  prose span.md
+  [ "$status" -eq 1 ]
+  [ "$output" = $'span.md:3: semicolon\nspan.md:5: semicolon\nspan.md:7: semicolon' ]
+}
+
 brewfile() { run "$REPO_ROOT/scripts/check-brewfile.sh" "$@"; }
 
 # fixture <files.md row cell>: a Brewfile in the repo's formats and a files.md with one row.

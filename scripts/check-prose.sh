@@ -3,10 +3,12 @@
 # run them. Reports file:line for each em dash, curly quote, ellipsis character and semicolon in
 # Markdown prose and exits 1 on any. Default files: README.md, CONTRIBUTING.md, SETUP_PROMPT.md
 # and every .md under docs/.
-# Skipped like the human-writing checker does: frontmatter, fenced code (``` or ~~~, closed by a
-# fence of the same character at least as long), inline code spans of any backtick count, HTML
-# entities such as &amp; for the semicolon rule, and blockquote lines (a quoted source keeps its
-# own punctuation) for the semicolon rule.
+# Skipped like the human-writing checker does: frontmatter (a leading --- block that has its
+# closing ---), fenced code (``` or ~~~, closed by a fence of the same character at least as long;
+# a ``` line with another backtick after it is inline code, not a fence), inline code spans of any
+# backtick count, also across the lines of one paragraph, HTML entities such as &amp; for the
+# semicolon rule, and blockquote lines (a quoted source keeps its own punctuation) for the
+# semicolon rule.
 set -euo pipefail
 
 if (( $# )); then
@@ -18,8 +20,10 @@ else
 fi
 
 awk '
-  # strip_code: remove every inline code span, a run of n backticks up to the next run of exactly n.
-  function strip_code(s,    out, i, n, rest, j, m, endat) {
+  # strip_code: drop every inline code span, a run of n backticks up to the next run of exactly
+  # n. Newlines inside a span are kept, so the text still splits into its source lines. A run
+  # with no closing run is literal text.
+  function strip_code(s,    out, i, n, rest, j, m, endat, span, k) {
     out = ""
     while ((i = index(s, "`")) > 0) {
       out = out substr(s, 1, i - 1)
@@ -37,45 +41,67 @@ awk '
           j += m
         } else j++
       }
-      if (endat) s = substr(rest, endat + n)
-      else { out = out substr(s, 1, n); s = rest }
+      if (endat) {
+        span = substr(rest, 1, endat - 1)
+        for (k = 1; k <= length(span); k++) if (substr(span, k, 1) == "\n") out = out "\n"
+        s = substr(rest, endat + n)
+      } else { out = out substr(s, 1, n); s = rest }
     }
     return out s
   }
-  function report(what) { printf "%s:%d: %s\n", FILENAME, FNR, what; bad = 1 }
-  FNR == 1 { fence = ""; fm = 1; infm = 0 }
-  {
-    line = $0
-    if (fm) {
-      if (line ~ /^[ \t]*$/) next
-      fm = 0
-      if (line == "---") { infm = 1; next }
-    }
-    if (infm) { if (line == "---") infm = 0; next }
-    t = line
-    sub(/^[ \t]+/, "", t)
-    if (fence != "") {
-      if (index(t, fence) == 1) {
-        rest = substr(t, length(fence) + 1)
-        c = substr(fence, 1, 1)
-        while (substr(rest, 1, 1) == c) rest = substr(rest, 2)
-        if (rest ~ /^[ \t]*$/) fence = ""
-      }
-      next
-    }
-    if (t ~ /^(```|~~~)/) {
-      c = substr(t, 1, 1); n = 0
-      while (substr(t, n + 1, 1) == c) n++
-      fence = substr(t, 1, n)
-      next
-    }
-    p = strip_code(line)
-    if (index(p, "\342\200\224")) report("em dash")
-    if (index(p, "\342\200\230") || index(p, "\342\200\231") || index(p, "\342\200\234") || index(p, "\342\200\235")) report("curly quote")
-    if (index(p, "\342\200\246")) report("ellipsis character")
+  function report(line, what) { printf "%s:%d: %s\n", name, line, what; bad = 1 }
+  function check(p, line, quote,    q) {
+    if (index(p, "\342\200\224")) report(line, "em dash")
+    if (index(p, "\342\200\230") || index(p, "\342\200\231") || index(p, "\342\200\234") || index(p, "\342\200\235")) report(line, "curly quote")
+    if (index(p, "\342\200\246")) report(line, "ellipsis character")
     q = p
     gsub(/&#?[A-Za-z0-9_]+;/, "", q)
-    if (index(q, ";") && t !~ /^>/) report("semicolon")
+    if (index(q, ";") && !quote) report(line, "semicolon")
   }
-  END { exit bad }
+  # flush: check the paragraph gathered so far, with code spans resolved across its lines.
+  function flush(    text, i, k, parts) {
+    if (np == 0) return
+    text = pl[1]
+    for (i = 2; i <= np; i++) text = text "\n" pl[i]
+    k = split(strip_code(text), parts, "\n")
+    for (i = 1; i <= k; i++) check(parts[i], pn[i], pq[i])
+    np = 0
+  }
+  function trimmed(s) { sub(/^[ \t]+/, "", s); return s }
+  # doc: one whole file, buffered in L[1..n], so frontmatter can be told from a leading rule.
+  function doc(    i, start, f, j, t, fence, c, k, rest) {
+    start = 1
+    for (f = 1; f <= n && L[f] ~ /^[ \t]*$/; f++) ;
+    if (f <= n && L[f] == "---")
+      for (j = f + 1; j <= n; j++) if (L[j] == "---") { start = j + 1; break }
+    fence = ""; np = 0
+    for (i = start; i <= n; i++) {
+      t = trimmed(L[i])
+      if (fence != "") {
+        if (index(t, fence) == 1) {
+          rest = substr(t, length(fence) + 1)
+          c = substr(fence, 1, 1)
+          while (substr(rest, 1, 1) == c) rest = substr(rest, 2)
+          if (rest ~ /^[ \t]*$/) fence = ""
+        }
+        continue
+      }
+      if (t ~ /^(```|~~~)/) {
+        c = substr(t, 1, 1); k = 0
+        while (substr(t, k + 1, 1) == c) k++
+        if (!(c == "`" && index(substr(t, k + 1), "`"))) {
+          flush()
+          fence = substr(t, 1, k)
+          continue
+        }
+      }
+      if (t == "") { flush(); continue }
+      np++; pl[np] = L[i]; pn[np] = i; pq[np] = (t ~ /^>/)
+    }
+    flush()
+  }
+  FNR == 1 && NR > 1 { doc() }
+  FNR == 1 { name = FILENAME; n = 0; split("", L) }
+  { L[++n] = $0 }
+  END { if (NR) doc(); exit bad }
 ' "${files[@]}"

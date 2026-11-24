@@ -4,7 +4,10 @@ import sys
 # codex_launches.py <prefix> <file>...: every Codex launch in shell code and Markdown code must start
 # with <prefix>. Prints "file:line: <code>" for each one that does not and exits 1 if any.
 prefix = sys.argv[1] + " "
-LAUNCH = re.compile(r"(?<![\w/.$-])codex(?= )( (?:exec|resume|login|app-server|mcp|sandbox|review|-p|-s|-a|-c|-C|-m)\b[^`\n]*)")
+# Only "codex <subcommand or flag>", so finditer finds every launch on a line, not just the first.
+LAUNCH = re.compile(r"(?<![\w/.$-])codex (?:exec|resume|login|app-server|mcp|sandbox|review|-p|-s|-a|-c|-C|-m)\b")
+# Where one command of a compound shell line ends.
+END = re.compile(r"\s*(?:&&|\|\||[;|&)`])")
 EXEMPT = {"codex login status", "codex login --with-api-key"}
 bad = False
 
@@ -48,7 +51,7 @@ for path in sys.argv[2:]:
             # In a script, text inside double quotes is a message, not a command.
             if shell and code[: m.start()].count('"') % 2:
                 continue
-            launch = "codex" + m.group(1)
+            launch = END.split(code[m.start():], maxsplit=1)[0]
             if launch.strip() in EXEMPT:
                 continue
             if not code[: m.start()].endswith(prefix):

@@ -106,16 +106,19 @@ codex_prefix() {
   [ "$status" -eq 0 ]
 }
 
-@test "rules: the launch check catches a prefix removed from one launch, continued lines included" {
+@test "rules: the launch check catches a prefix removed from one launch, continued lines and compound lines included" {
   local p
   p=$(codex_prefix)
   sed "s/^$p codex exec/codex exec/" "$REPO_ROOT/docs/guides/agent-rules.md" > agent-rules.md
   sed "s/$p \\\\\$/\\\\/" "$REPO_ROOT/zsh/jj.zsh" > jj.zsh
   printf '| Codex | `%s codex -p <repo>` |\n| Codex | `codex -s read-only -a never` |\n' "$p" > table.md
-  run python3 -I "$REPO_ROOT/tests/codex_launches.py" "$p" agent-rules.md jj.zsh table.md
+  printf '```sh\n%s codex exec x && codex resume --last\n%s codex exec y; %s codex resume --last\n```\n' "$p" "$p" "$p" > compound.md
+  run python3 -I "$REPO_ROOT/tests/codex_launches.py" "$p" agent-rules.md jj.zsh table.md compound.md
   [ "$status" -eq 1 ]
   [[ $output == *"agent-rules.md:"*": codex exec --ephemeral"* ]] || false
   [[ $output == *'jj.zsh:'*': (cd "$d" && codex exec -s read-only'* ]] || false
   [[ $output == *"table.md:2: codex -s read-only -a never"* ]] || false
   [[ $output != *"table.md:1"* ]] || false
+  [[ $output == *"compound.md:2: $p codex exec x && codex resume --last"* ]] || false
+  [[ $output != *"compound.md:3"* ]] || false
 }

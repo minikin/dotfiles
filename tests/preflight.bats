@@ -9,6 +9,8 @@ setup() {
   STUBS="$BATS_TEST_TMPDIR/stubs"
   mkdir -p "$STUBS"
   ln -s "$(command -v jq)" "$STUBS/jq"
+  # codex/check-profile.sh needs a python3 with tomllib, which /usr/bin/python3 is not.
+  command -v python3 >/dev/null && ln -s "$(command -v python3)" "$STUBS/python3"
   export STUB_LOG="$BATS_TEST_TMPDIR/calls.log"
   : >"$STUB_LOG"
 
@@ -355,6 +357,7 @@ EOF
 }
 
 @test "preflight: in a jj repo the Codex profile is information, by the main checkout's name" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
   mkdir -p "$HOME/src/app" "$HOME/.codex"
   STUB_JJ_ROOT="$HOME/src/app" preflight
   [ "$status" -eq 0 ]

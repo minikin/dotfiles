@@ -262,6 +262,7 @@ codex_profile() {
 }
 
 @test "jwx: a profile without this checkout's roots or in read-only mode stops it before the workspace" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
   stub_codex
   codex_profile '/path/to/<repo>'
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
@@ -293,6 +294,7 @@ codex_profile() {
 }
 
 @test "jwx: a workspace git dir under another repo's common git dir does not start codex" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
   stub_codex
   codex_profile
   mkdir -p "$BATS_TEST_TMPDIR/gitbin"
@@ -310,6 +312,7 @@ EOF
 }
 
 @test "jwx: a workspace whose own git dir cannot be found does not start codex" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
   stub_codex
   codex_profile
   mkdir -p "$BATS_TEST_TMPDIR/gitbin"
@@ -327,6 +330,7 @@ EOF
 }
 
 @test "jwx: starts codex -p <repo> --add-dir <workspace git dir> in the workspace, keys and CODEX_HOME removed, marker set" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
   stub_codex
   codex_profile
   (cd "$REPO" && echo two > two.txt && jj commit -m second >/dev/null 2>&1)

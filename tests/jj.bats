@@ -261,16 +261,51 @@ codex_profile() {
     "$root" "$root" > "$HOME/.codex/app.config.toml"
 }
 
-@test "jwx: a profile that does not name this checkout's .jj stops it too" {
+@test "jwx: a profile without this checkout's roots or in read-only mode stops it before the workspace" {
   stub_codex
   codex_profile '/path/to/<repo>'
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
   [ "$status" -eq 1 ]
-  [[ $output == *"names no writable root for this checkout's .jj"* ]] || false
+  [[ $output == *"cannot start a writer here"* ]] || false
+  [[ $output == *"does not name this checkout's .jj"* ]] || false
   codex_profile /elsewhere/app
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
   [ "$status" -eq 1 ]
+  codex_profile
+  sed -i '' 's/workspace-write/read-only/' "$HOME/.codex/app.config.toml"
+  printf '# writable_roots = ["%s/.git"]\n' "$REPO" >> "$HOME/.codex/app.config.toml"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
+  [ "$status" -eq 1 ]
+  [[ $output == *'sandbox_mode is not "workspace-write"'* ]] || false
   [ ! -e "$WS/feat-x" ]
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
+}
+
+@test "jwx: refuses .. and a stray directory at the workspace path, never starting codex" {
+  stub_codex
+  codex_profile
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx .."
+  [ "$status" -eq 1 ]
+  mkdir -p "$WS/stray"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx stray"
+  [ "$status" -eq 1 ]
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
+}
+
+@test "jwx: a workspace whose own git dir cannot be found does not start codex" {
+  stub_codex
+  codex_profile
+  mkdir -p "$BATS_TEST_TMPDIR/gitbin"
+  real_git=$(command -v git)
+  cat > "$BATS_TEST_TMPDIR/gitbin/git" <<EOF
+#!/bin/sh
+case " \$* " in *" --absolute-git-dir "*) exit 128 ;; esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$BATS_TEST_TMPDIR/gitbin/git"
+  PATH="$BATS_TEST_TMPDIR/gitbin:$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
+  [ "$status" -eq 1 ]
+  [[ $output == *"cannot find this workspace's own git dir"* ]] || false
   [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
 }
 

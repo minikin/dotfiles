@@ -161,32 +161,36 @@ jwc() {
 # in it with the profile ~/.codex/<repo>.config.toml (codex -p <repo>), JW_NAME,
 # DOTFILES_AGENT_WORKSPACE=1, and the OpenAI API-key variables and CODEX_HOME removed, so it runs
 # on the ChatGPT subscription. <repo> is the main checkout's directory name. Without that profile,
-# or with one that does not name this checkout's .jj (an untouched template, another checkout of
-# the same name), it stops before creating anything: Codex's default sandbox cannot write the main
-# checkout's .jj and .git, so a writer in a workspace could not commit. Same rev rule as jwc.
+# or when codex/check-profile.sh finds it is not workspace-write with this checkout's .jj and .git
+# as writable roots (an untouched template, another checkout of the same name), it stops before
+# creating anything: Codex's default sandbox cannot write the main checkout's .jj and .git, so a
+# writer in a workspace could not commit. Same rev rule as jwc.
 # Codex keeps the git dir a worktree's .git file points to read-only even inside a writable root,
 # unless that exact dir is named, so jwx adds the workspace's own .git/worktrees/<name> with
 # --add-dir. Without it jj commit fails with "Failed to reset Git HEAD state".
 jwx() {
-  local name=${1:-} rev root gitdir
-  local -a add
+  local name=${1:-} rev root profile reasons gitdir common
   (( $# )) && shift
   [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
   [[ -z $name ]] && { echo "usage: jwx <name> [rev] [codex args...]" >&2; return 1; }
   root=$(_jw_root) || return 1
-  if [[ ! -f $HOME/.codex/${root:t}.config.toml ]]; then
+  profile=$HOME/.codex/${root:t}.config.toml
+  if [[ ! -f $profile ]]; then
     echo "jwx: no ~/.codex/${root:t}.config.toml, so Codex could not write ${root:t}'s .jj and .git from a workspace" >&2
     echo "jwx: copy codex/repo-profile.example.toml from the dotfiles there and set its paths" >&2
     return 1
   fi
-  if ! grep -qF -- "$root/.jj" "$HOME/.codex/${root:t}.config.toml"; then
-    echo "jwx: ~/.codex/${root:t}.config.toml names no writable root for this checkout's .jj, set its paths" >&2
+  if ! reasons=$("$_jw_codex_check" "$profile" "$root" 2>&1); then
+    print -rl -- "jwx: ~/.codex/${root:t}.config.toml cannot start a writer here:" "${(@f)reasons}" >&2
     return 1
   fi
   jw "$name" ${rev:+"$rev"} || return 1
-  gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) && add=(--add-dir "$gitdir")
+  gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) &&
+    common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    [[ $gitdir != "$common" ]] ||
+    { echo "jwx: cannot find this workspace's own git dir, not starting Codex" >&2; return 1; }
   JW_NAME=${PWD:t} DOTFILES_AGENT_WORKSPACE=1 \
-    env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p "${root:t}" $add "$@"
+    env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p "${root:t}" --add-dir "$gitdir" "$@"
 }
 
 # jreview [--codex] [--model <model>] [--] [name] [focus...] — a second agent reviews a
@@ -555,6 +559,7 @@ jpush() {
 # chpwd only computes: zsh runs it in $(...) and ( ... ) too, where output would be captured,
 # and a cd inside a redirected function would lose it. precmd writes to the terminal.
 _jw_where_sh=${${(%):-%x}:A:h:h}/claude/where.sh
+_jw_codex_check=${_jw_where_sh:h:h}/codex/check-profile.sh
 typeset -ga _jw_tint_dark=('#382b3d' '#2e363c' '#38363d' '#2b3046' '#383244' '#2c3642')
 typeset -ga _jw_tint_light=('#ecdae2' '#dee9e1' '#ede7df' '#dae3f5' '#eee5f1' '#d9e8ec')
 # "unknown", so the first prompt always sets or clears the tint: reload runs exec zsh, which

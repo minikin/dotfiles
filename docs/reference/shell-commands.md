@@ -279,9 +279,12 @@ JW_NAME=<name> DOTFILES_AGENT_WORKSPACE=1 \
 ```
 
 `<git dir>` is the workspace's `.git/worktrees/<name>` in the main checkout,
-from `git rev-parse --absolute-git-dir`. When git cannot report it, reports
-the main checkout's own git dir, or reports a common git dir other than the
-main checkout's, `jwx` prints
+from `git rev-parse --absolute-git-dir`, asked with `GIT_DIR`, `GIT_WORK_TREE`,
+`GIT_COMMON_DIR` and `GIT_INDEX_FILE` removed so an inherited override cannot
+point it at another worktree. When git cannot report it, reports the main
+checkout's own git dir, reports a common git dir other than the main
+checkout's, or the git dir's `gitdir` file does not point back at this
+workspace's `.git`, `jwx` prints
 `jwx: cannot find this workspace's own git dir in <main checkout>, not starting Codex`
 and returns 1. Codex keeps the git dir that a
 worktree's `.git` file points to read-only, also inside a writable root of

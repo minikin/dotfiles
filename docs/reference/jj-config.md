@@ -34,6 +34,7 @@ both. jj keeps them outside the repo, in `~/.config/jj/repos/<id>/config.toml`.
 | `jj stack`  | `["log", "-r", "trunk()::@ \| @::"]`                                        | `jj log -r 'trunk()::@ \| @::'`                           |
 | `jj dft`    | `["diff", "--tool", "difft"]`                                               | `jj diff --tool difft`                                    |
 | `jj dshow`  | `["show", "--tool", "difft"]`                                               | `jj show --tool difft`                                    |
+| `jj ks`     | `["diff", "--tool", "ks"]`                                                  | `jj diff --tool ks` (Kaleidoscope directory diff)         |
 
 Arguments after an alias are appended: `jj dft -r fix-login@`,
 `jj dshow <change-id>`.
@@ -61,6 +62,15 @@ difftastic is used only through `jj dft`, `jj dshow` or an explicit
 print jj's own format. The Claude Code settings deny any jj command
 containing `--tool`, and allow `jj dft`. See
 [Design](../explanation/design.md#why-difftastic-is-opt-in).
+
+## merge-tools.ksdiff and merge-tools.ks
+
+Opt-in Kaleidoscope GUI diff and merge tools (requires `ksdiff` from Kaleidoscope):
+
+- `merge-tools.ksdiff`: file-by-file diff (`--partial-changeset`) and 3-way merge (`jj resolve --tool ksdiff`).
+- `merge-tools.ks`: directory diff (`--wait`), invoked through `jj ks`.
+
+Neither sets `ui.diff-formatter`, so plain `jj diff` stays non-interactive for agents and CI.
 
 ## identity.toml
 

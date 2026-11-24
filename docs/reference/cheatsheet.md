@@ -93,6 +93,7 @@ Repo aliases (`jj/config.toml`):
 | `jj tug` | `bookmark move --from 'closest_bookmark(@)' --to 'work()'` | Move nearest bookmark up to latest work, then `jj git push` |
 | `jj dft [args]` | `diff --tool difft` | Structural diff |
 | `jj dshow [rev]` | `show --tool difft` | Structural show |
+| `jj ks [args]` | `diff --tool ks` | Kaleidoscope GUI diff |
 | `work()` | `heads(::@ & mutable() & ~empty())` | Latest non-empty change in your stack |
 | `closest_bookmark(to)` | `heads(::to & bookmarks() & mutable())` | Nearest mutable bookmark (never trunk) |
 
@@ -102,6 +103,7 @@ Repo aliases (`jj/config.toml`):
 |---|---|
 | `jjui` | jj TUI (`?` for keys) |
 | `jj dft` / `jj dshow [rev]` | difftastic diff / show |
+| `jj ks [args]` | Kaleidoscope GUI diff |
 | `git dft [args]` | difftastic for git (`-c diff.external=difft diff`) |
 
 difftastic is opt-in. Agents use plain `jj diff --git`. See [Review and land agent work](../guides/review-and-land.md) and [why difftastic is opt-in](../explanation/design.md#why-difftastic-is-opt-in).

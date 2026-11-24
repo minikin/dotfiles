@@ -182,7 +182,8 @@ jwc() {
 # unless that exact dir is named, so jwx adds the workspace's own .git/worktrees/<name> with
 # --add-dir. Without it jj commit fails with "Failed to reset Git HEAD state".
 jwx() {
-  local name=${1:-} rev root profile reasons gitdir common main
+  local name=${1:-} rev root profile reasons gitdir='' common='' main='' back=''
+  local -a nogit
   (( $# )) && shift
   [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
   [[ -z $name ]] && { echo "usage: jwx <name> [rev] [codex args...]" >&2; return 1; }
@@ -198,12 +199,21 @@ jwx() {
     return 1
   fi
   jw "$name" ${rev:+"$rev"} || return 1
-  # The workspace's own git dir must be a worktree of this checkout's git dir, not of another repo.
-  gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) &&
-    common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
-    main=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
-    [[ $gitdir != "$common" && ${common:A} == ${main:A} ]] ||
-    { echo "jwx: cannot find this workspace's own git dir in $root, not starting Codex" >&2; return 1; }
+  # The workspace's own git dir: a worktree of this checkout's git dir whose gitdir file points
+  # back at this workspace's .git. Asked without GIT_DIR and the like, which would point git, and
+  # so --add-dir, at another worktree's index and HEAD.
+  nogit=(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE git)
+  gitdir=$($nogit -C "$PWD" rev-parse --absolute-git-dir 2>/dev/null) &&
+    common=$($nogit -C "$PWD" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    main=$($nogit -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    [[ $gitdir != "$common" && ${common:A} == ${main:A} && -f $gitdir/gitdir ]] &&
+    back=$(<$gitdir/gitdir)
+  # git writes the backlink relative to the git dir when worktrees use relative paths.
+  [[ -n $back && $back != /* ]] && back=$gitdir/$back
+  if [[ -z $back || ${back:A} != ${PWD:A}/.git ]]; then
+    echo "jwx: cannot find this workspace's own git dir in $root, not starting Codex" >&2
+    return 1
+  fi
   JW_NAME=${PWD:t} DOTFILES_AGENT_WORKSPACE=1 \
     env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p "${root:t}" --add-dir "$gitdir" "$@"
 }

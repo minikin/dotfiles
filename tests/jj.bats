@@ -299,13 +299,46 @@ codex_profile() {
   codex_profile
   mkdir -p "$BATS_TEST_TMPDIR/gitbin"
   real_git=$(command -v git)
+  # Asked from the workspace, git reports another repo's common dir. Asked from the main checkout
+  # (jw's hook install and jwx's own comparison), it answers truthfully.
+  main_root=$(realpath_of "$REPO")
   cat > "$BATS_TEST_TMPDIR/gitbin/git" <<EOF
 #!/bin/sh
-[ "\$1" = -C ] || case " \$* " in *" --git-common-dir "*) echo /elsewhere/other/.git; exit 0 ;; esac
+if [ "\$1" = -C ] && [ "\$2" != "$main_root" ]; then
+  case " \$* " in *" --git-common-dir "*) echo /elsewhere/other/.git; exit 0 ;; esac
+fi
 exec "$real_git" "\$@"
 EOF
   chmod +x "$BATS_TEST_TMPDIR/gitbin/git"
   PATH="$BATS_TEST_TMPDIR/gitbin:$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
+  [ "$status" -eq 1 ]
+  [[ $output == *"cannot find this workspace's own git dir in"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
+}
+
+@test "jwx: GIT_DIR pointing at a sibling worktree does not change the git dir codex may write" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
+  stub_codex
+  codex_profile
+  run_zsh "cd '$REPO' && jw a >/dev/null 2>&1 && jw b >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  a_git=$(git -C "$WS/a" rev-parse --absolute-git-dir)
+  b_git=$(git -C "$WS/b" rev-parse --absolute-git-dir)
+  GIT_DIR="$b_git" PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx a 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 4p "$BATS_TEST_TMPDIR/codex.args")" = "$a_git" ]
+  ! grep -qxF -- "$b_git" "$BATS_TEST_TMPDIR/codex.args" || false
+}
+
+@test "jwx: a worktree git dir whose gitdir backlink names another directory does not start codex" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
+  stub_codex
+  codex_profile
+  run_zsh "cd '$REPO' && jw a >/dev/null 2>&1 && jw b >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  a_git=$(git -C "$WS/a" rev-parse --absolute-git-dir)
+  echo "$WS/b/.git" > "$a_git/gitdir"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx a"
   [ "$status" -eq 1 ]
   [[ $output == *"cannot find this workspace's own git dir in"* ]] || false
   [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]

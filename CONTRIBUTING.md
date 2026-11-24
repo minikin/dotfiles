@@ -40,7 +40,7 @@ just check       # lint, tests, the secret scan and the commit check, the same a
 
 | Recipe         | Runs                                                                                      |
 | -------------- | ----------------------------------------------------------------------------------------- |
-| `just lint`    | `shellcheck` on `install.sh`, `claude/*.sh`, `scripts/*.sh` and `bin/*`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file including `agy/*.zsh`, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, `lychee --offline` on every Markdown file in the repo, `scripts/check-brewfile.sh`, `scripts/check-prose.sh`, and `actionlint` when it is installed. |
+| `just lint`    | `shellcheck` on `install.sh`, `claude/*.sh`, `scripts/*.sh`, `codex/*.sh` and `bin/*`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file including `agy/*.zsh`, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, `lychee --offline` on every Markdown file in the repo, `scripts/check-brewfile.sh`, `scripts/check-prose.sh`, and `actionlint` when it is installed. |
 | `just test`    | `bats tests`.                                                                             |
 | `just secrets` | `scripts/check-secrets.sh`, then `gitleaks dir . --config .gitleaks.toml` when gitleaks is installed. |
 | `just commits` | `scripts/check-commits.sh`: every non-merge commit subject in `origin/main..HEAD` (or the range given, `just commits <range>`) follows Conventional Commits. |
@@ -230,7 +230,7 @@ committed.
 | `install.sh`               | The installer: links, settings merge, identity                |
 | `ghostty/`, `zsh/`, `starship/`, `jj/`, `mise/`, `claude/`, `agents/`, `agy/`, `infra/`, `navi/` | The configs it installs |
 | `bin/`                     | Commands linked into `~/.local/bin`: `agent-preflight`         |
-| `codex/`                   | `repo-profile.example.toml`, the Codex profile template `jwx` needs, not installed |
+| `codex/`                   | `repo-profile.example.toml`, the Codex profile template `jwx` needs, and `check-profile.sh`, which checks a profile. Not installed |
 | `AGENTS.md`, `CLAUDE.md`   | The repo's rules for coding agents, and the Claude import of them |
 | `Brewfile`                 | Every package, including the tools the checks need            |
 | `justfile`                 | Every check, local and CI                                     |

@@ -72,12 +72,14 @@ jw <name> [rev]
 
 | Argument | Default                                             |
 | -------- | --------------------------------------------------- |
-| `name`   | Required. Every `/` becomes `-`: `feat/login` is `feat-login`. |
+| `name`   | Required. Every `/` becomes `-`: `feat/login` is `feat-login`. `.`, `..` and a name starting with `-` print `jw: not a workspace name: <name>` and return 1. |
 | `rev`    | `trunk()`, or `@-` of the main checkout when `trunk() & ~root()` is empty (no remote trunk). |
 
-If `<repo>-ws/<name>` already exists, `jw` prints `reusing <dir>`, refreshes
-the [agent pre-push hook](#agent-pre-push-hook) and `cd`s into it. `rev` is
-ignored and setup does not run.
+If `<repo>-ws/<name>` already exists and jj lists it as this repo's
+workspace `<name>`, `jw` prints `reusing <dir>`, refreshes the
+[agent pre-push hook](#agent-pre-push-hook) and `cd`s into it. `rev` is
+ignored and setup does not run. Any other directory at that path prints
+`jw: <dir> exists but is not workspace <name> of this repo` and returns 1.
 
 Otherwise it:
 
@@ -85,11 +87,13 @@ Otherwise it:
 2. If jj still lists a workspace with that name (its directory was deleted by
    hand), runs `jj workspace forget <name>` and `git worktree prune`.
 3. Runs `jj workspace add --name <name> -r <rev> <dir>`. On failure it returns 1.
-4. Unless `JW_NO_SETUP` is set, copies local env files and runs the project
+4. Adds or refreshes the [agent pre-push hook](#agent-pre-push-hook), before
+   the project setup runs any of the project's own tasks. If it cannot find
+   the repo's git dir or write the hook, it prints
+   `jw: could not install the agent pre-push hook` and returns 1 without the
+   setup or the `cd`.
+5. Unless `JW_NO_SETUP` is set, copies local env files and runs the project
    setup (below).
-5. Adds or refreshes the [agent pre-push hook](#agent-pre-push-hook). If it
-   cannot write the hook, it prints `jw: could not install the agent pre-push hook`
-   and returns 1 without the `cd`.
 6. `cd`s into the workspace.
 
 ### Agent pre-push hook
@@ -120,9 +124,10 @@ written to a temporary file next to the old one and renamed over it, so a
 push in another workspace never runs a half-written hook. A current hook is
 left as it is.
 
-The hook is marked with a `jw-pre-push` comment, and `jw` rewrites only a hook
-with that mark. With a `pre-push` hook of your own, or a symlink in its place,
-`jw` leaves it and prints
+The hook's second line starts with `# jw-pre-push, written by jw `, and `jw`
+rewrites only a regular file with that line. A `pre-push` hook of your own,
+also one that mentions or calls `jw-pre-push`, or a symlink in its place,
+stays, and `jw` prints
 `jw: <path> is your own, not adding the agent push guard to it`. With
 `core.hooksPath` set, `jw` adds nothing, because that directory usually
 belongs to the project's hook manager.
@@ -248,10 +253,14 @@ jwx: no ~/.codex/<repo>.config.toml, so Codex could not write <repo>'s .jj and .
 jwx: copy codex/repo-profile.example.toml from the dotfiles there and set its paths
 ```
 
-and returns 1 before it creates the workspace. It also stops, with
-`jwx: ~/.codex/<repo>.config.toml names no writable root for this checkout's .jj, set its paths`,
-when the file does not contain `<main checkout>/.jj`, as with an untouched
-template or a profile written for another checkout of the same name. The template is described in
+and returns 1 before it creates the workspace. It also stops, printing
+`jwx: ~/.codex/<repo>.config.toml cannot start a writer here:` and the
+reasons, when `codex/check-profile.sh` rejects the file: its top-level
+`sandbox_mode` is not `"workspace-write"`, or `[sandbox_workspace_write]`
+`writable_roots` does not hold exactly `<main checkout>/.jj` and
+`<main checkout>/.git`, as in an untouched template or a profile written for
+another checkout of the same name. The check parses the TOML, so a path in a
+comment or a `.jj-backup` root does not count. The template is described in
 [Files](files.md#installed-configuration). With the file, it runs `jw` and, when that
 succeeds, starts in the workspace:
 
@@ -261,7 +270,10 @@ JW_NAME=<name> DOTFILES_AGENT_WORKSPACE=1 \
 ```
 
 `<git dir>` is the workspace's `.git/worktrees/<name>` in the main checkout,
-from `git rev-parse --absolute-git-dir`. Codex keeps the git dir that a
+from `git rev-parse --absolute-git-dir`. When git cannot report it, or reports
+the main checkout's own git dir, `jwx` prints
+`jwx: cannot find this workspace's own git dir, not starting Codex` and
+returns 1. Codex keeps the git dir that a
 worktree's `.git` file points to read-only, also inside a writable root of
 the profile, unless that exact directory is named. Without it, `jj commit` in
 the workspace fails with `Failed to reset Git HEAD state`. With `CODEX_HOME`
@@ -341,7 +353,7 @@ workspace root:
    `jdone: the check failed, not pushing` and returns 1.
 2. [`jreview`](#jreview) on this workspace, with the focus words after `--`,
    so `jdone --codex` asks the Claude reviewer to focus on "--codex". If it
-   fails or its last line is not `VERDICT: PASS`, `jdone` prints
+   fails or its last line is not exactly `VERDICT: PASS`, `jdone` prints
    `jdone: the review did not pass, not pushing` and returns 1. For a Codex
    review, run `jreview --codex` yourself before `jdone`.
 3. `jpush`, with its default bookmark name.

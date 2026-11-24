@@ -149,6 +149,16 @@ JSON
   jq -e '.sandbox.autoAllowBashIfSandboxed == true' "$(SETTINGS)"
 }
 
+@test "install: the sandbox allows JSR, docs.rs and rustup downloads, and pkg.go.dev through *.go.dev" {
+  run_install
+  [ "$status" -eq 0 ]
+  local d
+  for d in jsr.io docs.rs static.rust-lang.org '*.go.dev'; do
+    jq -e --arg d "$d" '.sandbox.network.allowedDomains | index($d)' "$(SETTINGS)" >/dev/null || { echo "missing $d"; return 1; }
+  done
+  jq -e '.sandbox.network.allowedDomains | index("pkg.go.dev") | not' "$(SETTINGS)"
+}
+
 @test "install: sandbox domains are unioned, other sandbox keys kept" {
   mkdir -p "$HOME/.claude"
   cat > "$(SETTINGS)" <<'JSON'

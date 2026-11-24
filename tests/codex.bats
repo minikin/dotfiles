@@ -148,7 +148,8 @@ writable_roots = ["/r/app\t/.jj", "/r/app/.git"]'
   [[ $output == *"does not name this checkout's .jj"* ]] || false
   profile 'sandbox_mode = "workspace-write"
 [sandbox_workspace_write]
-writable_roots = ["/r/app/.jj", "/r/app/.git"]'
+writable_roots = ["/r/\u0061pp/.jj", "/r/app/.git"]'
+  grep -qF '/r/\u0061pp/.jj' "$BATS_TEST_TMPDIR/p.toml"
   check "$BATS_TEST_TMPDIR/p.toml" /r/app
   [ "$status" -eq 0 ]
 }

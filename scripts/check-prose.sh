@@ -6,8 +6,9 @@
 # Skipped like the human-writing checker does: frontmatter (a leading --- block that has its
 # closing ---), fenced code (``` or ~~~, closed by a fence of the same character at least as long;
 # a ``` line with another backtick after it is inline code, not a fence), inline code spans of any
-# backtick count, also across the lines of one paragraph but never across headings, list items,
-# table rows or blockquote edges, HTML entities such as &amp; for the
+# backtick count, also across the lines of one paragraph but never across headings, setext
+# underlines, thematic breaks, list items, table rows (with or without outer pipes) or blockquote
+# edges, HTML entities such as &amp; for the
 # semicolon rule, and blockquote lines (a quoted source keeps its own punctuation) for the
 # semicolon rule.
 set -euo pipefail
@@ -69,8 +70,22 @@ awk '
     np = 0
   }
   function trimmed(s) { sub(/^[ \t]+/, "", s); return s }
+  # rule: three or more of one of * - _, spaces allowed between them, and nothing else.
+  function rule(t,    c, rest) {
+    c = substr(t, 1, 1)
+    if (c != "*" && c != "-" && c != "_") return 0
+    rest = t
+    gsub(/[ \t]/, "", rest)
+    if (length(rest) < 3) return 0
+    gsub(c == "*" ? "[*]" : c, "", rest)
+    return rest == ""
+  }
+  # delimiter: a table delimiter row such as |---|:--:| or --- | ---.
+  function delimiter(t) {
+    return index(t, "-") && index(t, "|") && t ~ /^[|]?[ \t]*:?-+:?[ \t]*([|][ \t]*:?-+:?[ \t]*)*[|]?[ \t]*$/
+  }
   # doc: one whole file, buffered in L[1..n], so frontmatter can be told from a leading rule.
-  function doc(    i, start, f, j, t, fence, c, k, rest, quote, heading) {
+  function doc(    i, start, f, j, t, fence, c, k, rest, quote, heading, intable) {
     start = 1
     for (f = 1; f <= n && L[f] ~ /^[ \t]*$/; f++) ;
     if (f <= n && L[f] == "---")
@@ -88,6 +103,7 @@ awk '
         continue
       }
       if (t ~ /^(```|~~~)/) {
+        intable = 0
         c = substr(t, 1, 1); k = 0
         while (substr(t, k + 1, 1) == c) k++
         if (!(c == "`" && index(substr(t, k + 1), "`"))) {
@@ -96,7 +112,18 @@ awk '
           continue
         }
       }
-      if (t == "") { flush(); continue }
+      if (t == "") { flush(); intable = 0; continue }
+      # A thematic break (***, ---, ___) or a setext underline (=== or --- under text) ends the
+      # block before it and holds no prose of its own.
+      if (rule(t) || t ~ /^=+[ \t]*$/ || (np && t ~ /^-+[ \t]*$/)) { flush(); continue }
+      # A table starts at a row with a | over a delimiter row, outer pipes or not, and runs to the
+      # next blank line. Each row is a block: cells end code spans.
+      if (!intable && index(t, "|") && i < n && delimiter(trimmed(L[i + 1]))) intable = 1
+      if (intable) {
+        flush()
+        if (!delimiter(t)) { np = 1; pl[1] = L[i]; pn[1] = i; pq[1] = 0; flush() }
+        continue
+      }
       # A code span never crosses a block: a heading, a list item, a table row, or the start or
       # end of a blockquote begins a new one, and a heading is a block of its own.
       quote = (t ~ /^>/)

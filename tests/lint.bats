@@ -115,6 +115,22 @@ EOF
   [ "$output" = "table.md:2: semicolon" ]
 }
 
+@test "prose: a thematic break, a setext heading and a table without outer pipes end code spans" {
+  printf 'text `a\n\n***\nsemi; here `b\n' >rule.md
+  printf 'text `a\n***\nsemi; here `b\n' >rule2.md
+  prose rule.md rule2.md
+  [ "$status" -eq 1 ]
+  [ "$output" = $'rule.md:4: semicolon\nrule2.md:3: semicolon' ]
+  printf 'Title `a\n=====\nsemi; here `b\n' >setext.md
+  prose setext.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "setext.md:3: semicolon" ]
+  printf 'a `x | b\n--- | ---\nsemi; c | d `y\n' >bare.md
+  prose bare.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "bare.md:3: semicolon" ]
+}
+
 brewfile() { run "$REPO_ROOT/scripts/check-brewfile.sh" "$@"; }
 
 # fixture <files.md row cell>: a Brewfile in the repo's formats and a files.md with one row.

@@ -591,6 +591,18 @@ stub_gate() {
   [ "$output" = feature ]
 }
 
+@test "jdone: a review that is only the verdict line passes" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  stub_gate 0 PASS
+  printf '#!/bin/sh\necho "VERDICT: PASS"\n' > "$BATS_TEST_TMPDIR/bin/claude"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && touch justfile && echo y > f.txt && jj commit -m feature >/dev/null 2>&1 && jdone"
+  echo "output: $output"
+  [ "$status" -eq 0 ]
+  run git -C "$remote" log -1 --format=%s refs/heads/feat
+  [ "$output" = feature ]
+}
+
 @test "jdone: words that look like jreview options are focus for the Claude review" {
   add_bare_remote "$REPO" "$BATS_TEST_TMPDIR/remote.git"
   stub_gate 0 PASS

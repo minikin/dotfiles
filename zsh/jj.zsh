@@ -222,7 +222,7 @@ Do not edit any file. End with exactly one last line: VERDICT: BLOCK if any prob
 # focus, never as options: jdone always runs the default Claude review.
 jdone() {
   local where out rc
-  local -a w
+  local -a w review
   where=$("$_jw_where_sh" 2>/dev/null) && w=("${(@f)where}")
   [[ -n ${w[2]:-} && ${w[5]:-} == jj ]] || { echo "jdone: run it in an agent's jj workspace" >&2; return 1; }
   (
@@ -238,7 +238,10 @@ jdone() {
   out=$(jreview -- "$w[2]" "$@")
   rc=$?
   print -r -- "$out"
-  if (( rc )) || [[ ${${(f)out}[-1]} != *'VERDICT: PASS'* ]]; then
+  # An array, not ${${(f)out}[-1]}: a one-line review would collapse to a string and [-1]
+  # would pick its last character.
+  review=("${(@f)out}")
+  if (( rc )) || [[ ${review[-1]} != *'VERDICT: PASS'* ]]; then
     echo "jdone: the review did not pass, not pushing" >&2
     return 1
   fi

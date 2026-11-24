@@ -50,16 +50,17 @@ just check       # lint, tests, the secret scan and the commit check, the same a
 CI runs two jobs on every push to `main` and every pull request:
 
 - `check` on `macos-latest`: installs `git just bats-core shellcheck jq
-  lychee gitleaks mise navi` with Homebrew, installs jj 0.46.0 from its GitHub
-  release with a pinned checksum, and runs `just check`. The commit check
-  covers the pull request's commits, or the commits a push added.
+  lychee gitleaks mise navi actionlint` with Homebrew, installs jj 0.46.0 from
+  its GitHub release with a pinned checksum, and runs the steps of
+  `just check` one by one, with `just test-bash32` after the tests. The
+  commit check covers the pull request's commits, or the commits a push added.
 - `history-secrets` on `ubuntu-latest`: downloads gitleaks 8.30.1, verifies
   its checksum, and scans every commit reachable from the checked-out ref.
   A secret removed in a later commit still fails it, so rewrite the history
   before pushing rather than after.
 
-Run `actionlint` yourself after editing `.github/workflows/ci.yml`. CI does
-not.
+`just lint` runs `actionlint` when it is installed, so CI checks the workflow
+file too.
 
 ## Tests
 

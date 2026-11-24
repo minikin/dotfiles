@@ -18,7 +18,7 @@ just drift                       # read-only: live files vs repo copies
 ./install.sh --dry-run           # never run install.sh for real unless asked: it writes to the real $HOME
 ```
 
-Run `actionlint` after editing `.github/workflows/ci.yml`, because CI doesn't run it. `tests/navi.bats` skips when `navi` is missing.
+`just lint` runs `actionlint` on `.github/workflows/ci.yml` when it is installed, and CI installs it. `tests/navi.bats` skips when `navi` is missing.
 
 ## Architecture
 

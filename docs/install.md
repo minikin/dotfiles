@@ -114,7 +114,9 @@ sub-agents:
 
 For each repo you run Codex writers in, copy
 `codex/repo-profile.example.toml` to `~/.codex/<repo>.config.toml` and set
-its paths, or [`jwx`](reference/shell-commands.md#jwx) refuses to start.
+its paths, or [`jwx`](reference/shell-commands.md#jwx) refuses to start. The
+profile check needs a `python3` with `tomllib` (3.11 or later) on `PATH`.
+macOS's own `/usr/bin/python3` is 3.9, so install one with Homebrew or mise.
 Then run `agent-preflight`, or `just doctor` from the dotfiles checkout.
 
 ## Language toolchains and global mise tools

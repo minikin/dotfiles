@@ -12,6 +12,9 @@ jwc adr/<name> --permission-mode plan
 # Start throwaway spike agent
 jwc spike/<name>
 
+# Start Codex agent in a new workspace
+jwx feat/<name>
+
 # Continue an agent's last conversation
 jwc <workspace> --continue
 
@@ -51,6 +54,9 @@ jj git fetch && jw review-<pr_branch> '<pr_branch>@origin'
 
 # Review agent workspace with a second Claude
 jreview <workspace>
+
+# Review agent workspace with Codex, read-only
+jreview --codex <workspace>
 
 # Watch CI checks of pull request
 gh pr checks <pr> --watch

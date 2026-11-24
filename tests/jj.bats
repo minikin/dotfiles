@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# zsh/jj.zsh: jw, jwc, jreview, jwst, jnext, the repo-entry hint, jsync, jwrm, jpush, jland and the `jj tug` alias, in throwaway colocated repos.
+# zsh/jj.zsh: jw, jwc, jwx, jreview, jwst, jnext, the repo-entry hint, jsync, jwrm, jpush, jland and the `jj tug` alias, in throwaway colocated repos.
 
 load helpers
 
@@ -205,6 +205,103 @@ setup() {
   [ ! -e "$WS/fix-x/.jw_name" ]
 }
 
+@test "jwc: claude runs without the Anthropic key variables and with DOTFILES_AGENT_WORKSPACE=1" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "key=${ANTHROPIC_API_KEY-unset} token=${ANTHROPIC_AUTH_TOKEN-unset} marker=${DOTFILES_AGENT_WORKSPACE-unset}"\n' \
+    > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  ANTHROPIC_API_KEY=test-not-a-key ANTHROPIC_AUTH_TOKEN=test-not-a-key PATH="$BATS_TEST_TMPDIR/bin:$PATH" \
+    run_zsh "cd '$REPO' && jwc x 2>/dev/null; print -r -- \"after=\${DOTFILES_AGENT_WORKSPACE:-unset}\""
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "key=unset token=unset marker=1" ]
+  [ "${lines[1]}" = "after=unset" ]
+}
+
+@test "jwc: a failing jw never starts claude" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin" "$BATS_TEST_TMPDIR/norepo"
+  printf '#!/bin/sh\ntouch "%s/claude.ran"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$BATS_TEST_TMPDIR/norepo' && jwc x"
+  [ "$status" -eq 1 ]
+  [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
+}
+
+# stub_codex: a fake codex that logs its arguments (one per line), directory and key variables,
+# prints a two-line review and exits with STUB_CODEX_RC (default 0).
+stub_codex() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat > "$BATS_TEST_TMPDIR/bin/codex" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$BATS_TEST_TMPDIR/codex.args"
+pwd -P > "$BATS_TEST_TMPDIR/codex.cwd"
+echo "openai=\${OPENAI_API_KEY-unset} codexkey=\${CODEX_API_KEY-unset} home=\${CODEX_HOME-unset} name=\${JW_NAME-unset} marker=\${DOTFILES_AGENT_WORKSPACE-unset}" > "$BATS_TEST_TMPDIR/codex.env"
+echo "review text"
+echo "VERDICT: PASS"
+exit \${STUB_CODEX_RC:-0}
+EOF
+  chmod +x "$BATS_TEST_TMPDIR/bin/codex"
+}
+
+@test "jwx: without ~/.codex/<repo>.config.toml stops before creating the workspace or starting codex" {
+  stub_codex
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
+  [ "$status" -eq 1 ]
+  [[ $output == *"no ~/.codex/app.config.toml"* ]] || false
+  [[ $output == *"codex/repo-profile.example.toml"* ]] || false
+  [ ! -e "$WS/feat-x" ]
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
+}
+
+# codex_profile [root]: ~/.codex/app.config.toml with root's .jj and .git as writable roots
+# (default root: the repo's main checkout as jj reports it).
+codex_profile() {
+  local root=${1:-$(jj -R "$REPO" --ignore-working-copy workspace root --name default)}
+  mkdir -p "$HOME/.codex"
+  printf 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nwritable_roots = ["%s/.jj", "%s/.git"]\n' \
+    "$root" "$root" > "$HOME/.codex/app.config.toml"
+}
+
+@test "jwx: a profile that does not name this checkout's .jj stops it too" {
+  stub_codex
+  codex_profile '/path/to/<repo>'
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
+  [ "$status" -eq 1 ]
+  [[ $output == *"names no writable root for this checkout's .jj"* ]] || false
+  codex_profile /elsewhere/app
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
+  [ "$status" -eq 1 ]
+  [ ! -e "$WS/feat-x" ]
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
+}
+
+@test "jwx: starts codex -p <repo> --add-dir <workspace git dir> in the workspace, keys and CODEX_HOME removed, marker set" {
+  stub_codex
+  codex_profile
+  (cd "$REPO" && echo two > two.txt && jj commit -m second >/dev/null 2>&1)
+  OPENAI_API_KEY=test-not-a-key CODEX_API_KEY=test-not-a-key CODEX_HOME="$BATS_TEST_TMPDIR/codexhome" \
+    PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x @-- 'fix the retry storm' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/codex.cwd")" = "$WS/feat-x" ]
+  gitdir=$(git -C "$WS/feat-x" rev-parse --absolute-git-dir)
+  [[ $gitdir == */.git/worktrees/feat-x ]] || false
+  [ "$(cat "$BATS_TEST_TMPDIR/codex.args")" = "-p"$'\n'"app"$'\n'"--add-dir"$'\n'"$gitdir"$'\n'"fix the retry storm" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/codex.env")" = "openai=unset codexkey=unset home=unset name=feat-x marker=1" ]
+  [ "$(jj -R "$REPO" --ignore-working-copy log --no-graph -r 'feat-x@-' -T 'description.first_line()')" = init ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x --sandbox workspace-write 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/codex.args")" = "-p"$'\n'"app"$'\n'"--add-dir"$'\n'"$gitdir"$'\n'"--sandbox"$'\n'"workspace-write" ]
+}
+
+@test "jwx: a failing jw never starts codex" {
+  stub_codex
+  mkdir -p "$BATS_TEST_TMPDIR/norepo" "$HOME/.codex"
+  touch "$HOME/.codex/norepo.config.toml"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$BATS_TEST_TMPDIR/norepo' && jwx x"
+  [ "$status" -eq 1 ]
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
+}
+
 # osc <script>: run a zsh script with jj.zsh loaded, escapes made visible (ESC as ^[, BEL as ^G)
 osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
 
@@ -371,6 +468,80 @@ osc() { run_zsh "$1"; output=$(cat -v <<<"$output"); }
   [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
 }
 
+@test "jreview: claude gets --model fable by default, before the tool lists, without the Anthropic keys" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "%s/claude.args"\necho "key=${ANTHROPIC_API_KEY-unset} token=${ANTHROPIC_AUTH_TOKEN-unset}" > "%s/claude.env"\n' \
+    "$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  run_zsh "cd '$REPO' && jw a >/dev/null 2>&1 && echo a > a.txt"
+  [ "$status" -eq 0 ]
+  args() { cat "$BATS_TEST_TMPDIR/claude.args"; }
+  model() { sed -n '/^--model$/{n;p;}' "$BATS_TEST_TMPDIR/claude.args"; }
+
+  ANTHROPIC_API_KEY=test-not-a-key ANTHROPIC_AUTH_TOKEN=test-not-a-key PATH="$BATS_TEST_TMPDIR/bin:$PATH" \
+    run_zsh "cd '$REPO' && jreview a"
+  [ "$status" -eq 0 ]
+  [ "$(model)" = fable ]
+  (( $(grep -nx -- --model "$BATS_TEST_TMPDIR/claude.args" | cut -d: -f1) < $(grep -nx -- --allowedTools "$BATS_TEST_TMPDIR/claude.args" | cut -d: -f1) )) || false
+  [ "$(cat "$BATS_TEST_TMPDIR/claude.env")" = "key=unset token=unset" ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --model opus a"
+  [ "$status" -eq 0 ]
+  [ "$(model)" = opus ]
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --model=sonnet a"
+  [ "$status" -eq 0 ]
+  [ "$(model)" = sonnet ]
+  [[ $(args) != *--codex* ]] || false
+}
+
+@test "jreview --codex: a read-only codex exec in the workspace, keys removed, its stdout and exit status as is" {
+  stub_codex
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\ntouch "%s/claude.ran"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  run_zsh "cd '$REPO' && jw feat/x >/dev/null 2>&1 && echo x > x.txt"
+  [ "$status" -eq 0 ]
+
+  OPENAI_API_KEY=test-not-a-key CODEX_API_KEY=test-not-a-key CODEX_HOME="$BATS_TEST_TMPDIR/codexhome" \
+    PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --codex feat/x 'the retry logic' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'review text\nVERDICT: PASS' ]
+  [ "$(cat "$BATS_TEST_TMPDIR/codex.cwd")" = "$WS/feat-x" ]
+  [ "$(sed -n 1,4p "$BATS_TEST_TMPDIR/codex.args")" = $'exec\n-s\nread-only\n--ephemeral' ]
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/codex.args")" -eq 5 ]
+  prompt=$(sed -n 5p "$BATS_TEST_TMPDIR/codex.args")
+  [[ $prompt == *"jj --ignore-working-copy diff --git -r 'trunk()..@'"* ]] || false
+  [[ $prompt == *"Focus: the retry logic" ]] || false
+  [[ $(cat "$BATS_TEST_TMPDIR/codex.env") == "openai=unset codexkey=unset home=unset "* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --codex --model gpt-x feat/x 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 1,6p "$BATS_TEST_TMPDIR/codex.args")" = $'exec\n-s\nread-only\n--ephemeral\n-m\ngpt-x' ]
+
+  STUB_CODEX_RC=3 PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --codex feat/x 2>/dev/null"
+  [ "$status" -eq 3 ]
+  [ "$(grep -c 'VERDICT:' <<<"$output")" -eq 1 ]
+}
+
+@test "jreview: a missing --model value or an unknown option fails, -- ends the options" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\ntouch "%s/claude.ran"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --model"
+  [ "$status" -eq 2 ]
+  [[ $output == *"--model needs a model name"* ]] || false
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --model --codex a"
+  [ "$status" -eq 2 ]
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview --bogus a"
+  [ "$status" -eq 2 ]
+  [[ $output == *"usage: jreview"* ]] || false
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jreview -- -odd"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jreview: no workspace named -odd"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/claude.ran" ]
+}
+
 # stub_gate <check exit> <verdict>: fake just (a check recipe exiting with <check exit>) and a
 # fake claude whose review ends with VERDICT: <verdict>, both logging that they ran.
 stub_gate() {
@@ -418,6 +589,19 @@ stub_gate() {
   [ "$status" -eq 0 ]
   run git -C "$remote" log -1 --format=%s refs/heads/feat
   [ "$output" = feature ]
+}
+
+@test "jdone: words that look like jreview options are focus for the Claude review" {
+  add_bare_remote "$REPO" "$BATS_TEST_TMPDIR/remote.git"
+  stub_gate 0 PASS
+  stub_codex
+  printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "%s/claude.args"\necho "looks fine"\necho "VERDICT: PASS"\n' \
+    "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/claude"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && touch justfile && echo y > f.txt && jj commit -m feature >/dev/null 2>&1 && jdone --codex"
+  echo "output: $output"
+  [ "$status" -eq 0 ]
+  grep -q 'Focus: --codex' "$BATS_TEST_TMPDIR/claude.args"
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
 }
 
 @test "jwrm --merged: removes workspaces with no work, keeps ones with work or in use" {

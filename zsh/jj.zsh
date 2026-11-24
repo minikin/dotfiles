@@ -107,23 +107,77 @@ _jw_setup() {
 }
 
 # jwc <name> [rev] [claude args...] — create (or reuse) a workspace and start Claude Code in it,
-# with JW_NAME=<workspace name> in its environment. The second argument is a rev unless it
-# starts with "-" or contains whitespace: jwc x --continue, jwc x @- --continue, jwc x "fix the bug".
+# with JW_NAME=<workspace name> and DOTFILES_AGENT_WORKSPACE=1 in its environment and the
+# Anthropic API-key variables removed, so it runs on the claude.ai subscription. The second
+# argument is a rev unless it starts with "-" or contains whitespace: jwc x --continue,
+# jwc x @- --continue, jwc x "fix the bug".
 # The session is named <repo>/<name>: Claude Code shows it in the tab title and /resume,
 # and claude -r <repo>/<name> finds it.
 jwc() {
   local name=${1:-} rev root
   (( $# )) && shift
   [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
-  jw "$name" ${rev:+"$rev"} && root=$(_jw_root) && JW_NAME=${PWD:t} claude -n "${root:t}/${PWD:t}" "$@"
+  jw "$name" ${rev:+"$rev"} || return 1
+  root=$(_jw_root) || return 1
+  # The assignments go before env so the launch keeps the exact prefix the agy guard expects.
+  JW_NAME=${PWD:t} DOTFILES_AGENT_WORKSPACE=1 \
+    env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -n "${root:t}/${PWD:t}" "$@"
 }
 
-# jreview [name] [focus...] — a second Claude reviews a workspace's trunk()..@ read-only:
-# claude -p in that workspace, allowed to read files and run only jj diff, log and show.
-# fzf pick without a name, default left out. Extra arguments are appended to the prompt.
+# jwx <name> [rev] [codex args...] — jwc for Codex: create (or reuse) a workspace and start Codex
+# in it with the profile ~/.codex/<repo>.config.toml (codex -p <repo>), JW_NAME,
+# DOTFILES_AGENT_WORKSPACE=1, and the OpenAI API-key variables and CODEX_HOME removed, so it runs
+# on the ChatGPT subscription. <repo> is the main checkout's directory name. Without that profile,
+# or with one that does not name this checkout's .jj (an untouched template, another checkout of
+# the same name), it stops before creating anything: Codex's default sandbox cannot write the main
+# checkout's .jj and .git, so a writer in a workspace could not commit. Same rev rule as jwc.
+# Codex keeps the git dir a worktree's .git file points to read-only even inside a writable root,
+# unless that exact dir is named, so jwx adds the workspace's own .git/worktrees/<name> with
+# --add-dir. Without it jj commit fails with "Failed to reset Git HEAD state".
+jwx() {
+  local name=${1:-} rev root gitdir
+  local -a add
+  (( $# )) && shift
+  [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
+  [[ -z $name ]] && { echo "usage: jwx <name> [rev] [codex args...]" >&2; return 1; }
+  root=$(_jw_root) || return 1
+  if [[ ! -f $HOME/.codex/${root:t}.config.toml ]]; then
+    echo "jwx: no ~/.codex/${root:t}.config.toml, so Codex could not write ${root:t}'s .jj and .git from a workspace" >&2
+    echo "jwx: copy codex/repo-profile.example.toml from the dotfiles there and set its paths" >&2
+    return 1
+  fi
+  if ! grep -qF -- "$root/.jj" "$HOME/.codex/${root:t}.config.toml"; then
+    echo "jwx: ~/.codex/${root:t}.config.toml names no writable root for this checkout's .jj, set its paths" >&2
+    return 1
+  fi
+  jw "$name" ${rev:+"$rev"} || return 1
+  gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) && add=(--add-dir "$gitdir")
+  JW_NAME=${PWD:t} DOTFILES_AGENT_WORKSPACE=1 \
+    env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p "${root:t}" $add "$@"
+}
+
+# jreview [--codex] [--model <model>] [--] [name] [focus...] — a second agent reviews a
+# workspace's trunk()..@ read-only. Default: claude -p --model fable in that workspace, allowed to
+# read files and run only jj diff, log and show. --codex: codex exec -s read-only instead, a review
+# from the other model family. --model picks the model for either. Options come before the name,
+# because jdone passes the name first. fzf pick without a name, default left out. Extra
+# arguments are appended to the prompt. Prints the reviewer's final message on stdout.
 jreview() {
-  local root w d name prompt
+  local root w d name prompt model='' codex=0 diff
+  local -a mflag
   local -A dirs
+  while (( $# )); do
+    case $1 in
+      --codex) codex=1; shift ;;
+      --model)
+        [[ -n ${2:-} && $2 != -* ]] || { echo "jreview: --model needs a model name" >&2; return 2; }
+        model=$2; shift 2 ;;
+      --model=?*) model=${1#--model=}; shift ;;
+      --) shift; break ;;
+      -*) echo "usage: jreview [--codex] [--model <model>] [--] [name] [focus...]" >&2; return 2 ;;
+      *) break ;;
+    esac
+  done
   root=$(_jw_root) || return 1
   for w d in ${(@ps:\t:)${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"')"}}; do
     dirs[$w]=$d
@@ -139,21 +193,33 @@ jreview() {
   # Without --ignore-working-copy on purpose: edits the agent has not snapshotted yet count.
   [[ -n $(jj -R "$d" diff -r 'trunk()..@' --name-only 2>/dev/null) ]] ||
     { echo "jreview: $name has no changes since trunk(), nothing to review" >&2; return 1; }
-  # claude -p prints nothing until the review is done.
+  # Both reviewers print nothing on stdout until the review is done.
   echo "jreview: reviewing $name, this takes a minute or two..." >&2
-  prompt="Review the change in this jj workspace. Run jj diff --git -r 'trunk()..@' and read the code it touches. \
+  diff="jj diff --git -r 'trunk()..@'"
+  # Codex's read-only sandbox cannot let jj snapshot. The check above has just snapshotted.
+  (( codex )) && diff="jj --ignore-working-copy diff --git -r 'trunk()..@'"
+  prompt="Review the change in this jj workspace. Run $diff and read the code it touches. \
 List the problems you find by severity (blocking, should fix, nit), each with file:line and the reason. \
 Do not edit any file. End with exactly one last line: VERDICT: BLOCK if any problem is blocking, else VERDICT: PASS."
   (( $# )) && prompt+=" Focus: $*"
-  # The prompt goes before the tool lists: --allowedTools takes several values and would eat it.
-  (cd "$d" && claude -p "$prompt" \
-    --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
-    --disallowedTools 'Edit,Write,NotebookEdit')
+  if (( codex )); then
+    [[ -n $model ]] && mflag=(-m "$model")
+    # codex exec prints only its final message on stdout, progress goes to stderr.
+    (cd "$d" && env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME \
+      codex exec -s read-only --ephemeral $mflag "$prompt")
+  else
+    # The prompt goes before the tool lists: --allowedTools takes several values and would eat it.
+    (cd "$d" && env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p "$prompt" \
+      --model "${model:-fable}" \
+      --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
+      --disallowedTools 'Edit,Write,NotebookEdit')
+  fi
 }
 
 # jdone [focus...]: the gate before jpush, run in an agent's workspace. Runs the project's check
 # (just check, else mise run check), then jreview on this workspace, and pushes with jpush only
-# when the check passes and the review ends with VERDICT: PASS. Focus words go to jreview.
+# when the check passes and the review ends with VERDICT: PASS. Focus words go to jreview as
+# focus, never as options: jdone always runs the default Claude review.
 jdone() {
   local where out rc
   local -a w
@@ -169,7 +235,7 @@ jdone() {
       echo "jdone: no just or mise check task, skipping the check" >&2
     fi
   ) || { echo "jdone: the check failed, not pushing" >&2; return 1; }
-  out=$(jreview "$w[2]" "$@")
+  out=$(jreview -- "$w[2]" "$@")
   rc=$?
   print -r -- "$out"
   if (( rc )) || [[ ${${(f)out}[-1]} != *'VERDICT: PASS'* ]]; then

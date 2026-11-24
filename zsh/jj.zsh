@@ -232,7 +232,7 @@ Do not edit any file. End with exactly one last line: VERDICT: BLOCK if any prob
 
 # jdone [focus...]: the gate before jpush, run in an agent's workspace. Runs the project's check
 # (just check, else mise run check), then jreview on this workspace, and pushes with jpush only
-# when the check passes and the review ends with VERDICT: PASS. Focus words go to jreview as
+# when the check passes and the review's last line is exactly VERDICT: PASS. Focus words go to jreview as
 # focus, never as options: jdone always runs the default Claude review.
 jdone() {
   local where out rc
@@ -255,7 +255,8 @@ jdone() {
   # An array, not ${${(f)out}[-1]}: a one-line review would collapse to a string and [-1]
   # would pick its last character.
   review=("${(@f)out}")
-  if (( rc )) || [[ ${review[-1]} != *'VERDICT: PASS'* ]]; then
+  # The whole line: "VERDICT: BLOCK (previous VERDICT: PASS withdrawn)" must not pass.
+  if (( rc )) || [[ ${review[-1]} != 'VERDICT: PASS' ]]; then
     echo "jdone: the review did not pass, not pushing" >&2
     return 1
   fi

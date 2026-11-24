@@ -603,6 +603,25 @@ stub_gate() {
   [ "$output" = feature ]
 }
 
+@test "jdone: a last line that only contains VERDICT: PASS, or a failing reviewer, does not push" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  stub_gate 0 PASS
+  printf '#!/bin/sh\necho "looks fine"\necho "VERDICT: BLOCK (previous VERDICT: PASS withdrawn)"\n' > "$BATS_TEST_TMPDIR/bin/claude"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && touch justfile && echo y > f.txt && jj commit -m feature >/dev/null 2>&1 && jdone"
+  [ "$status" -eq 1 ]
+  [[ $output == *"the review did not pass"* ]] || false
+  run git -C "$remote" rev-parse --verify -q refs/heads/feat
+  [ "$status" -ne 0 ]
+
+  printf '#!/bin/sh\necho "VERDICT: PASS"\nexit 7\n' > "$BATS_TEST_TMPDIR/bin/claude"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$WS/feat' && jdone"
+  [ "$status" -eq 1 ]
+  [[ $output == *"the review did not pass"* ]] || false
+  run git -C "$remote" rev-parse --verify -q refs/heads/feat
+  [ "$status" -ne 0 ]
+}
+
 @test "jdone: words that look like jreview options are focus for the Claude review" {
   add_bare_remote "$REPO" "$BATS_TEST_TMPDIR/remote.git"
   stub_gate 0 PASS

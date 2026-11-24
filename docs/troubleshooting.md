@@ -20,7 +20,7 @@ proves each tool loads the file.
 **agy says "tool call denied by pre-tool hook: agent guard: ...".** The
 launch guard blocked a `claude` or `codex` command. The reason names the
 cause: put `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN` in front of
-`claude`, `env -u OPENAI_API_KEY -u CODEX_HOME` in front of `codex`, inside
+`claude`, `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME` in front of `codex`, inside
 `rex window new ... --` as well. "does not parse" means a quote or bracket is
 unbalanced.
 

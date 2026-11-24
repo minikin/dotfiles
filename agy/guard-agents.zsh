@@ -17,9 +17,10 @@
 emulate -L zsh
 setopt extended_glob
 
-typeset -ga GUARDED=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_HOME)
+# CODEX_API_KEY: Codex bills model requests to it even when the saved login is ChatGPT.
+typeset -ga GUARDED=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY CODEX_HOME)
 typeset -ga CLAUDE_VARS=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN)
-typeset -ga CODEX_VARS=(OPENAI_API_KEY CODEX_HOME)
+typeset -ga CODEX_VARS=(OPENAI_API_KEY CODEX_API_KEY CODEX_HOME)
 typeset -gi MAX_DEPTH=8
 typeset -g REASON='' HD_TEXT=''
 typeset -ga HD_BODIES subs ENV_ARGV

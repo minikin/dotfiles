@@ -31,22 +31,26 @@ The shared rules above end with a "Codex only" section. It does not apply to you
 | Claude, light work | `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude --model haiku` (or `sonnet`) |
 | Claude, hard design, subtle bugs, large refactors | same, with `--model opus` |
 | Claude, reviews | same, with `--model fable` |
-| Codex, writes code, files or jj metadata | `env -u OPENAI_API_KEY -u CODEX_HOME codex -p <repo>` |
-| Codex, read-only research or review | `env -u OPENAI_API_KEY -u CODEX_HOME codex -s read-only -a never` |
+| Codex, writes code, files or jj metadata | `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p <repo> --add-dir <git dir>`, started in the workspace |
+| Codex, read-only research or review | `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -s read-only -a never` |
 
 - A hook blocks any `claude` or `codex` launch without its `env -u` prefix, and any launch with an
   API key. When it blocks you, fix the command. Never try to get around it.
 - Confirm the subscription before you send the brief. Claude: no "claude.ai connectors are
   disabled" warning on its first screen. Codex: `/status` shows a ChatGPT plan, not an API key.
   Check a process without printing values:
-  `ps eww -o command= -p <pid> | tr ' ' '\n' | grep -oE '^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_HOME)='`
+  `ps eww -o command= -p <pid> | tr ' ' '\n' | grep -oE '^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY|CODEX_HOME)='`
   must print nothing.
 - A writing Codex agent needs the repo profile `~/.codex/<repo>.config.toml`. In a jj workspace it
   is what lets Codex write the shared `.jj` and `.git`. If the profile is missing, show me its
   content and wait. Never create or edit it yourself.
+- `<git dir>` is the workspace's own git dir, `git -C <workspace> rev-parse --absolute-git-dir`
+  (`<main checkout>/.git/worktrees/<name>`). Codex keeps it read-only unless it is named, and
+  without it `jj commit` fails with `Failed to reset Git HEAD state`. In my shell `jwx <name>`
+  does all of this.
 - Resume a dead agent's own session with its original settings instead of starting fresh:
-  `claude --resume <id> --model <model>`, `codex resume <id> -p <repo>` for a writer,
-  `codex resume <id> -s read-only -a never` for a reviewer. Keep the `env -u` prefix.
+  `claude --resume <id> --model <model>`, `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex resume <id> -p <repo> --add-dir <git dir>` for a writer,
+  `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex resume <id> -s read-only -a never` for a reviewer. Keep the `env -u` prefix.
 
 ### Reviews
 

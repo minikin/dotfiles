@@ -53,9 +53,10 @@ I pay for a claude.ai subscription and a ChatGPT subscription. Any Claude or Cod
 uses those logins, never API keys.
 
 - Start Claude as `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude ...` and Codex as
-  `env -u OPENAI_API_KEY -u CODEX_HOME codex ...`. A key exported in your own shell is inherited
-  by every child, so strip it on every launch, also inside `rex window new ... --`.
-- Never wrap an agent in `op run`, never set any of those four variables, never run
+  `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex ...`. A key exported in your own
+  shell is inherited by every child, so strip it on every launch, also inside
+  `rex window new ... --`. Codex bills to `CODEX_API_KEY` even with a ChatGPT login.
+- Never wrap an agent in `op run`, never set any of those five variables, never run
   `codex login --with-api-key`.
 - When an agent hits its usage limit, tell me. Never switch it to an API key.
 

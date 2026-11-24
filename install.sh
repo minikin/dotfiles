@@ -84,7 +84,14 @@ replace_if_changed() {
 if (( BREW )); then
   echo "== brew bundle"
   command -v brew >/dev/null || { echo "Homebrew is required for --brew: https://brew.sh" >&2; exit 1; }
-  run brew bundle --file "$REPO/Brewfile"
+  if run brew bundle --file "$REPO/Brewfile"; then :; else
+    rc=$?
+    # brew bundle may have installed some packages before the one that failed.
+    echo "brew bundle failed (exit $rc), dotfile installation has not started." >&2
+    echo "If Homebrew reported an app that already exists in /Applications, install it over that copy" >&2
+    echo "with brew install --cask --adopt <cask>, then re-run ./install.sh --brew." >&2
+    exit "$rc"
+  fi
 fi
 
 echo "== symlinks"

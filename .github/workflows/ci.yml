@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install tools
-        run: brew install git just bats-core shellcheck jq lychee gitleaks mise navi
+        run: brew install git just bats-core shellcheck jq lychee gitleaks mise navi actionlint
 
       # jj from the release, pinned: the runner's Homebrew tap can lag (it served
       # 0.45, and jw needs 0.46+, where each workspace is a real git worktree).
@@ -46,13 +46,13 @@ jobs:
       - name: Tool versions
         run: |
           bash --version | head -1
-          for t in git just bats shellcheck jj jq lychee gitleaks mise zsh; do
+          for t in git just bats shellcheck jj jq lychee gitleaks mise zsh actionlint; do
             printf '%-10s %s (%s)\n' "$t" "$("$t" --version 2>&1 | head -1)" "$(command -v "$t")"
           done
           echo "::notice title=versions::$(git --version) at $(command -v git), $(jj --version)"
 
-      # `just check` = lint + test + secrets. Separate steps so a failure names
-      # its stage, and failing output becomes annotations readable without login.
+      # `just check` = lint + test + secrets + commits, lint including actionlint. Separate steps
+      # so a failure names its stage, and failing output becomes annotations readable without login.
       - name: just lint
         shell: bash
         run: |
@@ -69,6 +69,14 @@ jobs:
             echo "::error title=bats failures::${msg}"
             exit 1
           }
+
+      # bats starts with `env bash`, which finds Homebrew's bash 5. The recipe puts /bin/bash 3.2
+      # first on PATH for the suites that broke on it before.
+      - name: just test-bash32
+        shell: bash
+        run: |
+          set -o pipefail
+          just test-bash32 2>&1 | tee test-bash32.log || { grep -A3 '^not ok' test-bash32.log | head -60 | sed 's/^/::error title=bash 3.2::/'; exit 1; }
 
       - name: just secrets
         shell: bash

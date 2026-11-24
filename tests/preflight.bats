@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# bin/agent-preflight against stub moshi-hook, rex, claude, codex and launchctl.
+# bin/agent-preflight against stub moshi-hook, rex, claude, codex, launchctl, jj and agy.
 
 load helpers
 
@@ -9,6 +9,8 @@ setup() {
   STUBS="$BATS_TEST_TMPDIR/stubs"
   mkdir -p "$STUBS"
   ln -s "$(command -v jq)" "$STUBS/jq"
+  # codex/check-profile.sh needs a python3 with tomllib, which /usr/bin/python3 is not.
+  command -v python3 >/dev/null && ln -s "$(command -v python3)" "$STUBS/python3"
   export STUB_LOG="$BATS_TEST_TMPDIR/calls.log"
   : >"$STUB_LOG"
 
@@ -38,9 +40,44 @@ if [[ $1 == app-server ]]; then
   echo "${STUB_LIMITS:-$default}"
   exit 0
 fi
-[[ -n ${OPENAI_API_KEY:-} ]] && { echo "Logged in using an API key - sk-test"; exit 0; }
+[[ -n ${OPENAI_API_KEY:-}${CODEX_API_KEY:-} ]] && { echo "Logged in using an API key - sk-test"; exit 0; }
 echo "${STUB_CODEX:-Logged in using ChatGPT}"
 EOF
+  # STUB_JJ_<KEY>=none makes `config get` fail as for an unset key. STUB_JJ_ROOT is the main
+  # checkout `workspace root --name default` prints, none outside a repo.
+  stub jj <<'EOF'
+echo "jj $*" >>"$STUB_LOG"
+[[ $1 == --ignore-working-copy ]] || exit 9
+get() { [[ $1 == none ]] && exit 1; echo "$1"; exit 0; }
+case "$2 $3 $4" in
+  "config get user.name") get "${STUB_JJ_NAME:-Example Person}" ;;
+  "config get user.email") get "${STUB_JJ_EMAIL:-someone@example.com}" ;;
+  "config get signing.behavior") get "${STUB_JJ_BEHAVIOR:-own}" ;;
+  "config get signing.key") get "${STUB_JJ_KEY:-ssh-ed25519 AAAAtestnotakey}" ;;
+  "config get signing.backend") get "${STUB_JJ_BACKEND:-ssh}" ;;
+  "workspace root --name") [[ -n ${STUB_JJ_ROOT:-} ]] || exit 1; echo "$STUB_JJ_ROOT" ;;
+  *) exit 9 ;;
+esac
+EOF
+}
+
+# agy_ready: a stub agy plus the hooks.json, guard script and skill link install.sh would write.
+agy_ready() {
+  stub agy <<'EOF'
+exit 0
+EOF
+  mkdir -p "$HOME/.gemini/config/hooks" "$HOME/.gemini/config/skills" "$HOME/skills-src/rex-orchestrator" "$HOME/.claude/skills"
+  jq '. + {"other": {"enabled": false, "PreToolUse": []}}' "$REPO_ROOT/agy/hooks.fragment.json" >"$HOME/.gemini/config/hooks.json"
+  printf '#!/bin/sh\n' >"$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  chmod +x "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  ln -s "$HOME/skills-src/rex-orchestrator" "$HOME/.claude/skills/rex-orchestrator"
+  ln -s "$(cd "$HOME/skills-src/rex-orchestrator" && pwd -P)" "$HOME/.gemini/config/skills/rex-orchestrator"
+}
+
+# hooks_set <jq filter>: rewrite the fake hooks.json with a filter on the dotfiles entry.
+hooks_set() {
+  local f="$HOME/.gemini/config/hooks.json"
+  jq "$1" "$f" >"$f.new" && mv "$f.new" "$f"
 }
 
 # stub <name>: an executable in $STUBS with the body from stdin
@@ -56,7 +93,9 @@ preflight() {
 @test "preflight: everything in order passes, one ok line per check" {
   preflight
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 6 ]
+  [ "${#lines[@]}" -eq 7 ]
+  [[ $output == *"ok    jj: identity set, signing configured"* ]] || false
+  [[ $output != *agy:* && $output != *"codex profile"* ]] || false
   [[ $output != *FAIL* ]] || false
   [[ $output == *"claude: logged in to claude.ai (max)"* ]] || false
 }
@@ -79,9 +118,9 @@ preflight() {
 }
 
 @test "preflight: a key in the shell fails by name, and claude and codex still run without it" {
-  ANTHROPIC_API_KEY=test-not-a-key OPENAI_API_KEY=test-not-a-key preflight
+  ANTHROPIC_API_KEY=test-not-a-key OPENAI_API_KEY=test-not-a-key CODEX_API_KEY=test-not-a-key preflight
   [ "$status" -eq 1 ]
-  [[ $output == *"FAIL  env: set in this shell: ANTHROPIC_API_KEY OPENAI_API_KEY"* ]] || false
+  [[ $output == *"FAIL  env: set in this shell: ANTHROPIC_API_KEY OPENAI_API_KEY CODEX_API_KEY"* ]] || false
   [[ $output == *"ok    claude: logged in to claude.ai"* ]] || false
   [[ $output == *"ok    codex: logged in with ChatGPT"* ]] || false
   ! grep -q 'key=test-not-a-key' "$STUB_LOG" || false
@@ -107,12 +146,19 @@ preflight() {
   [[ $output == *"FAIL  codex: not logged in with ChatGPT"* ]] || false
 }
 
-@test "preflight: never prints a value, an email or the Moshi host name" {
-  ANTHROPIC_API_KEY=test-not-a-key STUB_LAUNCHD_VAR=OPENAI_API_KEY preflight --limits
+@test "preflight: never prints a value, a name, an email, a key, a home path or the Moshi host name" {
+  agy_ready
+  mkdir -p "$HOME/src/app"
+  ANTHROPIC_API_KEY=test-not-a-key STUB_LAUNCHD_VAR=OPENAI_API_KEY STUB_JJ_ROOT="$HOME/src/app" preflight --limits
   [[ $output != *test-not-a-key* ]] || false
   [[ $output != *example.com* ]] || false
   [[ $output != *Example-Host* ]] || false
+  [[ $output != *"Example Person"* ]] || false
+  [[ $output != *AAAAtestnotakey* ]] || false
   [[ $output != *sk-test* ]] || false
+  [[ $output != *"$HOME"* ]] || false
+  STUB_JJ_EMAIL=you@work.example preflight
+  [[ $output != *you@work.example* ]] || false
 }
 
 @test "preflight: --limits prints the codex weekly limit and says claude has no command" {
@@ -133,7 +179,7 @@ exit 3
 STUB
   preflight
   [ "$status" -eq 1 ]
-  [[ $output == *"FAIL  env: cannot check launchd for ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_HOME (launchctl getenv failed)"* ]] || false
+  [[ $output == *"FAIL  env: cannot check launchd for ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY CODEX_HOME (launchctl getenv failed)"* ]] || false
   [[ $output != *"no API-key variables in launchd"* ]] || false
 
   rm "$STUBS/launchctl"
@@ -173,4 +219,180 @@ STUB
   [ "$status" -eq 0 ]
   STUB_LIMITS='{"id":2,"result":{}}' run bash -c '"$1" app-server </dev/null | jq -e -s "length == 1 and .[0].id == 2"' _ "$STUBS/codex"
   [ "$status" -eq 0 ]
+}
+
+@test "preflight: jj is asked read-only, never snapshotting a working copy" {
+  preflight
+  [ "$status" -eq 0 ]
+  ! grep '^jj ' "$STUB_LOG" | grep -v '^jj --ignore-working-copy ' || false
+}
+
+@test "preflight: jj without an identity, with template placeholders or without signing fails" {
+  STUB_JJ_EMAIL=none preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: no user.name or user.email"* ]] || false
+  STUB_JJ_NAME='Your Name' preflight
+  [[ $output == *"FAIL  jj: identity has template placeholders"* ]] || false
+  STUB_JJ_EMAIL=you@personal.example preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: identity has template placeholders"* ]] || false
+  STUB_JJ_BEHAVIOR=none preflight
+  [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
+  STUB_JJ_BEHAVIOR=drop preflight
+  [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
+  STUB_JJ_KEY='ssh-ed25519 AAAA...your-work-key' preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
+  STUB_JJ_BACKEND=none preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
+  STUB_JJ_BACKEND=none STUB_JJ_BEHAVIOR=force preflight
+  [ "$status" -eq 1 ]
+  STUB_JJ_BEHAVIOR=force preflight
+  [ "$status" -eq 0 ]
+}
+
+@test "preflight: jj with no signing.backend at all fails" {
+  stub jj <<'EOF'
+[[ $1 == --ignore-working-copy ]] || exit 9
+case "$2 $3 $4" in
+  "config get user.name") echo "Example Person" ;;
+  "config get user.email") echo "someone@example.com" ;;
+  "config get signing.behavior") echo own ;;
+  "config get signing.key") echo "ssh-ed25519 AAAAtestnotakey" ;;
+  *) exit 1 ;;
+esac
+EOF
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
+}
+
+@test "preflight: no jj on PATH fails" {
+  rm "$STUBS/jj"
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: not installed"* ]] || false
+  [[ $output != *"codex profile"* ]] || false
+}
+
+@test "preflight: agy with its guard hook and Rex skill in place passes, an unrelated disabled hook too" {
+  agy_ready
+  preflight
+  [ "$status" -eq 0 ]
+  [[ $output == *"ok    agy: guard hook registered"* ]] || false
+  [[ $output == *"ok    agy: rex-orchestrator skill linked to Claude's"* ]] || false
+  [ "${#lines[@]}" -eq 9 ]
+}
+
+@test "preflight: an agy guard entry that is missing, disabled, unmatched or another command fails" {
+  agy_ready
+  local filter
+  for filter in 'del(.["dotfiles-agent-guard"])' \
+                '.["dotfiles-agent-guard"].enabled = false' \
+                '.["dotfiles-agent-guard"].PreToolUse[0].matcher = "run_command"' \
+                '.["dotfiles-agent-guard"].PreToolUse[0].hooks[0].type = "script"' \
+                '.["dotfiles-agent-guard"].PreToolUse[0].hooks[0].command = "~/other.zsh"' \
+                '.["dotfiles-agent-guard"] = []'; do
+    cp "$REPO_ROOT/agy/hooks.fragment.json" "$HOME/.gemini/config/hooks.json"
+    hooks_set "$filter"
+    preflight
+    [ "$status" -eq 1 ] || { echo "passed with: $filter"; return 1; }
+    [[ $output == *"FAIL  agy: guard hook dotfiles-agent-guard missing, disabled or changed"* ]] || false
+  done
+}
+
+@test "preflight: agy with no hooks.json, invalid JSON, a missing guard script or no jq fails" {
+  agy_ready
+  printf '{"dotfiles-agent-guard": ' >"$HOME/.gemini/config/hooks.json"
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  agy: ~/.gemini/config/hooks.json is not valid JSON"* ]] || false
+
+  rm "$HOME/.gemini/config/hooks.json"
+  preflight
+  [[ $output == *"FAIL  agy: no ~/.gemini/config/hooks.json"* ]] || false
+
+  cp "$REPO_ROOT/agy/hooks.fragment.json" "$HOME/.gemini/config/hooks.json"
+  chmod -x "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  agy: guard hook script ~/.gemini/config/hooks/dotfiles-guard-agents.zsh is missing or not executable"* ]] || false
+
+  rm "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  mkdir "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  agy: guard hook script ~/.gemini/config/hooks/dotfiles-guard-agents.zsh is missing or not executable"* ]] || false
+  rmdir "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  cp "$REPO_ROOT/agy/hooks.fragment.json" "$HOME/.gemini/config/hooks.json"
+
+  rm "$STUBS/jq"
+  local tools="$BATS_TEST_TMPDIR/tools" t
+  mkdir -p "$tools"
+  for t in sed head grep env sleep tr cat readlink; do ln -s "$(command -v "$t")" "$tools/$t"; done
+  PATH="$STUBS:$tools" AGENT_PREFLIGHT_WAIT=0 run /bin/bash "$REPO_ROOT/bin/agent-preflight"
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  agy: jq is missing"* ]] || false
+}
+
+@test "preflight: agy's Rex skill linked elsewhere fails, no Claude skill or no agy says nothing" {
+  agy_ready
+  rm "$HOME/.gemini/config/skills/rex-orchestrator"
+  ln -s "$HOME/elsewhere" "$HOME/.gemini/config/skills/rex-orchestrator"
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  agy: ~/.gemini/config/skills/rex-orchestrator does not link to Claude's skill"* ]] || false
+
+  rm "$HOME/.claude/skills/rex-orchestrator"
+  preflight
+  [ "$status" -eq 0 ]
+  [[ $output != *rex-orchestrator* ]] || false
+
+  rm "$STUBS/agy"
+  printf 'broken' >"$HOME/.gemini/config/hooks.json"
+  preflight
+  [ "$status" -eq 0 ]
+  [[ $output != *agy:* ]] || false
+}
+
+@test "preflight: in a jj repo the Codex profile is information, by the main checkout's name" {
+  python3 -I -c 'import tomllib' 2>/dev/null || skip "python3 without tomllib"
+  mkdir -p "$HOME/src/app" "$HOME/.codex"
+  STUB_JJ_ROOT="$HOME/src/app" preflight
+  [ "$status" -eq 0 ]
+  [[ $output == *"info  codex profile: no ~/.codex/app.config.toml, jwx will not start Codex here"* ]] || false
+
+  sed 's|/path/to/<repo>|/path/to/app|g' "$REPO_ROOT/codex/repo-profile.example.toml" >"$HOME/.codex/app.config.toml"
+  STUB_JJ_ROOT="$HOME/src/app" preflight
+  [ "$status" -eq 0 ]
+  [[ $output == *"info  codex profile: ~/.codex/app.config.toml: [sandbox_workspace_write] writable_roots does not name this checkout's .jj"* ]] || false
+  [[ $output == *"info  codex profile: ~/.codex/app.config.toml: [sandbox_workspace_write] writable_roots does not name this checkout's .git"* ]] || false
+
+  sed "s|/path/to/<repo>|$HOME/src/app|g" "$REPO_ROOT/codex/repo-profile.example.toml" >"$HOME/.codex/app.config.toml"
+  STUB_JJ_ROOT="$HOME/src/app" preflight
+  [ "$status" -eq 0 ]
+  [[ $output == *"ok    codex profile: ~/.codex/app.config.toml"* ]] || false
+
+  sed -e 's/"workspace-write"/"read-only"/' "$HOME/.codex/app.config.toml" >"$HOME/.codex/app.config.toml.new"
+  printf '# writable_roots = ["%s/src/app/.jj"]\n' "$HOME" >>"$HOME/.codex/app.config.toml.new"
+  mv "$HOME/.codex/app.config.toml.new" "$HOME/.codex/app.config.toml"
+  STUB_JJ_ROOT="$HOME/src/app" preflight
+  [ "$status" -eq 0 ]
+  [[ $output == *'info  codex profile: ~/.codex/app.config.toml: sandbox_mode is not "workspace-write"'* ]] || false
+  [[ $output != *"ok    codex profile"* ]] || false
+
+  # The same rule as jwx: only the absolute path counts, a ~/ root is not known to work in Codex.
+  printf 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nwritable_roots = ["~/src/app/.jj", "~/src/app/.git"]\n' >"$HOME/.codex/app.config.toml"
+  STUB_JJ_ROOT="$HOME/src/app" preflight
+  [[ $output == *"info  codex profile: ~/.codex/app.config.toml: [sandbox_workspace_write] writable_roots does not name this checkout's .jj"* ]] || false
+  [[ $output != *"$HOME"* ]] || false
+}
+
+@test "preflight: --help shows the usage and the new checks" {
+  preflight --help
+  [ "$status" -eq 0 ]
+  [[ $output == *"Usage: agent-preflight [--limits] | --help"* ]] || false
+  [[ $output == *"jj identity and signing configured"* ]] || false
+  [[ $output != *set\ -uo* ]] || false
 }

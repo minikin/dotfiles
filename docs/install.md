@@ -78,6 +78,47 @@ The live configs end up as symlinks into the repo, so editing `~/.zshrc`
 edits `zsh/zshrc`. [Updating](guides/updating.md) covers committing those
 edits and pulling them on another machine.
 
+## Agent skills, plugins and MCP servers
+
+Three things the agent setup uses do not come from this repo or the
+`Brewfile`. Install them once per Mac, before the first session with
+sub-agents:
+
+1. The human-writing checker, a Claude Code plugin from the
+   `minikin/claude-skills` marketplace. agy and the repo's prose rule find
+   its `scripts/check.py` under `~/.claude/plugins/cache`.
+
+   ```sh
+   claude plugin marketplace add minikin/claude-skills
+   claude plugin install human-writing@minikin-skills
+   ```
+
+2. The `rex-orchestrator` skill, from a clone of the same repo. Link it for
+   Claude, then re-run `install.sh`, which links agy's copy to the same
+   directory.
+
+   ```sh
+   git clone https://github.com/minikin/claude-skills ~/src/claude-skills
+   mkdir -p ~/.claude/skills
+   ln -s ~/src/claude-skills/skills/rex-orchestrator ~/.claude/skills/rex-orchestrator
+   ./install.sh
+   ```
+
+3. Agent Caffeine, from its tap (see [Installing macOS apps](guides/mac-apps.md)),
+   registered as an MCP server for Claude and Codex:
+
+   ```sh
+   claude mcp add --scope user agent-caffeine -- "/Applications/Agent Caffeine.app/Contents/MacOS/agent-caffeine" mcp
+   env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex mcp add agent-caffeine -- "/Applications/Agent Caffeine.app/Contents/MacOS/agent-caffeine" mcp
+   ```
+
+For each repo you run Codex writers in, copy
+`codex/repo-profile.example.toml` to `~/.codex/<repo>.config.toml` and set
+its paths, or [`jwx`](reference/shell-commands.md#jwx) refuses to start. The
+profile check needs a `python3` with `tomllib` (3.11 or later) on `PATH`.
+macOS's own `/usr/bin/python3` is 3.9, so install one with Homebrew or mise.
+Then run `agent-preflight`, or `just doctor` from the dotfiles checkout.
+
 ## Language toolchains and global mise tools
 
 `install.sh` links `mise/config.toml` to `~/.config/mise/config.toml`, but it
@@ -188,7 +229,7 @@ exec zsh
 ghostty +validate-config
 ghostty +list-fonts | grep 'JetBrainsMono Nerd Font Mono'
 /usr/bin/time zsh -i -c exit
-type jw jwc jws jwst jwl jwrm jsync jpush jland jnext sign-as infra reload navi-trust navi-untrust z zi
+type jw jwc jwx jreview jws jwst jwl jwrm jsync jpush jland jnext sign-as infra reload navi-trust navi-untrust z zi
 (cd ~ && jj config get user.email)
 git config --global user.email
 echo '{"workspace":{"current_dir":"'$PWD'"},"model":{"display_name":"test"}}' | ~/.claude/statusline.sh
@@ -199,7 +240,8 @@ startup should take about 150 ms or less. Both emails should be the main
 email you entered (jj runs from `~` because inside the second identity's
 folder it shows that identity), unless git already had one, which `install.sh`
 leaves alone. The status line should print the directory, the change and
-`test`, separated by `·`.
+`test`, separated by `·`. `just doctor` from the checkout then reports the
+links, the agent checks and missing Homebrew packages in one run.
 
 Then restart Ghostty and Claude Code, and add your public keys on GitHub as
 **Signing keys** so your commits show as verified. The global `` cmd+` ``

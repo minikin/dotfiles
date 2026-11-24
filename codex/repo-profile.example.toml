@@ -1,0 +1,14 @@
+# Codex profile for the jj workspaces of one repo. install.sh does not install it: copy it to
+# ~/.codex/<repo>.config.toml, where <repo> is the main checkout's directory name, and replace
+# /path/to/<repo> with the main checkout's absolute path. jwx passes -p <repo> and refuses to
+# start Codex without this file, or when it does not name the checkout's .jj by that path.
+#
+# A jj workspace keeps its commits in the main checkout's .jj and .git, outside the workspace,
+# so workspace-write must name both. jwx also passes --add-dir with the workspace's own
+# .git/worktrees/<name>, which Codex keeps read-only unless that exact dir is named.
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[sandbox_workspace_write]
+writable_roots = ["/path/to/<repo>/.jj", "/path/to/<repo>/.git"]
+network_access = false

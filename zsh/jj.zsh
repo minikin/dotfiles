@@ -18,56 +18,102 @@ _jw_root() {
 # jw <name> [rev] — create (or reuse) a workspace and cd into it.
 # rev defaults to trunk() (e.g. origin/main), or @- if there's no remote trunk.
 jw() {
-  local name=${1//\//-} rev=${2:-} root dir
+  local name=${1//\//-} rev=${2:-} root dir registered
   [[ -z $name ]] && { echo "usage: jw <name> [rev]" >&2; return 1; }
+  # "." and ".." would put the workspace path on <repo>-ws itself or on the repo's parent, and
+  # "default" is the main checkout.
+  [[ $name == . || $name == .. || $name == -* || $name == default ]] &&
+    { echo "jw: not a workspace name: $name" >&2; return 1; }
   root=$(_jw_root) || return 1
   dir="${root:h}/${root:t}-ws/$name"
 
   if [[ -d $dir ]]; then
+    _jw_is_workspace "$root" "$name" "$dir" ||
+      { echo "jw: $dir exists but is not workspace $name of this repo" >&2; return 1; }
     echo "reusing $dir"
+    # On reuse too, so a repo set up before the hook last changed gets the current one.
+    _jw_pre_push "$root" || { echo "jw: could not install the agent pre-push hook" >&2; return 1; }
   else
     if [[ -z $rev ]]; then
       rev='trunk()'
       [[ -z $(jj -R $root --ignore-working-copy log -r 'trunk() & ~root()' --no-graph -T 'x' 2>/dev/null) ]] && rev='@-'
     fi
-    mkdir -p "${dir:h}"
-    # Workspace registered but its directory was deleted by hand: forget the stale entry
-    if jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -qx -- "$name"; then
+    # Registered but its directory is gone: forget the stale entry. Registered at a path that still
+    # exists: a live workspace somewhere else, which jw must not forget.
+    if registered=$(jj -R $root --ignore-working-copy workspace root --name "$name" 2>/dev/null); then
+      if [[ -e $registered ]]; then
+        echo "jw: workspace $name already exists at $registered, not at $dir" >&2
+        return 1
+      fi
       jj -R $root workspace forget "$name" || return 1
       git -C $root worktree prune   # drop git's entry for the missing directory
     fi
+    # Before the workspace exists and before the setup, which runs the project's own just or mise
+    # tasks. A failure here leaves nothing behind, so a retry is a fresh create with its setup.
+    _jw_pre_push "$root" || { echo "jw: could not install the agent pre-push hook" >&2; return 1; }
+    mkdir -p "${dir:h}"
     jj -R $root workspace add --name "$name" -r "$rev" "$dir" || return 1
-    _jw_pre_push "$root"
     [[ -z ${JW_NO_SETUP:-} ]] && _jw_setup "$root" "$dir"
   fi
   cd "$dir"
 }
 
-# A pre-push hook in the repo's shared git hooks: a Claude Code agent (CLAUDECODE set) cannot
-# git push from a jj workspace or git worktree, even from inside a script or a just recipe,
-# where the guard-push.sh Claude hook cannot see the push. You, and pushes from the main
-# checkout, pass. Never replaces a hook of yours, and does nothing with core.hooksPath set,
-# because that dir usually belongs to the project (husky, lefthook).
+# _jw_is_workspace <root> <name> <dir>: asked from inside <dir>, jj reports <dir> as the current
+# workspace, as the root of workspace <name>, and <root> as the main checkout. A directory put at
+# that path by hand, or a workspace of another repo, fails even when the paths jj recorded match.
+_jw_is_workspace() {
+  local root=$1 name=$2 dir=$3 cur named def
+  cur=$(jj -R "$dir" --ignore-working-copy workspace root 2>/dev/null) &&
+    named=$(jj -R "$dir" --ignore-working-copy workspace root --name "$name" 2>/dev/null) &&
+    def=$(jj -R "$dir" --ignore-working-copy workspace root --name default 2>/dev/null) || return 1
+  [[ ${cur:A} == ${dir:A} && ${named:A} == ${dir:A} && ${def:A} == ${root:A} ]]
+}
+
+# A pre-push hook in the repo's shared git hooks: a coding agent cannot git push from a jj
+# workspace or git worktree, even from inside a script or a just recipe, where the guard-push.sh
+# Claude hook cannot see the push. An agent is a process with any of these set: CLAUDECODE
+# (Claude Code), CODEX_SANDBOX, CODEX_THREAD_ID or CODEX_CI (Codex), OPENCODE (opencode),
+# DOTFILES_AGENT_WORKSPACE (jwc and jwx). You, and pushes from the main checkout, pass.
+# jj git push never runs git hooks, so jpush and jland are not affected.
+# Replaces only a hook with jw's own header, never a hook of yours or a symlink, and does nothing
+# with core.hooksPath set, because
+# that dir usually belongs to the project (husky, lefthook). Every workspace shares the hook, so
+# a changed one is written next to it and renamed over it: a push never reads a half-written file.
 _jw_pre_push() {
-  local root=$1 hook
+  local root=$1 hook tmp body
   [[ -n $(git -C $root config core.hooksPath 2>/dev/null) ]] && return 0
-  hook=$(git -C $root rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+  hook=$(git -C $root rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
   hook+=/hooks/pre-push
-  if [[ -e $hook ]] && ! grep -q jw-pre-push $hook; then
+  if [[ -L $hook ]] || { [[ -e $hook ]] && ! _jw_pre_push_ours "$hook"; }; then
     echo "jw: $hook is your own, not adding the agent push guard to it" >&2
     return 0
   fi
-  mkdir -p ${hook:h}
-  cat > $hook <<'EOF'
+  body=$(_jw_pre_push_body)
+  [[ -f $hook && -x $hook && $(<$hook) == "$body" ]] && return 0
+  mkdir -p ${hook:h} || return 1
+  tmp=$(mktemp "${hook:h}/.pre-push.XXXXXX" 2>/dev/null) || return 1
+  if ! { print -r -- "$body" > $tmp && chmod 755 $tmp && mv -f $tmp $hook; }; then
+    rm -f $tmp
+    return 1
+  fi
+}
+
+# _jw_pre_push_ours <hook>: a regular file whose second line is the header jw writes. A hook of
+# yours that only mentions jw-pre-push, or calls it, is not jw's to replace.
+_jw_pre_push_ours() {
+  [[ -f $1 && ! -L $1 ]] && [[ $(sed -n 2p "$1") == '# jw-pre-push, written by jw '* ]]
+}
+
+_jw_pre_push_body() {
+  cat <<'EOF'
 #!/bin/sh
-# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): a Claude Code agent must not push
-# from a jj workspace or git worktree. You, and pushes from the main checkout, pass.
-[ -n "$CLAUDECODE" ] || exit 0
+# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): a coding agent must not push from a jj
+# workspace or git worktree. You, and pushes from the main checkout, pass.
+[ -n "$CLAUDECODE$CODEX_SANDBOX$CODEX_THREAD_ID$CODEX_CI$OPENCODE$DOTFILES_AGENT_WORKSPACE" ] || exit 0
 [ "$(git rev-parse --absolute-git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ] && exit 0
 echo "blocked: agents in jj workspaces and git worktrees do not push; the user pushes from the main checkout with jpush/jland" >&2
 exit 1
 EOF
-  chmod +x $hook
 }
 
 # Make a fresh workspace runnable: copy untracked local env files from the main
@@ -107,23 +153,93 @@ _jw_setup() {
 }
 
 # jwc <name> [rev] [claude args...] — create (or reuse) a workspace and start Claude Code in it,
-# with JW_NAME=<workspace name> in its environment. The second argument is a rev unless it
-# starts with "-" or contains whitespace: jwc x --continue, jwc x @- --continue, jwc x "fix the bug".
+# with JW_NAME=<workspace name> and DOTFILES_AGENT_WORKSPACE=1 in its environment and the
+# Anthropic API-key variables removed, so it runs on the claude.ai subscription. The second
+# argument is a rev unless it starts with "-" or contains whitespace: jwc x --continue,
+# jwc x @- --continue, jwc x "fix the bug".
 # The session is named <repo>/<name>: Claude Code shows it in the tab title and /resume,
 # and claude -r <repo>/<name> finds it.
 jwc() {
   local name=${1:-} rev root
   (( $# )) && shift
   [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
-  jw "$name" ${rev:+"$rev"} && root=$(_jw_root) && JW_NAME=${PWD:t} claude -n "${root:t}/${PWD:t}" "$@"
+  jw "$name" ${rev:+"$rev"} || return 1
+  root=$(_jw_root) || return 1
+  # The assignments go before env so the launch keeps the exact prefix the agy guard expects.
+  JW_NAME=${PWD:t} DOTFILES_AGENT_WORKSPACE=1 \
+    env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -n "${root:t}/${PWD:t}" "$@"
 }
 
-# jreview [name] [focus...] — a second Claude reviews a workspace's trunk()..@ read-only:
-# claude -p in that workspace, allowed to read files and run only jj diff, log and show.
-# fzf pick without a name, default left out. Extra arguments are appended to the prompt.
+# jwx <name> [rev] [codex args...] — jwc for Codex: create (or reuse) a workspace and start Codex
+# in it with the profile ~/.codex/<repo>.config.toml (codex -p <repo>), JW_NAME,
+# DOTFILES_AGENT_WORKSPACE=1, and the OpenAI API-key variables and CODEX_HOME removed, so it runs
+# on the ChatGPT subscription. <repo> is the main checkout's directory name. Without that profile,
+# or when codex/check-profile.sh finds it is not workspace-write with this checkout's .jj and .git
+# as writable roots (an untouched template, another checkout of the same name), it stops before
+# creating anything: Codex's default sandbox cannot write the main checkout's .jj and .git, so a
+# writer in a workspace could not commit. Same rev rule as jwc.
+# Codex keeps the git dir a worktree's .git file points to read-only even inside a writable root,
+# unless that exact dir is named, so jwx adds the workspace's own .git/worktrees/<name> with
+# --add-dir. Without it jj commit fails with "Failed to reset Git HEAD state".
+jwx() {
+  local name=${1:-} rev root profile reasons gitdir='' common='' main='' back=''
+  local -a nogit
+  (( $# )) && shift
+  [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
+  [[ -z $name ]] && { echo "usage: jwx <name> [rev] [codex args...]" >&2; return 1; }
+  root=$(_jw_root) || return 1
+  profile=$HOME/.codex/${root:t}.config.toml
+  if [[ ! -f $profile ]]; then
+    echo "jwx: no ~/.codex/${root:t}.config.toml, so Codex could not write ${root:t}'s .jj and .git from a workspace" >&2
+    echo "jwx: copy codex/repo-profile.example.toml from the dotfiles there and set its paths" >&2
+    return 1
+  fi
+  if ! reasons=$("$_jw_codex_check" "$profile" "$root" 2>&1); then
+    print -rl -- "jwx: ~/.codex/${root:t}.config.toml cannot start a writer here:" "${(@f)reasons}" >&2
+    return 1
+  fi
+  jw "$name" ${rev:+"$rev"} || return 1
+  # The workspace's own git dir: a worktree of this checkout's git dir whose gitdir file points
+  # back at this workspace's .git. Asked without GIT_DIR and the like, which would point git, and
+  # so --add-dir, at another worktree's index and HEAD.
+  nogit=(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE git)
+  gitdir=$($nogit -C "$PWD" rev-parse --absolute-git-dir 2>/dev/null) &&
+    common=$($nogit -C "$PWD" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    main=$($nogit -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    [[ $gitdir != "$common" && ${common:A} == ${main:A} && -f $gitdir/gitdir ]] &&
+    back=$(<$gitdir/gitdir)
+  # git writes the backlink relative to the git dir when worktrees use relative paths.
+  [[ -n $back && $back != /* ]] && back=$gitdir/$back
+  if [[ -z $back || ${back:A} != ${PWD:A}/.git ]]; then
+    echo "jwx: cannot find this workspace's own git dir in $root, not starting Codex" >&2
+    return 1
+  fi
+  JW_NAME=${PWD:t} DOTFILES_AGENT_WORKSPACE=1 \
+    env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p "${root:t}" --add-dir "$gitdir" "$@"
+}
+
+# jreview [--codex] [--model <model>] [--] [name] [focus...] — a second agent reviews a
+# workspace's trunk()..@ read-only. Default: claude -p --model fable in that workspace, allowed to
+# read files and run only jj diff, log and show. --codex: codex exec -s read-only instead, a review
+# from the other model family. --model picks the model for either. Options come before the name,
+# because jdone passes the name first. fzf pick without a name, default left out. Extra
+# arguments are appended to the prompt. Prints the reviewer's final message on stdout.
 jreview() {
-  local root w d name prompt
+  local root w d name prompt model='' codex=0 diff
+  local -a mflag
   local -A dirs
+  while (( $# )); do
+    case $1 in
+      --codex) codex=1; shift ;;
+      --model)
+        [[ -n ${2:-} && $2 != -* ]] || { echo "jreview: --model needs a model name" >&2; return 2; }
+        model=$2; shift 2 ;;
+      --model=?*) model=${1#--model=}; shift ;;
+      --) shift; break ;;
+      -*) echo "usage: jreview [--codex] [--model <model>] [--] [name] [focus...]" >&2; return 2 ;;
+      *) break ;;
+    esac
+  done
   root=$(_jw_root) || return 1
   for w d in ${(@ps:\t:)${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"')"}}; do
     dirs[$w]=$d
@@ -139,24 +255,36 @@ jreview() {
   # Without --ignore-working-copy on purpose: edits the agent has not snapshotted yet count.
   [[ -n $(jj -R "$d" diff -r 'trunk()..@' --name-only 2>/dev/null) ]] ||
     { echo "jreview: $name has no changes since trunk(), nothing to review" >&2; return 1; }
-  # claude -p prints nothing until the review is done.
+  # Both reviewers print nothing on stdout until the review is done.
   echo "jreview: reviewing $name, this takes a minute or two..." >&2
-  prompt="Review the change in this jj workspace. Run jj diff --git -r 'trunk()..@' and read the code it touches. \
+  diff="jj diff --git -r 'trunk()..@'"
+  # Codex's read-only sandbox cannot let jj snapshot. The check above has just snapshotted.
+  (( codex )) && diff="jj --ignore-working-copy diff --git -r 'trunk()..@'"
+  prompt="Review the change in this jj workspace. Run $diff and read the code it touches. \
 List the problems you find by severity (blocking, should fix, nit), each with file:line and the reason. \
 Do not edit any file. End with exactly one last line: VERDICT: BLOCK if any problem is blocking, else VERDICT: PASS."
   (( $# )) && prompt+=" Focus: $*"
-  # The prompt goes before the tool lists: --allowedTools takes several values and would eat it.
-  (cd "$d" && claude -p "$prompt" \
-    --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
-    --disallowedTools 'Edit,Write,NotebookEdit')
+  if (( codex )); then
+    [[ -n $model ]] && mflag=(-m "$model")
+    # codex exec prints only its final message on stdout, progress goes to stderr.
+    (cd "$d" && env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME \
+      codex exec -s read-only --ephemeral $mflag "$prompt")
+  else
+    # The prompt goes before the tool lists: --allowedTools takes several values and would eat it.
+    (cd "$d" && env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p "$prompt" \
+      --model "${model:-fable}" \
+      --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
+      --disallowedTools 'Edit,Write,NotebookEdit')
+  fi
 }
 
 # jdone [focus...]: the gate before jpush, run in an agent's workspace. Runs the project's check
 # (just check, else mise run check), then jreview on this workspace, and pushes with jpush only
-# when the check passes and the review ends with VERDICT: PASS. Focus words go to jreview.
+# when the check passes and the review's last line is exactly VERDICT: PASS. Focus words go to jreview as
+# focus, never as options: jdone always runs the default Claude review.
 jdone() {
   local where out rc
-  local -a w
+  local -a w review
   where=$("$_jw_where_sh" 2>/dev/null) && w=("${(@f)where}")
   [[ -n ${w[2]:-} && ${w[5]:-} == jj ]] || { echo "jdone: run it in an agent's jj workspace" >&2; return 1; }
   (
@@ -169,10 +297,14 @@ jdone() {
       echo "jdone: no just or mise check task, skipping the check" >&2
     fi
   ) || { echo "jdone: the check failed, not pushing" >&2; return 1; }
-  out=$(jreview "$w[2]" "$@")
+  out=$(jreview -- "$w[2]" "$@")
   rc=$?
   print -r -- "$out"
-  if (( rc )) || [[ ${${(f)out}[-1]} != *'VERDICT: PASS'* ]]; then
+  # An array, not ${${(f)out}[-1]}: a one-line review would collapse to a string and [-1]
+  # would pick its last character.
+  review=("${(@f)out}")
+  # The whole line: "VERDICT: BLOCK (previous VERDICT: PASS withdrawn)" must not pass.
+  if (( rc )) || [[ ${review[-1]} != 'VERDICT: PASS' ]]; then
     echo "jdone: the review did not pass, not pushing" >&2
     return 1
   fi
@@ -452,6 +584,7 @@ jpush() {
 # chpwd only computes: zsh runs it in $(...) and ( ... ) too, where output would be captured,
 # and a cd inside a redirected function would lose it. precmd writes to the terminal.
 _jw_where_sh=${${(%):-%x}:A:h:h}/claude/where.sh
+_jw_codex_check=${_jw_where_sh:h:h}/codex/check-profile.sh
 typeset -ga _jw_tint_dark=('#382b3d' '#2e363c' '#38363d' '#2b3046' '#383244' '#2c3642')
 typeset -ga _jw_tint_light=('#ecdae2' '#dee9e1' '#ede7df' '#dae3f5' '#eee5f1' '#d9e8ec')
 # "unknown", so the first prompt always sets or clears the tint: reload runs exec zsh, which

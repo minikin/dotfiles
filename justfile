@@ -8,13 +8,13 @@ default:
 install *args:
     ./install.sh {{args}}
 
-# Shellcheck, bats asserts, zsh syntax (zsh/ and agy/), compose config (if docker is installed) and offline Markdown link check
+# Shellcheck, bats asserts, zsh syntax (zsh/ and agy/), compose config (if docker is installed), offline Markdown links, the Brewfile inventory, prose rules and actionlint (if installed)
 lint:
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
     echo "== shellcheck"
-    shellcheck install.sh claude/*.sh scripts/*.sh bin/*
+    shellcheck install.sh claude/*.sh scripts/*.sh codex/*.sh bin/*
     echo "== bats asserts"
     # bash 3.2 (macOS /usr/bin/env bash) ignores a failing [[ ]] or ! that is not a test's last command.
     if grep -nE '^[[:space:]]+(\[\[ .*\]\]|! .*)$' tests/*.bats | grep -v '|| false$'; then
@@ -30,10 +30,33 @@ lint:
     fi
     echo "== lychee"
     find . -name '*.md' -not -path './.git/*' -not -path './.jj/*' -print0 | xargs -0 lychee --offline --no-progress
+    echo "== brewfile"
+    scripts/check-brewfile.sh
+    echo "== prose"
+    scripts/check-prose.sh
+    if command -v actionlint >/dev/null; then
+      echo "== actionlint"
+      actionlint
+    else
+      echo "skip actionlint: not installed"
+    fi
 
 # Run the bats tests
 test:
     bats tests
+
+# Run the drift, statusline and install suites under macOS's /bin/bash 3.2 (bats itself starts with env bash)
+test-bash32:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shim=$(mktemp -d)
+    trap 'rm -rf "$shim"' EXIT
+    ln -s /bin/bash "$shim/bash"
+    export PATH="$shim:$PATH"
+    version=$(bash -c 'echo "${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}"')
+    [[ $version == 3.2 ]] || { echo "test-bash32: bash on PATH is $version, not 3.2" >&2; exit 1; }
+    echo "== bats under bash $(bash -c 'echo "$BASH_VERSION"')"
+    bats --print-output-on-failure tests/drift.bats tests/statusline.bats tests/install.bats
 
 # Scan for secrets and personal data
 secrets:
@@ -82,6 +105,25 @@ drift:
       fi
       printf '%-12s %s%s\n' "$status" "${dest/#$HOME/$tilde}" "$target"
     fi
+
+# Read-only health check of this Mac: just drift, agent-preflight, brew bundle check, then a pointer to remote-check. Exits 1 if preflight or brew fails
+doctor:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    rc=0
+    echo "== drift"
+    just drift || rc=1
+    echo "== agent-preflight"
+    ./bin/agent-preflight || rc=1
+    echo "== brew bundle check"
+    if command -v brew >/dev/null; then
+      brew bundle check --file Brewfile --no-upgrade || rc=1
+    else
+      echo "skip brew bundle check: brew not installed"
+    fi
+    echo "== phone access"
+    echo "run remote-check in zsh: it is a shell function, so a just recipe cannot call it"
+    exit "$rc"
 
 # Start the local Redis / Kafka / Jaeger stack and wait until healthy
 infra-up:

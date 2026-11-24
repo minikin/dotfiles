@@ -39,7 +39,9 @@ jwc fix-retry
 directory. Arguments after the name and the optional `rev` go to `claude`,
 so `jwc feat/login --permission-mode plan` starts in plan mode and
 `jwc fix-retry --continue` reopens an existing workspace's last
-conversation. Use `jw` alone when you want the shell without the agent. The
+conversation. `jwx <name> [rev] [codex args...]` does the same with Codex,
+once the repo has a [Codex profile](../install.md#agent-skills-plugins-and-mcp-servers).
+Use `jw` alone when you want the shell without the agent. The
 output from a repo with a `.env` at the root, a `pkg/.env` and a `justfile`
 with a `setup` recipe:
 

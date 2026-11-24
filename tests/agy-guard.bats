@@ -53,12 +53,12 @@ assert_all() {
 
 ALLOWED=$(cat <<'EOF'
 env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude --model sonnet
-env -u OPENAI_API_KEY -u CODEX_HOME codex -p repo
+env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p repo
 rex window new -s s1 a -c d --focus=false --keep-open --json -- env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude --model opus
-rex window new -s s1 a -c d --focus=false --keep-open --json -- env -u OPENAI_API_KEY -u CODEX_HOME codex -s read-only -a never
+rex window new -s s1 a -c d --focus=false --keep-open --json -- env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -s read-only -a never
 rex send -s s1 -b b1 'env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude --model haiku'
-rex send -s s1 -b b1 'env -u OPENAI_API_KEY -u CODEX_HOME codex -p repo'
-ps eww -o command= -p 1 | tr ' ' '\n' | grep -oE '^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_HOME)='
+rex send -s s1 -b b1 'env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p repo'
+ps eww -o command= -p 1 | tr ' ' '\n' | grep -oE '^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY|CODEX_HOME)='
 claude auth status
 codex login status
 claude --version
@@ -82,6 +82,10 @@ ANTHROPIC_API_KEY=x claude --version
 export OPENAI_API_KEY=x
 declare -x CODEX_HOME=x
 env CODEX_HOME=/tmp/x codex
+export CODEX_API_KEY=x
+env CODEX_API_KEY=x codex exec y
+env -u OPENAI_API_KEY -u CODEX_HOME codex -p repo
+rex window new a -- env -u OPENAI_API_KEY -u CODEX_HOME codex -s read-only -a never
 launchctl setenv OPENAI_API_KEY x
 codex login --with-api-key
 printenv K | codex login --with-api-key
@@ -270,9 +274,9 @@ EOF
 
 @test "agy guard: codex global options do not hide login --with-api-key" {
   local c
-  for c in 'env -u OPENAI_API_KEY -u CODEX_HOME codex -c x=y login --with-api-key' \
-           'env -u OPENAI_API_KEY -u CODEX_HOME codex --profile p login --with-api-key' \
-           'env -u OPENAI_API_KEY -u CODEX_HOME codex -m gpt --config=a=b login --with-api-key'; do
+  for c in 'env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -c x=y login --with-api-key' \
+           'env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex --profile p login --with-api-key' \
+           'env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -m gpt --config=a=b login --with-api-key'; do
     run_cmd "$c"
     is_deny || { echo "not denied: $c -> $output" >&3; false; }
     [[ $(jq -r .reason <<<"$output") == *with-api-key* ]] || false
@@ -299,7 +303,7 @@ EOF
   for c in "rex send -b b1 'op run -- claude'" "rex send -b b1 'claude --model sonnet'" \
            "rex send -b b1 '  codex -p repo'" "rex send -b b1 'ANTHROPIC_API_KEY=x claude'" \
            "rex send -b b1 'export OPENAI_API_KEY=x && codex'" \
-           "rex send -b b1 'env -u OPENAI_API_KEY -u CODEX_HOME codex login --with-api-key'" \
+           "rex send -b b1 'env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex login --with-api-key'" \
            "rex send -b b1 'nohup op run --env-file .env -- codex exec x'" \
            $'rex send -s s1 -b b1 \'cd /tmp\ncodex -p repo\'' \
            "rex -S host --timeout 5s send -b b1 'codex exec x'" \
@@ -353,19 +357,19 @@ EOF
   local c
   for c in "rex send -b b1 'cd /tmp && codex -p repo'" "rex send -b b1 'echo hi; op run -- claude'" \
            "rex send -b b1 'true | claude --model opus'" "rex send -b b1 'ls & codex exec x'" \
-           "rex send -b b1 'false || env -u OPENAI_API_KEY -u CODEX_HOME codex login --with-api-key'"; do
+           "rex send -b b1 'false || env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex login --with-api-key'"; do
     run_cmd "$c"
     is_deny || { echo "not denied: $c -> $output" >&3; false; }
   done
-  run_cmd "rex send -b b1 'cd /tmp && env -u OPENAI_API_KEY -u CODEX_HOME codex -p repo'"
+  run_cmd "rex send -b b1 'cd /tmp && env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p repo'"
   [[ $status -eq 0 && -z $output ]] || false
 }
 
 @test "agy guard: a prompt argument that looks like an assignment is not an env assignment" {
   local c
-  for c in "rex send -b b1 'env -u OPENAI_API_KEY -u CODEX_HOME codex exec OPENAI_API_KEY=example'" \
+  for c in "rex send -b b1 'env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex exec OPENAI_API_KEY=example'" \
            "rex send -b b1 'env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p ANTHROPIC_API_KEY=x'" \
-           "env -u OPENAI_API_KEY -u CODEX_HOME codex exec OPENAI_API_KEY=example"; do
+           "env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex exec OPENAI_API_KEY=example"; do
     run_cmd "$c"
     [[ $status -eq 0 && -z $output ]] || { echo "not allowed: $c -> $output" >&3; false; }
   done
@@ -384,8 +388,15 @@ EOF
     is_deny || { echo "not denied: $c -> $output" >&3; false; }
   done
   for c in "env -S 'echo hi'" "env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -S 'claude --model sonnet'" \
-           "env -S '-u OPENAI_API_KEY -u CODEX_HOME codex -p repo'"; do
+           "env -S '-u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p repo'"; do
     run_cmd "$c"
     [[ $status -eq 0 && -z $output ]] || { echo "not allowed: $c -> $output" >&3; false; }
   done
+}
+
+@test "guard: a codex launch that keeps CODEX_API_KEY is denied and named in the reason" {
+  run_cmd 'env -u OPENAI_API_KEY -u CODEX_HOME codex -p repo'
+  is_deny
+  [[ $output == *"codex starts without unsetting CODEX_API_KEY"* ]] || false
+  [[ $output == *"env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex"* ]] || false
 }

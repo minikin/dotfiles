@@ -1,23 +1,24 @@
 #!/bin/bash
 # agent-preflight: start-of-session checks before running Claude and Codex agents on the
 # subscriptions. Moshi paired, Rex answering, no API-key variables, Claude and Codex logged in to
-# their subscriptions. Prints one line per check and exits 1 when any check fails.
+# their subscriptions, jj identity and signing configured, agy's guard hook and Rex skill, and
+# in a jj repo its Codex profile. Prints one line per check and exits 1 when any check fails.
 # Usage: agent-preflight [--limits] | --help
 #   --limits  also print the Codex weekly limit (through the experimental codex app-server).
 #             Claude has no command for its limits: /usage in a session shows them.
-# Never prints a variable's value, an email or the Moshi host name.
+# Never prints a variable's value, a name, an email, a key or the Moshi host name.
 set -uo pipefail
 
 limits=0
 for arg in "$@"; do
   case $arg in
     --limits) limits=1 ;;
-    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $arg (usage: agent-preflight [--limits] | --help)" >&2; exit 2 ;;
   esac
 done
 
-VARS=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_HOME)
+VARS=(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY CODEX_HOME)
 failed=0
 ok()   { printf 'ok    %s\n' "$*"; }
 fail() { printf 'FAIL  %s\n' "$*"; failed=1; }
@@ -74,7 +75,7 @@ else
 fi
 
 if have codex; then
-  if env -u OPENAI_API_KEY -u CODEX_HOME codex login status 2>&1 | grep -q '^Logged in using ChatGPT'; then
+  if env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex login status 2>&1 | grep -q '^Logged in using ChatGPT'; then
     ok "codex: logged in with ChatGPT"
   else
     fail "codex: not logged in with ChatGPT (codex login)"
@@ -82,6 +83,85 @@ if have codex; then
 else
   fail "codex: not installed"
 fi
+
+# jj: the identity every commit gets, and whether signing is configured. Reading the config
+# cannot prove a commit verifies, so the line says "configured", not "signed".
+if have jj; then
+  jjget() { jj --ignore-working-copy config get "$1" 2>/dev/null; }
+  name=$(jjget user.name) email=$(jjget user.email)
+  behavior=$(jjget signing.behavior) key=$(jjget signing.key) backend=$(jjget signing.backend)
+  if [[ -z $name || -z $email ]]; then
+    fail "jj: no user.name or user.email (run ./install.sh)"
+  elif [[ $name == 'Your Name' || $email == you@*.example ]]; then
+    fail "jj: identity has template placeholders (edit ~/.config/jj/conf.d/identity.toml)"
+  # jj's default backend is "none", which signs nothing whatever behavior and key say.
+  elif [[ ( $behavior != own && $behavior != force ) || -z $backend || $backend == none ||
+          -z $key || $key == *your-*-key* ]]; then
+    fail "jj: commit signing is not configured (fill in [signing] in ~/.config/jj/conf.d/identity.toml)"
+  else
+    ok "jj: identity set, signing configured"
+  fi
+  unset name email behavior key backend
+else
+  fail "jj: not installed"
+fi
+
+# agy: the launch guard install.sh merges into hooks.json, and the Rex skill it links. Silent
+# without agy.
+if have agy; then
+  # The literal ~ is what agy/hooks.fragment.json registers, agy expands it.
+  # shellcheck disable=SC2088
+  hooks=$HOME/.gemini/config/hooks.json guard='~/.gemini/config/hooks/dotfiles-guard-agents.zsh'
+  if ! have jq; then
+    fail "agy: jq is missing, cannot read ~/.gemini/config/hooks.json"
+  elif [[ ! -f $hooks ]]; then
+    fail "agy: no ~/.gemini/config/hooks.json, guard hook not registered (run ./install.sh)"
+  elif ! jq -e . "$hooks" >/dev/null 2>&1; then
+    fail "agy: ~/.gemini/config/hooks.json is not valid JSON"
+  elif ! jq -e --arg cmd "$guard" '
+      .["dotfiles-agent-guard"] | type == "object" and .enabled != false
+      and any(.PreToolUse[]?; .matcher == "*"
+        and any(.hooks[]?; .type == "command" and .command == $cmd))' "$hooks" >/dev/null 2>&1; then
+    fail "agy: guard hook dotfiles-agent-guard missing, disabled or changed in ~/.gemini/config/hooks.json (run ./install.sh)"
+  elif [[ ! -f $HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh || ! -x $HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh ]]; then
+    fail "agy: guard hook script ~/.gemini/config/hooks/dotfiles-guard-agents.zsh is missing or not executable (run ./install.sh)"
+  else
+    ok "agy: guard hook registered"
+  fi
+  skill=$HOME/.claude/skills/rex-orchestrator dest=$HOME/.gemini/config/skills/rex-orchestrator
+  if [[ -d $skill ]]; then
+    if [[ -L $dest && $(readlink "$dest") == "$(cd "$skill" && pwd -P)" ]]; then
+      ok "agy: rex-orchestrator skill linked to Claude's"
+    else
+      fail "agy: ~/.gemini/config/skills/rex-orchestrator does not link to Claude's skill (run ./install.sh)"
+    fi
+  fi
+  unset hooks guard skill dest
+fi
+
+# Codex: jwx starts a writer in a workspace only with ~/.codex/<repo>.config.toml that
+# codex/check-profile.sh accepts, so in a jj repo say whether this one would. Information, not a
+# failure: jwx enforces it. Silent outside a jj repo. The checker lives in the repo this script
+# is linked from.
+src=$0
+[[ -L $src ]] && src=$(readlink "$src")
+checker=$(cd "$(dirname "$src")/.." 2>/dev/null && pwd)/codex/check-profile.sh
+if have jj && root=$(jj --ignore-working-copy workspace root --name default 2>/dev/null) && [[ -n $root ]]; then
+  repo=${root##*/} profile=$HOME/.codex/${root##*/}.config.toml
+  if [[ ! -f $profile ]]; then
+    info "codex profile: no ~/.codex/$repo.config.toml, jwx will not start Codex here (template: codex/repo-profile.example.toml)"
+  elif [[ ! -x $checker ]]; then
+    info "codex profile: ~/.codex/$repo.config.toml not checked, codex/check-profile.sh not found"
+  elif ! reasons=$("$checker" "$profile" "$root" 2>&1); then
+    while IFS= read -r reason; do
+      info "codex profile: ~/.codex/$repo.config.toml: $reason"
+    done <<<"$reasons"
+  else
+    ok "codex profile: ~/.codex/$repo.config.toml"
+  fi
+  unset repo profile reasons reason
+fi
+unset root src checker
 
 if (( limits )); then
   if have codex && have jq; then
@@ -92,7 +172,7 @@ if (( limits )); then
         '{"jsonrpc":"2.0","method":"initialized"}' \
         '{"jsonrpc":"2.0","id":2,"method":"account/rateLimits/read"}'
       sleep "${AGENT_PREFLIGHT_WAIT:-5}"
-    } | env -u OPENAI_API_KEY -u CODEX_HOME codex app-server 2>/dev/null | grep -m1 '"id":2')
+    } | env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex app-server 2>/dev/null | grep -m1 '"id":2')
     # The weekly window can be primary or secondary (next to a five-hour one): pick it by length.
     line=$(jq -r '.result.rateLimits // empty
       | [.primary, .secondary] | map(select(.windowDurationMins? == 10080)) | first

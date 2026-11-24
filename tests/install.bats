@@ -149,6 +149,16 @@ JSON
   jq -e '.sandbox.autoAllowBashIfSandboxed == true' "$(SETTINGS)"
 }
 
+@test "install: the sandbox allows JSR, docs.rs and rustup downloads, and pkg.go.dev through *.go.dev" {
+  run_install
+  [ "$status" -eq 0 ]
+  local d
+  for d in jsr.io docs.rs static.rust-lang.org '*.go.dev'; do
+    jq -e --arg d "$d" '.sandbox.network.allowedDomains | index($d)' "$(SETTINGS)" >/dev/null || { echo "missing $d"; return 1; }
+  done
+  jq -e '.sandbox.network.allowedDomains | index("pkg.go.dev") | not' "$(SETTINGS)"
+}
+
 @test "install: sandbox domains are unioned, other sandbox keys kept" {
   mkdir -p "$HOME/.claude"
   cat > "$(SETTINGS)" <<'JSON'
@@ -566,6 +576,27 @@ fake_brew() {
   [ "$status" -eq 0 ]
   grep -q '^brew bundle' "$BATS_TEST_TMPDIR/calls"
   grep -qx 'activate -u' "$BATS_TEST_TMPDIR/calls"
+}
+
+@test "install: a failing brew bundle keeps its exit status, hints at --adopt and links nothing" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "brew $*" >> "%s"\nexit 42\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
+  chmod +x "$BATS_TEST_TMPDIR/bin/brew"
+  before_home=$(home_listing)
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --brew
+  [ "$status" -eq 42 ]
+  [[ $output == *"brew bundle failed (exit 42), dotfile installation has not started."* ]] || false
+  [[ $output == *"If Homebrew reported an app that already exists in /Applications"* ]] || false
+  [[ $output == *"brew install --cask --adopt <cask>"* ]] || false
+  [[ $output != *"== symlinks"* ]] || false
+  [ "$(home_listing)" = "$before_home" ]
+
+  rm "$BATS_TEST_TMPDIR/calls"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --dry-run --brew
+  [ "$status" -eq 0 ]
+  [[ $output == *"+ brew bundle --file $DOTFILES/Brewfile"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/calls" ]
+  [ "$(home_listing)" = "$before_home" ]
 }
 
 @test "install: --brew without Homebrew fails before changing anything" {

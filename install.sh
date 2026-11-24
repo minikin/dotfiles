@@ -86,7 +86,8 @@ if (( BREW )); then
   command -v brew >/dev/null || { echo "Homebrew is required for --brew: https://brew.sh" >&2; exit 1; }
   if run brew bundle --file "$REPO/Brewfile"; then :; else
     rc=$?
-    echo "brew bundle failed (exit $rc), nothing else was changed." >&2
+    # brew bundle may have installed some packages before the one that failed.
+    echo "brew bundle failed (exit $rc), dotfile installation has not started." >&2
     echo "If Homebrew reported an app that already exists in /Applications, install it over that copy" >&2
     echo "with brew install --cask --adopt <cask>, then re-run ./install.sh --brew." >&2
     exit "$rc"

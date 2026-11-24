@@ -578,14 +578,14 @@ fake_brew() {
   grep -qx 'activate -u' "$BATS_TEST_TMPDIR/calls"
 }
 
-@test "install: a failing brew bundle keeps its exit status, hints at --adopt and changes nothing" {
+@test "install: a failing brew bundle keeps its exit status, hints at --adopt and links nothing" {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   printf '#!/bin/sh\necho "brew $*" >> "%s"\nexit 42\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
   chmod +x "$BATS_TEST_TMPDIR/bin/brew"
   before_home=$(home_listing)
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --brew
   [ "$status" -eq 42 ]
-  [[ $output == *"brew bundle failed (exit 42)"* ]] || false
+  [[ $output == *"brew bundle failed (exit 42), dotfile installation has not started."* ]] || false
   [[ $output == *"If Homebrew reported an app that already exists in /Applications"* ]] || false
   [[ $output == *"brew install --cask --adopt <cask>"* ]] || false
   [[ $output != *"== symlinks"* ]] || false

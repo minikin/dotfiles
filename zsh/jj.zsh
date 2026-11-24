@@ -37,37 +37,51 @@ jw() {
       git -C $root worktree prune   # drop git's entry for the missing directory
     fi
     jj -R $root workspace add --name "$name" -r "$rev" "$dir" || return 1
-    _jw_pre_push "$root"
     [[ -z ${JW_NO_SETUP:-} ]] && _jw_setup "$root" "$dir"
   fi
+  # On reuse too, so a repo set up before the hook last changed gets the current one.
+  _jw_pre_push "$root" || { echo "jw: could not install the agent pre-push hook" >&2; return 1; }
   cd "$dir"
 }
 
-# A pre-push hook in the repo's shared git hooks: a Claude Code agent (CLAUDECODE set) cannot
-# git push from a jj workspace or git worktree, even from inside a script or a just recipe,
-# where the guard-push.sh Claude hook cannot see the push. You, and pushes from the main
-# checkout, pass. Never replaces a hook of yours, and does nothing with core.hooksPath set,
-# because that dir usually belongs to the project (husky, lefthook).
+# A pre-push hook in the repo's shared git hooks: a coding agent cannot git push from a jj
+# workspace or git worktree, even from inside a script or a just recipe, where the guard-push.sh
+# Claude hook cannot see the push. An agent is a process with any of these set: CLAUDECODE
+# (Claude Code), CODEX_SANDBOX, CODEX_THREAD_ID or CODEX_CI (Codex), OPENCODE (opencode),
+# DOTFILES_AGENT_WORKSPACE (jwc and jwx). You, and pushes from the main checkout, pass.
+# jj git push never runs git hooks, so jpush and jland are not affected.
+# Never replaces a hook of yours or a symlink, and does nothing with core.hooksPath set, because
+# that dir usually belongs to the project (husky, lefthook). Every workspace shares the hook, so
+# a changed one is written next to it and renamed over it: a push never reads a half-written file.
 _jw_pre_push() {
-  local root=$1 hook
+  local root=$1 hook tmp body
   [[ -n $(git -C $root config core.hooksPath 2>/dev/null) ]] && return 0
   hook=$(git -C $root rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
   hook+=/hooks/pre-push
-  if [[ -e $hook ]] && ! grep -q jw-pre-push $hook; then
+  if [[ -L $hook ]] || { [[ -e $hook ]] && ! grep -q jw-pre-push "$hook"; }; then
     echo "jw: $hook is your own, not adding the agent push guard to it" >&2
     return 0
   fi
-  mkdir -p ${hook:h}
-  cat > $hook <<'EOF'
+  body=$(_jw_pre_push_body)
+  [[ -f $hook && -x $hook && $(<$hook) == "$body" ]] && return 0
+  mkdir -p ${hook:h} || return 1
+  tmp=$(mktemp "${hook:h}/.pre-push.XXXXXX" 2>/dev/null) || return 1
+  if ! { print -r -- "$body" > $tmp && chmod 755 $tmp && mv -f $tmp $hook; }; then
+    rm -f $tmp
+    return 1
+  fi
+}
+
+_jw_pre_push_body() {
+  cat <<'EOF'
 #!/bin/sh
-# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): a Claude Code agent must not push
-# from a jj workspace or git worktree. You, and pushes from the main checkout, pass.
-[ -n "$CLAUDECODE" ] || exit 0
+# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): a coding agent must not push from a jj
+# workspace or git worktree. You, and pushes from the main checkout, pass.
+[ -n "$CLAUDECODE$CODEX_SANDBOX$CODEX_THREAD_ID$CODEX_CI$OPENCODE$DOTFILES_AGENT_WORKSPACE" ] || exit 0
 [ "$(git rev-parse --absolute-git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ] && exit 0
 echo "blocked: agents in jj workspaces and git worktrees do not push; the user pushes from the main checkout with jpush/jland" >&2
 exit 1
 EOF
-  chmod +x $hook
 }
 
 # Make a fresh workspace runnable: copy untracked local env files from the main

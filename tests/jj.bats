@@ -671,6 +671,84 @@ stub_gate() {
   [ ! -e "$REPO/.githooks/pre-push" ]
 }
 
+@test "jw: the pre-push hook blocks a workspace push for each agent variable alone, not a main-checkout push" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  local v
+  for v in CLAUDECODE CODEX_SANDBOX CODEX_THREAD_ID CODEX_CI OPENCODE DOTFILES_AGENT_WORKSPACE; do
+    run env "$v=1" git -C "$WS/feat" push "$remote" "HEAD:refs/heads/agent-$v"
+    [ "$status" -ne 0 ] || { echo "$v did not block"; return 1; }
+    [[ $output == *"agents in jj workspaces and git worktrees do not push"* ]] || false
+    run env "$v=1" git -C "$REPO" push "$remote" "HEAD:refs/heads/main-$v"
+    [ "$status" -eq 0 ] || { echo "$v blocked the main checkout: $output"; return 1; }
+  done
+  run git -C "$WS/feat" push "$remote" HEAD:refs/heads/me
+  [ "$status" -eq 0 ]
+}
+
+@test "jw: the pre-push hook never sees jj git push, so jpush works for an agent in a workspace" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1 && echo y > f.txt && jj commit -m feature >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  grep -q 'jw-pre-push' "$REPO/.git/hooks/pre-push"
+  run env CLAUDECODE=1 DOTFILES_AGENT_WORKSPACE=1 git -C "$WS/feat" push "$remote" HEAD~1:refs/heads/by-git
+  [ "$status" -ne 0 ]
+  CLAUDECODE=1 DOTFILES_AGENT_WORKSPACE=1 run_zsh "cd '$WS/feat' && jpush"
+  echo "output: $output"
+  [ "$status" -eq 0 ]
+  run git -C "$remote" log -1 --format=%s refs/heads/feat
+  [ "$output" = feature ]
+}
+
+@test "jw: reusing a workspace replaces an older jw hook, keeps a current one, leaves no temp file" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  hook="$REPO/.git/hooks/pre-push"
+  printf '#!/bin/sh\n# jw-pre-push, old\n[ -n "$CLAUDECODE" ] || exit 0\nexit 1\n' > "$hook"
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  grep -q 'CODEX_THREAD_ID' "$hook"
+  [ -x "$hook" ]
+  inode=$(ls -i "$hook" | awk '{print $1}')
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  [ "$(ls -i "$hook" | awk '{print $1}')" = "$inode" ]
+  [ -z "$(find "$REPO/.git/hooks" -name '.pre-push.*')" ]
+}
+
+@test "jw: reusing a workspace leaves a hook of your own and a symlinked hook alone" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  hook="$REPO/.git/hooks/pre-push"
+  printf '#!/bin/sh\necho mine\n' > "$hook"
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$hook")" = $'#!/bin/sh\necho mine' ]
+
+  printf '#!/bin/sh\n# jw-pre-push, old\nexit 0\n' > "$BATS_TEST_TMPDIR/shared-hook"
+  rm "$hook"
+  ln -s "$BATS_TEST_TMPDIR/shared-hook" "$hook"
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  [ -L "$hook" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/shared-hook")" = $'#!/bin/sh\n# jw-pre-push, old\nexit 0' ]
+}
+
+@test "jw: a hook it cannot write makes jw fail instead of keeping the old guard" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  printf '#!/bin/sh\n# jw-pre-push, old\nexit 0\n' > "$REPO/.git/hooks/pre-push"
+  chmod 555 "$REPO/.git/hooks"
+  run_zsh "cd '$REPO' && jw feat && pwd -P"
+  chmod 755 "$REPO/.git/hooks"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jw: could not install the agent pre-push hook"* ]] || false
+  [ "$(cat "$REPO/.git/hooks/pre-push")" = $'#!/bin/sh\n# jw-pre-push, old\nexit 0' ]
+}
+
 @test "jwst: colours workspace names when its output is a real terminal" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   colour=$(bash "$REPO_ROOT/claude/where.sh" --colour app/feat)

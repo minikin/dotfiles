@@ -292,6 +292,23 @@ codex_profile() {
   [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
 }
 
+@test "jwx: a workspace git dir under another repo's common git dir does not start codex" {
+  stub_codex
+  codex_profile
+  mkdir -p "$BATS_TEST_TMPDIR/gitbin"
+  real_git=$(command -v git)
+  cat > "$BATS_TEST_TMPDIR/gitbin/git" <<EOF
+#!/bin/sh
+[ "\$1" = -C ] || case " \$* " in *" --git-common-dir "*) echo /elsewhere/other/.git; exit 0 ;; esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$BATS_TEST_TMPDIR/gitbin/git"
+  PATH="$BATS_TEST_TMPDIR/gitbin:$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jwx feat/x"
+  [ "$status" -eq 1 ]
+  [[ $output == *"cannot find this workspace's own git dir in"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/codex.args" ]
+}
+
 @test "jwx: a workspace whose own git dir cannot be found does not start codex" {
   stub_codex
   codex_profile
@@ -845,6 +862,66 @@ EOF
   run_zsh "cd '$REPO' && jw other >/dev/null 2>&1 && jw other && pwd -P"
   [ "$status" -eq 0 ]
   [ "${lines[${#lines[@]}-1]}" = "$WS/other" ]
+}
+
+@test "jw: default is not a workspace name, and the main checkout is never forgotten" {
+  run_zsh "cd '$REPO' && jw default"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jw: not a workspace name: default"* ]] || false
+  [ "$(jj -R "$REPO" --ignore-working-copy workspace root --name default)" = "$(realpath_of "$REPO")" ]
+}
+
+@test "jw: a workspace registered at another live path is refused, not forgotten" {
+  mkdir -p "$BATS_TEST_TMPDIR/elsewhere"
+  jj -R "$REPO" workspace add --name x "$BATS_TEST_TMPDIR/elsewhere/x" >/dev/null 2>&1
+  run_zsh "cd '$REPO' && jw x && pwd -P"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jw: workspace x already exists at"* ]] || false
+  [ "$(jj -R "$REPO" --ignore-working-copy workspace root --name x)" = "$(realpath_of "$BATS_TEST_TMPDIR/elsewhere/x")" ]
+  [ ! -e "$WS/x" ]
+}
+
+@test "jw: a workspace whose directory was deleted is forgotten and created again" {
+  run_zsh "cd '$REPO' && jw gone >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  rm -rf "$WS/gone"
+  run_zsh "cd '$REPO' && jw gone >/dev/null 2>&1 && pwd -P"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$WS/gone" ]
+}
+
+@test "jw: a directory replaced at a workspace path is not reused, even with the recorded path" {
+  run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
+  [ "$status" -eq 0 ]
+  rm -rf "$WS/feat"
+  make_jj_repo "$WS/feat"
+  run_zsh "cd '$REPO' && jw feat && pwd -P"
+  [ "$status" -eq 1 ]
+  [[ $output == *"exists but is not workspace feat of this repo"* ]] || false
+}
+
+@test "jw: a hook failure on create leaves no workspace, and the retry runs the setup" {
+  (cd "$REPO" && printf 'setup:\n\ttrue\n' > justfile && jj commit -m justfile >/dev/null 2>&1)
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  real_git=$(command -v git)
+  cat > "$BATS_TEST_TMPDIR/bin/git" <<EOF
+#!/bin/sh
+case " \$* " in *" --git-common-dir "*)
+  [ -e "$BATS_TEST_TMPDIR/failed-once" ] || { touch "$BATS_TEST_TMPDIR/failed-once"; exit 128; } ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  printf '#!/bin/sh\n[ "$1" = --summary ] && { echo setup; exit 0; }\ntouch "%s/setup.ran"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/just"
+  chmod +x "$BATS_TEST_TMPDIR/bin/git" "$BATS_TEST_TMPDIR/bin/just"
+  JW_NO_SETUP= PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 1 ]
+  [ ! -e "$WS/feat" ]
+  run jj -R "$REPO" --ignore-working-copy workspace root --name feat
+  [ "$status" -ne 0 ]
+  JW_NO_SETUP= PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat && pwd -P"
+  [ "$status" -eq 0 ]
+  [ "${lines[${#lines[@]}-1]}" = "$WS/feat" ]
+  [ -e "$BATS_TEST_TMPDIR/setup.ran" ]
 }
 
 @test "jw: a hook it cannot write makes jw fail instead of keeping the old guard" {

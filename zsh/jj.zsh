@@ -18,42 +18,55 @@ _jw_root() {
 # jw <name> [rev] — create (or reuse) a workspace and cd into it.
 # rev defaults to trunk() (e.g. origin/main), or @- if there's no remote trunk.
 jw() {
-  local name=${1//\//-} rev=${2:-} root dir w d found='' created=0
+  local name=${1//\//-} rev=${2:-} root dir registered
   [[ -z $name ]] && { echo "usage: jw <name> [rev]" >&2; return 1; }
-  # "." and ".." would put the workspace path on <repo>-ws itself or on the repo's parent.
-  [[ $name == . || $name == .. || $name == -* ]] && { echo "jw: not a workspace name: $name" >&2; return 1; }
+  # "." and ".." would put the workspace path on <repo>-ws itself or on the repo's parent, and
+  # "default" is the main checkout.
+  [[ $name == . || $name == .. || $name == -* || $name == default ]] &&
+    { echo "jw: not a workspace name: $name" >&2; return 1; }
   root=$(_jw_root) || return 1
   dir="${root:h}/${root:t}-ws/$name"
 
   if [[ -d $dir ]]; then
-    # Reuse only what jj knows as this repo's workspace <name>, never any directory at that path.
-    for w d in ${(@ps:\t:)${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"')"}}; do
-      [[ $w == "$name" ]] && found=$d
-    done
-    if [[ -z $found || ${found:A} != ${dir:A} ]]; then
-      echo "jw: $dir exists but is not workspace $name of this repo" >&2
-      return 1
-    fi
+    _jw_is_workspace "$root" "$name" "$dir" ||
+      { echo "jw: $dir exists but is not workspace $name of this repo" >&2; return 1; }
     echo "reusing $dir"
+    # On reuse too, so a repo set up before the hook last changed gets the current one.
+    _jw_pre_push "$root" || { echo "jw: could not install the agent pre-push hook" >&2; return 1; }
   else
     if [[ -z $rev ]]; then
       rev='trunk()'
       [[ -z $(jj -R $root --ignore-working-copy log -r 'trunk() & ~root()' --no-graph -T 'x' 2>/dev/null) ]] && rev='@-'
     fi
-    mkdir -p "${dir:h}"
-    # Workspace registered but its directory was deleted by hand: forget the stale entry
-    if jj -R $root --ignore-working-copy workspace list -T 'name ++ "\n"' | grep -qx -- "$name"; then
+    # Registered but its directory is gone: forget the stale entry. Registered at a path that still
+    # exists: a live workspace somewhere else, which jw must not forget.
+    if registered=$(jj -R $root --ignore-working-copy workspace root --name "$name" 2>/dev/null); then
+      if [[ -e $registered ]]; then
+        echo "jw: workspace $name already exists at $registered, not at $dir" >&2
+        return 1
+      fi
       jj -R $root workspace forget "$name" || return 1
       git -C $root worktree prune   # drop git's entry for the missing directory
     fi
+    # Before the workspace exists and before the setup, which runs the project's own just or mise
+    # tasks. A failure here leaves nothing behind, so a retry is a fresh create with its setup.
+    _jw_pre_push "$root" || { echo "jw: could not install the agent pre-push hook" >&2; return 1; }
+    mkdir -p "${dir:h}"
     jj -R $root workspace add --name "$name" -r "$rev" "$dir" || return 1
-    created=1
+    [[ -z ${JW_NO_SETUP:-} ]] && _jw_setup "$root" "$dir"
   fi
-  # On reuse too, so a repo set up before the hook last changed gets the current one. Before the
-  # setup, which runs the project's own just or mise tasks.
-  _jw_pre_push "$root" || { echo "jw: could not install the agent pre-push hook" >&2; return 1; }
-  (( created )) && [[ -z ${JW_NO_SETUP:-} ]] && _jw_setup "$root" "$dir"
   cd "$dir"
+}
+
+# _jw_is_workspace <root> <name> <dir>: asked from inside <dir>, jj reports <dir> as the current
+# workspace, as the root of workspace <name>, and <root> as the main checkout. A directory put at
+# that path by hand, or a workspace of another repo, fails even when the paths jj recorded match.
+_jw_is_workspace() {
+  local root=$1 name=$2 dir=$3 cur named def
+  cur=$(jj -R "$dir" --ignore-working-copy workspace root 2>/dev/null) &&
+    named=$(jj -R "$dir" --ignore-working-copy workspace root --name "$name" 2>/dev/null) &&
+    def=$(jj -R "$dir" --ignore-working-copy workspace root --name default 2>/dev/null) || return 1
+  [[ ${cur:A} == ${dir:A} && ${named:A} == ${dir:A} && ${def:A} == ${root:A} ]]
 }
 
 # A pre-push hook in the repo's shared git hooks: a coding agent cannot git push from a jj
@@ -169,7 +182,7 @@ jwc() {
 # unless that exact dir is named, so jwx adds the workspace's own .git/worktrees/<name> with
 # --add-dir. Without it jj commit fails with "Failed to reset Git HEAD state".
 jwx() {
-  local name=${1:-} rev root profile reasons gitdir common
+  local name=${1:-} rev root profile reasons gitdir common main
   (( $# )) && shift
   [[ -n ${1:-} && $1 != -* && $1 != *[[:space:]]* ]] && { rev=$1; shift; }
   [[ -z $name ]] && { echo "usage: jwx <name> [rev] [codex args...]" >&2; return 1; }
@@ -185,10 +198,12 @@ jwx() {
     return 1
   fi
   jw "$name" ${rev:+"$rev"} || return 1
+  # The workspace's own git dir must be a worktree of this checkout's git dir, not of another repo.
   gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) &&
     common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
-    [[ $gitdir != "$common" ]] ||
-    { echo "jwx: cannot find this workspace's own git dir, not starting Codex" >&2; return 1; }
+    main=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    [[ $gitdir != "$common" && ${common:A} == ${main:A} ]] ||
+    { echo "jwx: cannot find this workspace's own git dir in $root, not starting Codex" >&2; return 1; }
   JW_NAME=${PWD:t} DOTFILES_AGENT_WORKSPACE=1 \
     env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p "${root:t}" --add-dir "$gitdir" "$@"
 }

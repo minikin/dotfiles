@@ -49,8 +49,8 @@ The shared rules above end with a "Codex only" section. It does not apply to you
   without it `jj commit` fails with `Failed to reset Git HEAD state`. In my shell `jwx <name>`
   does all of this.
 - Resume a dead agent's own session with its original settings instead of starting fresh:
-  `claude --resume <id> --model <model>`, `codex resume <id> -p <repo> --add-dir <git dir>` for a writer,
-  `codex resume <id> -s read-only -a never` for a reviewer. Keep the `env -u` prefix.
+  `claude --resume <id> --model <model>`, `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex resume <id> -p <repo> --add-dir <git dir>` for a writer,
+  `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex resume <id> -s read-only -a never` for a reviewer. Keep the `env -u` prefix.
 
 ### Reviews
 

@@ -18,12 +18,22 @@ _jw_root() {
 # jw <name> [rev] — create (or reuse) a workspace and cd into it.
 # rev defaults to trunk() (e.g. origin/main), or @- if there's no remote trunk.
 jw() {
-  local name=${1//\//-} rev=${2:-} root dir
+  local name=${1//\//-} rev=${2:-} root dir w d found='' created=0
   [[ -z $name ]] && { echo "usage: jw <name> [rev]" >&2; return 1; }
+  # "." and ".." would put the workspace path on <repo>-ws itself or on the repo's parent.
+  [[ $name == . || $name == .. || $name == -* ]] && { echo "jw: not a workspace name: $name" >&2; return 1; }
   root=$(_jw_root) || return 1
   dir="${root:h}/${root:t}-ws/$name"
 
   if [[ -d $dir ]]; then
+    # Reuse only what jj knows as this repo's workspace <name>, never any directory at that path.
+    for w d in ${(@ps:\t:)${(f)"$(jj -R $root --ignore-working-copy workspace list -T 'name ++ "\t" ++ self.root() ++ "\n"')"}}; do
+      [[ $w == "$name" ]] && found=$d
+    done
+    if [[ -z $found || ${found:A} != ${dir:A} ]]; then
+      echo "jw: $dir exists but is not workspace $name of this repo" >&2
+      return 1
+    fi
     echo "reusing $dir"
   else
     if [[ -z $rev ]]; then
@@ -37,10 +47,12 @@ jw() {
       git -C $root worktree prune   # drop git's entry for the missing directory
     fi
     jj -R $root workspace add --name "$name" -r "$rev" "$dir" || return 1
-    [[ -z ${JW_NO_SETUP:-} ]] && _jw_setup "$root" "$dir"
+    created=1
   fi
-  # On reuse too, so a repo set up before the hook last changed gets the current one.
+  # On reuse too, so a repo set up before the hook last changed gets the current one. Before the
+  # setup, which runs the project's own just or mise tasks.
   _jw_pre_push "$root" || { echo "jw: could not install the agent pre-push hook" >&2; return 1; }
+  (( created )) && [[ -z ${JW_NO_SETUP:-} ]] && _jw_setup "$root" "$dir"
   cd "$dir"
 }
 
@@ -50,15 +62,16 @@ jw() {
 # (Claude Code), CODEX_SANDBOX, CODEX_THREAD_ID or CODEX_CI (Codex), OPENCODE (opencode),
 # DOTFILES_AGENT_WORKSPACE (jwc and jwx). You, and pushes from the main checkout, pass.
 # jj git push never runs git hooks, so jpush and jland are not affected.
-# Never replaces a hook of yours or a symlink, and does nothing with core.hooksPath set, because
+# Replaces only a hook with jw's own header, never a hook of yours or a symlink, and does nothing
+# with core.hooksPath set, because
 # that dir usually belongs to the project (husky, lefthook). Every workspace shares the hook, so
 # a changed one is written next to it and renamed over it: a push never reads a half-written file.
 _jw_pre_push() {
   local root=$1 hook tmp body
   [[ -n $(git -C $root config core.hooksPath 2>/dev/null) ]] && return 0
-  hook=$(git -C $root rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+  hook=$(git -C $root rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
   hook+=/hooks/pre-push
-  if [[ -L $hook ]] || { [[ -e $hook ]] && ! grep -q jw-pre-push "$hook"; }; then
+  if [[ -L $hook ]] || { [[ -e $hook ]] && ! _jw_pre_push_ours "$hook"; }; then
     echo "jw: $hook is your own, not adding the agent push guard to it" >&2
     return 0
   fi
@@ -70,6 +83,12 @@ _jw_pre_push() {
     rm -f $tmp
     return 1
   fi
+}
+
+# _jw_pre_push_ours <hook>: a regular file whose second line is the header jw writes. A hook of
+# yours that only mentions jw-pre-push, or calls it, is not jw's to replace.
+_jw_pre_push_ours() {
+  [[ -f $1 && ! -L $1 ]] && [[ $(sed -n 2p "$1") == '# jw-pre-push, written by jw '* ]]
 }
 
 _jw_pre_push_body() {

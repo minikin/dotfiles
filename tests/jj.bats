@@ -726,7 +726,7 @@ stub_gate() {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   [ "$status" -eq 0 ]
   hook="$REPO/.git/hooks/pre-push"
-  printf '#!/bin/sh\n# jw-pre-push, old\n[ -n "$CLAUDECODE" ] || exit 0\nexit 1\n' > "$hook"
+  printf '#!/bin/sh\n# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): old\n[ -n "$CLAUDECODE" ] || exit 0\nexit 1\n' > "$hook"
   run_zsh "cd '$REPO' && jw feat"
   [ "$status" -eq 0 ]
   grep -q 'CODEX_THREAD_ID' "$hook"
@@ -747,25 +747,81 @@ stub_gate() {
   [ "$status" -eq 0 ]
   [ "$(cat "$hook")" = $'#!/bin/sh\necho mine' ]
 
-  printf '#!/bin/sh\n# jw-pre-push, old\nexit 0\n' > "$BATS_TEST_TMPDIR/shared-hook"
+  printf '#!/bin/sh\n# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): old\nexit 0\n' > "$BATS_TEST_TMPDIR/shared-hook"
   rm "$hook"
   ln -s "$BATS_TEST_TMPDIR/shared-hook" "$hook"
   run_zsh "cd '$REPO' && jw feat"
   [ "$status" -eq 0 ]
   [ -L "$hook" ]
-  [ "$(cat "$BATS_TEST_TMPDIR/shared-hook")" = $'#!/bin/sh\n# jw-pre-push, old\nexit 0' ]
+  [ "$(cat "$BATS_TEST_TMPDIR/shared-hook")" = $'#!/bin/sh\n# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): old\nexit 0' ]
+}
+
+@test "jw: a hook of yours that mentions jw-pre-push is left alone on create and on reuse" {
+  mkdir -p "$REPO/.git/hooks"
+  printf '#!/bin/sh\n# run the jw-pre-push check from the dotfiles first\nexit 0\n' > "$REPO/.git/hooks/pre-push"
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  [[ $output == *"is your own, not adding the agent push guard"* ]] || false
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$REPO/.git/hooks/pre-push")" = $'#!/bin/sh\n# run the jw-pre-push check from the dotfiles first\nexit 0' ]
+}
+
+@test "jw: the hook is in place before the project setup of a new workspace runs" {
+  (cd "$REPO" && printf 'setup:\n\ttrue\n' > justfile && jj commit -m justfile >/dev/null 2>&1)
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat > "$BATS_TEST_TMPDIR/bin/just" <<EOF
+#!/bin/sh
+[ "\$1" = --summary ] && { echo setup; exit 0; }
+grep -q DOTFILES_AGENT_WORKSPACE "$REPO/.git/hooks/pre-push" 2>/dev/null && touch "$BATS_TEST_TMPDIR/hook-before-setup"
+touch "$BATS_TEST_TMPDIR/setup.ran"
+EOF
+  chmod +x "$BATS_TEST_TMPDIR/bin/just"
+  JW_NO_SETUP= PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+  [ -e "$BATS_TEST_TMPDIR/setup.ran" ]
+  [ -e "$BATS_TEST_TMPDIR/hook-before-setup" ]
+}
+
+@test "jw: a git dir it cannot find fails jw before setup and the cd" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  real_git=$(command -v git)
+  cat > "$BATS_TEST_TMPDIR/bin/git" <<EOF
+#!/bin/sh
+case " \$* " in *" --git-common-dir "*) exit 128 ;; esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$BATS_TEST_TMPDIR/bin/git"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_zsh "cd '$REPO' && jw feat && pwd -P"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jw: could not install the agent pre-push hook"* ]] || false
+}
+
+@test "jw: refuses . and .. and a directory at the workspace path that is not that workspace" {
+  run_zsh "cd '$REPO' && jw .. && pwd -P"
+  [ "$status" -eq 1 ]
+  [[ $output == *"jw: not a workspace name: .."* ]] || false
+  run_zsh "cd '$REPO' && jw ."
+  [ "$status" -eq 1 ]
+  mkdir -p "$WS/stray"
+  run_zsh "cd '$REPO' && jw stray && pwd -P"
+  [ "$status" -eq 1 ]
+  [[ $output == *"exists but is not workspace stray of this repo"* ]] || false
+  run_zsh "cd '$REPO' && jw other >/dev/null 2>&1 && jw other && pwd -P"
+  [ "$status" -eq 0 ]
+  [ "${lines[${#lines[@]}-1]}" = "$WS/other" ]
 }
 
 @test "jw: a hook it cannot write makes jw fail instead of keeping the old guard" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   [ "$status" -eq 0 ]
-  printf '#!/bin/sh\n# jw-pre-push, old\nexit 0\n' > "$REPO/.git/hooks/pre-push"
+  printf '#!/bin/sh\n# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): old\nexit 0\n' > "$REPO/.git/hooks/pre-push"
   chmod 555 "$REPO/.git/hooks"
   run_zsh "cd '$REPO' && jw feat && pwd -P"
   chmod 755 "$REPO/.git/hooks"
   [ "$status" -eq 1 ]
   [[ $output == *"jw: could not install the agent pre-push hook"* ]] || false
-  [ "$(cat "$REPO/.git/hooks/pre-push")" = $'#!/bin/sh\n# jw-pre-push, old\nexit 0' ]
+  [ "$(cat "$REPO/.git/hooks/pre-push")" = $'#!/bin/sh\n# jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): old\nexit 0' ]
 }
 
 @test "jwst: colours workspace names when its output is a real terminal" {

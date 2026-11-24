@@ -40,12 +40,14 @@ just check       # lint, tests, the secret scan and the commit check, the same a
 
 | Recipe         | Runs                                                                                      |
 | -------------- | ----------------------------------------------------------------------------------------- |
-| `just lint`    | `shellcheck` on `install.sh`, `claude/*.sh`, `scripts/*.sh` and `bin/*`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file including `agy/*.zsh`, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, and `lychee --offline` on every Markdown file in the repo. |
+| `just lint`    | `shellcheck` on `install.sh`, `claude/*.sh`, `scripts/*.sh` and `bin/*`, a check that every bats `[[ ]]` and `!` assert ends in `\|\| false`, `zsh -n` on every zsh file including `agy/*.zsh`, `docker compose config -q` on `infra/compose.yaml` when Docker is installed, `lychee --offline` on every Markdown file in the repo, `scripts/check-brewfile.sh`, `scripts/check-prose.sh`, and `actionlint` when it is installed. |
 | `just test`    | `bats tests`.                                                                             |
 | `just secrets` | `scripts/check-secrets.sh`, then `gitleaks dir . --config .gitleaks.toml` when gitleaks is installed. |
 | `just commits` | `scripts/check-commits.sh`: every non-merge commit subject in `origin/main..HEAD` (or the range given, `just commits <range>`) follows Conventional Commits. |
 | `just check`   | All four.                                                                                 |
 | `just drift`   | Read-only: compares each file `install.sh` links with the repo copy. Not part of `check`. |
+| `just test-bash32` | `tests/drift.bats`, `tests/statusline.bats` and `tests/install.bats` with `/bin/bash` 3.2 first on `PATH`. bats starts with `env bash`, so plain `bats` runs on Homebrew's bash 5 even from `/bin/bash`. CI runs it. |
+| `just doctor`  | Read-only health check of your Mac: `just drift`, `agent-preflight`, `brew bundle check --no-upgrade`, and a pointer to `remote-check`. Exits 1 when preflight or brew fails. |
 
 CI runs two jobs on every push to `main` and every pull request:
 
@@ -67,7 +69,8 @@ file too.
 The tests are bats suites in `tests/`, one per area: `install.bats`,
 `jj.bats`, `sign.bats`, `drift.bats`, `statusline.bats`, `infra.bats`,
 `reload.bats`, `navi.bats`, `commits.bats`, `hooks.bats`, `where.bats`,
-`rules.bats`, `agy-guard.bats`, `preflight.bats`. Each test calls the helpers in
+`rules.bats`, `agy-guard.bats`, `preflight.bats`, `codex.bats`, `lint.bats`,
+`doctor.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 
@@ -81,6 +84,10 @@ your machine:
   `JJ_USER` and `JJ_EMAIL`. git reads only the fake `~/.gitconfig`
   (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM=1`). Every `DOTFILES_*` variable
   and `JW_NO_SETUP` are unset.
+- The API-key variables and the agent markers the jw pre-push hook reads
+  (`CLAUDECODE`, `CODEX_SANDBOX`, `CODEX_THREAD_ID`, `CODEX_CI`, `OPENCODE`,
+  `DOTFILES_AGENT_WORKSPACE`) are unset, so a test run by an agent behaves
+  like one run by you. A test that needs one sets it on its own command.
 - `copy_repo` copies the tree to `BATS_TEST_TMPDIR/dotfiles`, so `install.sh`
   links into the copy. A broken install test cannot rename a file in your
   checkout.
@@ -120,9 +127,9 @@ and order entries from most to least used.
 
 - The description is unique across all cheats. Start it with the verb and
   the object you would search for ("Tail Kafka topic") and keep it short.
-- Pickers run in bash, so they never call `jw`, `jwc`, `jws`, `jwst`, `jwl`,
-  `jwrm`, `jsync`, `jnext`, `jreview`, `jpush`, `jland`, `reload`, `infra`, `sign-as`,
-  `z` or `zi`. The command line may.
+- Pickers run in bash, so they never call `jw`, `jwc`, `jwx`, `jws`, `jwst`,
+  `jwl`, `jwrm`, `jsync`, `jnext`, `jreview`, `jdone`, `jpush`, `jland`,
+  `reload`, `infra`, `sign-as`, `z` or `zi`. The command line may.
 - Every `jj` picker passes `--ignore-working-copy`.
 - An infra entry that deletes topics or Redis keys, resets consumer group
   offsets, flushes Redis or runs `infra reset` starts with `[LOCAL ONLY]`,
@@ -149,16 +156,22 @@ including its quirks, with tables where the content is tabular. Every value
 in it (a path, a key, a default, a port) must match the code. When you
 change a value in the code, search the docs for it.
 
-Prose goes through the human-writing checker before you push:
+`just lint` runs `scripts/check-prose.sh` on `README.md`, `CONTRIBUTING.md`,
+`SETUP_PROMPT.md` and `docs/`, in CI too. It fails on an em dash, a curly
+quote, an ellipsis character or a semicolon in prose. Code spans, fenced
+blocks, frontmatter, HTML entities and, for semicolons, blockquotes are not
+checked. The human-writing checker reads for more than these four, so run it
+on what you wrote as well:
 
 ```sh
-python3 path/to/human-writing/scripts/check.py README.md CHANGELOG.md CONTRIBUTING.md docs/**/*.md
+python3 path/to/human-writing/scripts/check.py README.md CONTRIBUTING.md SETUP_PROMPT.md $(find docs -name '*.md')
 ```
 
-It must report 0 hard findings and no semicolon warnings. The rules it
-enforces: no em dashes, no curly quotes, no ellipsis character, no
-semicolons in prose. Code spans and fenced blocks are not checked. CI does
-not run it, so it is on you.
+It must report 0 hard findings and no semicolon warnings.
+
+`just lint` also runs `scripts/check-brewfile.sh`: the `Brewfile` row of
+[Files](docs/reference/files.md#packages) lists every tap, cask and formula in
+`Brewfile`, each once. Add a package to both.
 
 Leave `CHANGELOG.md` alone. The maintainer writes it for the release.
 
@@ -217,10 +230,13 @@ committed.
 | `install.sh`               | The installer: links, settings merge, identity                |
 | `ghostty/`, `zsh/`, `starship/`, `jj/`, `mise/`, `claude/`, `agents/`, `agy/`, `infra/`, `navi/` | The configs it installs |
 | `bin/`                     | Commands linked into `~/.local/bin`: `agent-preflight`         |
+| `codex/`                   | `repo-profile.example.toml`, the Codex profile template `jwx` needs, not installed |
+| `AGENTS.md`, `CLAUDE.md`   | The repo's rules for coding agents, and the Claude import of them |
 | `Brewfile`                 | Every package, including the tools the checks need            |
 | `justfile`                 | Every check, local and CI                                     |
 | `scripts/check-secrets.sh` | The personal-data scan                                        |
 | `scripts/check-commits.sh` | The Conventional Commits check                                |
+| `scripts/check-brewfile.sh`, `scripts/check-prose.sh` | The Brewfile inventory and prose checks of `just lint` |
 | `.gitignore`               | Local agent state and install backups kept out of the repo    |
 | `.gitleaks.toml`           | The same rules for gitleaks and the history scan              |
 | `tests/`                   | bats suites and `helpers.bash`                                |

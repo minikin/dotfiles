@@ -101,8 +101,9 @@ command cannot reach the Tailscale or herdr sockets, so `remote-check` from
 With the sandbox on, `autoAllowBashIfSandboxed` means a command that stays inside it (writes only to the project and the temp
 dir, reaches only the listed hosts) runs without a prompt. That is what keeps
 parallel agents from stopping on every `just test`. `allowedDomains` lists
-GitHub, the npm, Go, crates, PyPI and Docker registries and
-`*.anthropic.com`. `allowLocalBinding` lets dev servers listen on localhost.
+GitHub, the npm, JSR, Go, crates, PyPI and Docker registries, `docs.rs`,
+`static.rust-lang.org` for rustup's downloads and `*.anthropic.com`.
+`*.go.dev` covers `pkg.go.dev`. `allowLocalBinding` lets dev servers listen on localhost.
 Nothing is excluded from the sandbox: when `go` or `cargo` needs to write its
 cache in `$HOME`, the agent asks to run that one command unsandboxed. Add your own hosts, such as a company Jira, to
 `sandbox.network.allowedDomains` in `~/.claude/settings.json`: the repo is

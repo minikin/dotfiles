@@ -6,8 +6,9 @@ sets up. `<x>` is required, `[x]` is optional.
 | Command            | Defined in       | Arguments            | Does                                                          |
 | ------------------ | ---------------- | -------------------- | ------------------------------------------------------------- |
 | `jw`               | `zsh/jj.zsh`     | `<name> [rev]`       | Create or reuse a workspace at `<repo>-ws/<name>`, `cd` into it. |
-| `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude -n <repo>/<name>` there with the remaining arguments and `JW_NAME` set. |
-| `jreview`          | `zsh/jj.zsh`     | `[name] [focus...]`  | A second, read-only Claude reviews the workspace's `trunk()..@`. fzf pick without a name. |
+| `jwc`              | `zsh/jj.zsh`     | `<name> [rev] [claude args...]` | `jw`, then start `claude -n <repo>/<name>` there with the remaining arguments, `JW_NAME` and `DOTFILES_AGENT_WORKSPACE=1` set and the Anthropic key variables removed. |
+| `jwx`              | `zsh/jj.zsh`     | `<name> [rev] [codex args...]` | With `~/.codex/<repo>.config.toml` in place, `jw`, then start `codex -p <repo>` there. Without it, stop before creating anything. |
+| `jreview`          | `zsh/jj.zsh`     | `[--codex] [--model <model>] [--] [name] [focus...]` | A second agent reviews the workspace's `trunk()..@` read-only: Claude (`fable` by default) or, with `--codex`, Codex. fzf pick without a name. |
 | `jnext`            | `zsh/jj.zsh`     | none                 | What to do next: one row per agent workspace that needs you, most urgent first. |
 | `jwst`             | `zsh/jj.zsh`     | none                 | One row per workspace: latest change, commits behind trunk, pushed, conflicts. |
 | `jsync`            | `zsh/jj.zsh`     | `[name...]`          | Fetch, then rebase workspaces onto trunk one at a time. fzf multi-pick without arguments. |
@@ -28,8 +29,9 @@ sets up. `<x>` is required, `[x]` is optional.
 
 | Variable      | Read by | Effect                                                         |
 | ------------- | ------- | -------------------------------------------------------------- |
-| `JW_NO_SETUP` | `jw`, `jwc` | Any non-empty value skips the env-file copy and project setup on a new workspace. |
-| `JW_NAME` | your app and tests | Set by `jwc` to the workspace name, in the environment of the `claude` it starts and every command that `claude` runs. Not exported to your shell, not written to a file. |
+| `JW_NO_SETUP` | `jw`, `jwc`, `jwx` | Any non-empty value skips the env-file copy and project setup on a new workspace. |
+| `JW_NAME` | your app and tests | Set by `jwc` and `jwx` to the workspace name, in the environment of the `claude` or `codex` they start and every command that agent runs. Not exported to your shell, not written to a file. |
+| `DOTFILES_AGENT_WORKSPACE` | the [agent pre-push hook](#agent-pre-push-hook) | Set to `1` by `jwc` and `jwx` in the environment of the agent they start. Not exported to your shell. |
 | `JW_HINT` | `zsh/jj.zsh` | `0` turns off the [repo-entry hint](#repo-entry-hint). Read when the file is sourced. |
 | `JW_TINT` | `zsh/jj.zsh` | `0` turns off the background [tint](#tab-title-and-tint). The tab title stays. Read at every prompt. |
 | `NO_COLOR` | `jwst`, `jws` | Any non-empty value prints workspace names without colour. |
@@ -38,7 +40,8 @@ sets up. `<x>` is required, `[x]` is optional.
 | `JW_PORT_BASE` | your app and tests | Exported with `JW_SLOT`: `10000 + 100 * JW_SLOT`, the first of the workspace's 100 ports. |
 | `PORT` | your app | Exported as `JW_PORT_BASE` in a jj workspace. Leaving it brings back the `PORT` you had, or unsets it. |
 | `JW_WHERE` | starship | Exported by `zsh/jj.zsh` as `<repo>/<workspace>` in a jj workspace or git worktree, unset elsewhere. The prompt shows it. |
-| `CLAUDECODE` | `zsh/jj.zsh` | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint, the tab title and the tint. |
+| `CLAUDECODE` | `zsh/jj.zsh`, the agent pre-push hook | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint, the tab title and the tint, and marks a `git push` as an agent's. |
+| `CODEX_SANDBOX`, `CODEX_THREAD_ID`, `CODEX_CI`, `OPENCODE` | the agent pre-push hook | Set by Codex and opencode in the commands they run. Any non-empty value marks a `git push` as an agent's. |
 | `GHOSTTY_BIN` | `reload` | The Ghostty binary to validate the config with. Without it, `ghostty` on `PATH`, else `/Applications/Ghostty.app/Contents/MacOS/ghostty`. |
 | `NAVI_CONFIG_YAML` | navi | Set by `zsh/navi.zsh` to the palette's column layout, unless it is already set or `${NAVI_CONFIG:-~/.config/navi/config.yaml}` exists. |
 | `NAVI_DEFAULT_PATH` | `zsh/navi.zsh` | navi's default cheats folder, first in `NAVI_PATH`. Default `~/.local/share/navi/cheats`. |
@@ -50,11 +53,11 @@ sets up. `<x>` is required, `[x]` is optional.
 
 A workspace for repo `~/repos/app` named `fix-login` lives at
 `~/repos/app-ws/fix-login`: next to the main checkout, never inside it. The
-main checkout is the workspace named `default`. `jw`, `jws`, `jwst`, `jsync`, `jreview` and `jwrm` first find
+main checkout is the workspace named `default`. `jw`, `jwc`, `jwx`, `jws`, `jwst`, `jsync`, `jreview` and `jwrm` first find
 the main checkout with `jj workspace root --name default`, so they work the
 same from the main checkout and from inside any workspace.
 
-Outside a jj repo `jw`, `jws`, `jwst`, `jsync`, `jreview` and `jwrm` print `not in a jj repo` and return 1. In a
+Outside a jj repo `jw`, `jwc`, `jwx`, `jws`, `jwst`, `jsync`, `jreview` and `jwrm` print `not in a jj repo` and return 1. In a
 git repo without jj they print
 `git repo without jj — run: jj git init --colocate`. `jwl` and
 `jpush` call `jj` directly and show jj's own error instead. Outside a jj
@@ -72,8 +75,9 @@ jw <name> [rev]
 | `name`   | Required. Every `/` becomes `-`: `feat/login` is `feat-login`. |
 | `rev`    | `trunk()`, or `@-` of the main checkout when `trunk() & ~root()` is empty (no remote trunk). |
 
-If `<repo>-ws/<name>` already exists, `jw` prints `reusing <dir>` and `cd`s
-into it. `rev` is ignored and setup does not run.
+If `<repo>-ws/<name>` already exists, `jw` prints `reusing <dir>`, refreshes
+the [agent pre-push hook](#agent-pre-push-hook) and `cd`s into it. `rev` is
+ignored and setup does not run.
 
 Otherwise it:
 
@@ -81,23 +85,44 @@ Otherwise it:
 2. If jj still lists a workspace with that name (its directory was deleted by
    hand), runs `jj workspace forget <name>` and `git worktree prune`.
 3. Runs `jj workspace add --name <name> -r <rev> <dir>`. On failure it returns 1.
-4. Adds the [agent pre-push hook](#agent-pre-push-hook) to the repo.
-5. Unless `JW_NO_SETUP` is set, copies local env files and runs the project
+4. Unless `JW_NO_SETUP` is set, copies local env files and runs the project
    setup (below).
+5. Adds or refreshes the [agent pre-push hook](#agent-pre-push-hook). If it
+   cannot write the hook, it prints `jw: could not install the agent pre-push hook`
+   and returns 1 without the `cd`.
 6. `cd`s into the workspace.
 
 ### Agent pre-push hook
 
 `jw` writes a `pre-push` hook into the repo's shared git hooks
 (`.git/hooks/pre-push` of the main checkout), which every workspace and git
-worktree of the repo uses. The hook rejects a `git push` when `CLAUDECODE` is
-set, so it comes from a Claude Code agent, and the push runs in a jj workspace
-or git worktree. It catches what the [push guard](../guides/claude-code.md#push-guard)
+worktree of the repo uses. The hook rejects a `git push` that runs in a jj
+workspace or git worktree when any of these variables is non-empty, so the
+push comes from an agent:
+
+| Variable | Set by |
+| -------- | ------ |
+| `CLAUDECODE` | Claude Code, in its shells |
+| `CODEX_SANDBOX`, `CODEX_THREAD_ID`, `CODEX_CI` | Codex, in the commands it runs |
+| `OPENCODE` | opencode |
+| `DOTFILES_AGENT_WORKSPACE` | `jwc` and `jwx`, for the agent they start |
+
+It catches what the [push guard](../guides/claude-code.md#push-guard)
 cannot see, such as a push inside a script or a `just` recipe. Your own
-pushes, and any push from the main checkout, go through.
+pushes, and any push from the main checkout, go through. `jj git push` does
+not run git hooks, so the hook never sees `jpush`, `jland` or the push in
+`jdone`, and `tests/jj.bats` checks that `jpush` from a workspace works with
+`CLAUDECODE` set.
+
+`jw` installs the hook on every call, also when it reuses a workspace, so a
+repo whose hook predates a change gets the current one. A changed hook is
+written to a temporary file next to the old one and renamed over it, so a
+push in another workspace never runs a half-written hook. A current hook is
+left as it is.
 
 The hook is marked with a `jw-pre-push` comment, and `jw` rewrites only a hook
-with that mark. With a `pre-push` hook of your own, `jw` leaves it and prints
+with that mark. With a `pre-push` hook of your own, or a symlink in its place,
+`jw` leaves it and prints
 `jw: <path> is your own, not adding the agent push guard to it`. With
 `core.hooksPath` set, `jw` adds nothing, because that directory usually
 belongs to the project's hook manager.
@@ -181,6 +206,12 @@ for `jwc fix/x`), and so does every command it runs. Prefix Kafka topics,
 Redis keys and test databases with it, and two agents running the same tests
 against the shared `infra` stack stay out of each other's data.
 
+The launch is
+`JW_NAME=<name> DOTFILES_AGENT_WORKSPACE=1 env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude ...`,
+so a key exported in your shell cannot move the session off the claude.ai
+subscription, and the [agent pre-push hook](#agent-pre-push-hook) knows the
+session is an agent. When `jw` fails, `claude` does not start.
+
 ### Slots and ports
 
 Every agent workspace has a slot: `1` for the first one, then the lowest
@@ -202,14 +233,51 @@ inherits that directory's mise `PATH` (see
 [Agents and PATH](../explanation/agents-and-path.md)). It honours
 `JW_NO_SETUP` the same way.
 
+## jwx
+
+```sh
+jwx <name> [rev] [codex args...]
+```
+
+`jwc` for Codex, with the same rule for the second argument. It first looks
+for `~/.codex/<repo>.config.toml`, where `<repo>` is the main checkout's
+directory name, the same from every workspace. Without that file it prints
+
+```text
+jwx: no ~/.codex/<repo>.config.toml, so Codex could not write <repo>'s .jj and .git from a workspace
+jwx: copy codex/repo-profile.example.toml from the dotfiles there and set its paths
+```
+
+and returns 1 before it creates the workspace. It also stops, with
+`jwx: ~/.codex/<repo>.config.toml names no writable root for this checkout's .jj, set its paths`,
+when the file does not contain `<main checkout>/.jj`, as with an untouched
+template or a profile written for another checkout of the same name. The template is described in
+[Files](files.md#installed-configuration). With the file, it runs `jw` and, when that
+succeeds, starts in the workspace:
+
+```sh
+JW_NAME=<name> DOTFILES_AGENT_WORKSPACE=1 \
+  env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex -p <repo> --add-dir <git dir> [codex args...]
+```
+
+`<git dir>` is the workspace's `.git/worktrees/<name>` in the main checkout,
+from `git rev-parse --absolute-git-dir`. Codex keeps the git dir that a
+worktree's `.git` file points to read-only, also inside a writable root of
+the profile, unless that exact directory is named. Without it, `jj commit` in
+the workspace fails with `Failed to reset Git HEAD state`. With `CODEX_HOME`
+removed, Codex reads the profile from `~/.codex`.
+
 ## jreview
 
 ```sh
-jreview [name] [focus...]
+jreview [--codex] [--model <model>] [--] [name] [focus...]
 ```
 
 | Argument | Behaviour |
 | -------- | --------- |
+| `--codex` | Codex reviews instead of Claude. |
+| `--model <model>` | The reviewer's model, also as `--model=<model>`. Default `fable` for Claude, Codex's own default for Codex. Without a value it prints `jreview: --model needs a model name` and returns 2. |
+| `--` | Ends the options, for a workspace name that starts with `-`. Any other argument starting with `-` before the name prints the usage line and returns 2. |
 | name     | The workspace to review. Every `/` becomes `-`, as in `jw`. An unknown name prints `jreview: no workspace named <name>` to stderr and returns 1. |
 | none     | fzf pick (prompt `review> `) over every workspace except `default`. Esc returns 1. |
 | focus    | Appended to the prompt after `Focus:`, for example `jreview feat-x "the retry logic"`. |
@@ -221,14 +289,24 @@ the main checkout or from any workspace. If
 `jreview: <name> has no changes since trunk(), nothing to review` to stderr
 and returns 1 without starting Claude. Otherwise it prints
 `jreview: reviewing <name>, this takes a minute or two...` to stderr, because
-`claude -p` shows nothing until the review is done. Then, in that directory
-and in a subshell, so your own directory does not change:
+neither reviewer prints anything on stdout until the review is done. Then,
+in that directory and in a subshell, so your own directory does not change:
 
 ```sh
-claude -p "<prompt>" \
+env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude -p "<prompt>" --model fable \
   --allowedTools 'Read,Grep,Glob,Bash(jj diff *),Bash(jj log *),Bash(jj show *)' \
   --disallowedTools 'Edit,Write,NotebookEdit'
 ```
+
+or, with `--codex`:
+
+```sh
+env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex exec -s read-only --ephemeral [-m <model>] "<prompt>"
+```
+
+`codex exec` prints only its final message on stdout, its progress goes to
+stderr, and `jreview` returns its exit status. No Codex profile is passed:
+the review writes nothing.
 
 The prompt asks for a review of `jj diff --git -r 'trunk()..@'` against the
 code it touches, a list of problems by severity (blocking, should fix, nit)
@@ -237,9 +315,12 @@ with `file:line` for each, and no edits, and it ends with one line,
 which [`jdone`](#jdone) reads. `-p` prints the review and exits.
 In `-p` mode a tool call that no rule allows is denied, not asked about, so
 the reviewer can read files and run `jj diff`, `jj log` and `jj show`, and
-nothing else. `Bash(jj diff *)` also matches a bare `jj diff`.
+nothing else. `Bash(jj diff *)` also matches a bare `jj diff`. Codex's
+read-only sandbox cannot let jj snapshot, so its prompt asks for
+`jj --ignore-working-copy diff --git -r 'trunk()..@'` instead. The
+`--name-only` check has already snapshotted the agent's edits.
 
-That check and the reviewer's `jj diff` snapshot the workspace like any jj command run in
+That check and Claude's `jj diff` snapshot the workspace like any jj command run in
 it. Run `jreview` while the agent waits for input, not while it is writing
 files, as with `jsync`.
 
@@ -258,9 +339,11 @@ workspace root:
    else `mise run check` if mise has a `check` task, else nothing, with a
    note on stderr. A failing check prints
    `jdone: the check failed, not pushing` and returns 1.
-2. [`jreview`](#jreview) on this workspace, with the focus words. If it fails
-   or its last line is not `VERDICT: PASS`, `jdone` prints
-   `jdone: the review did not pass, not pushing` and returns 1.
+2. [`jreview`](#jreview) on this workspace, with the focus words after `--`,
+   so `jdone --codex` asks the Claude reviewer to focus on "--codex". If it
+   fails or its last line is not `VERDICT: PASS`, `jdone` prints
+   `jdone: the review did not pass, not pushing` and returns 1. For a Codex
+   review, run `jreview --codex` yourself before `jdone`.
 3. `jpush`, with its default bookmark name.
 
 The review runs only after the check passes, so a red build costs no Claude

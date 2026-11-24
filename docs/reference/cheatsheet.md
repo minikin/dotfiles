@@ -49,7 +49,8 @@ Workspaces live next to the repo at `<parent>/<repo>-ws/<name>`. Each is also a 
 |---|---|
 | `jw <name> [rev]` | Create (or reuse) workspace and `cd` in. `rev` defaults to `trunk()`, or `@-` if no remote trunk. `/` in name becomes `-` |
 | `jwc <name> [rev] [claude args...]` | `jw`, then start `claude -n <repo>/<name>` in it with the remaining arguments and `JW_NAME=<name>`, e.g. `jwc feat/x --permission-mode plan`, `jwc feat-x --continue`, `jwc fix/x "fix the retry storm"`. A second argument with a space is the task, not a rev |
-| `jreview [name] [focus...]` | A second Claude reviews the workspace's `trunk()..@` read-only (`claude -p`, only reads and `jj diff`/`log`/`show`) and prints problems by severity. fzf pick if no name |
+| `jwx <name> [rev] [codex args...]` | `jwc` for Codex: with `~/.codex/<repo>.config.toml` in place, `jw`, then `codex -p <repo> --add-dir <workspace git dir>`. Without the profile it stops |
+| `jreview [--codex] [--model <m>] [name] [focus...]` | A second Claude reviews the workspace's `trunk()..@` read-only (`claude -p`, only reads and `jj diff`/`log`/`show`) and prints problems by severity. fzf pick if no name |
 | `jnext` | What to do next: one row per agent workspace that needs you (conflicts, behind trunk, not pushed, no work), then `jwst`. Read-only |
 | `jwst` | One row per workspace: latest change, commits behind trunk, pushed, conflicts. Read-only |
 | `jsync [name...]` | Fetch, then rebase each workspace onto trunk, snapshotting and updating it around the rebase (fzf multi-pick if no args) |
@@ -197,6 +198,8 @@ Guide: [Updating the dotfiles](../guides/updating.md).
 | `just check` | Lint, tests, secret scan and commit-message check, the same as CI |
 | `just test` / `bats tests/<suite>.bats -f <regex>` | All tests, or the matching tests of one suite |
 | `just drift` | `linked`, `elsewhere`, `same (copy)`, `DIFFERS` or `missing` per live file |
+| `just doctor` | `just drift`, `agent-preflight` and `brew bundle check` in one run, exit 1 when preflight or brew fails |
+| `just test-bash32` | The drift, statusline and install suites under `/bin/bash` 3.2, as CI runs them |
 | `just commits [range]` | Conventional Commits check, default `origin/main..HEAD` |
 | `just infra-up` / `just infra-down` | Same as `infra up` / `infra down` |
 

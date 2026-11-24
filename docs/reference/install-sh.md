@@ -19,7 +19,7 @@ just install --dry-run   # the same through the justfile
 | ----------- | --------------------------------------------------------------------------------------------------------- |
 | none        | Full install.                                                                                             |
 | `--dry-run` | Prints each command as `+ <command>` instead of running it. Skips the identity prompts and the jq check. |
-| `--brew`    | Runs `brew bundle --file <repo>/Brewfile` before the links. Without `brew` on `PATH` it prints `Homebrew is required for --brew` and exits 1 before changing anything. |
+| `--brew`    | Runs `brew bundle --file <repo>/Brewfile` before the links. Without `brew` on `PATH` it prints `Homebrew is required for --brew` and exits 1 before changing anything. When `brew bundle` fails, it prints `brew bundle failed (exit <n>), nothing else was changed.` and a hint to run `brew install --cask --adopt <cask>` if Homebrew reported an app already in `/Applications`, then exits with `brew bundle`'s status. |
 | `--shottr`  | Adds the screenshot shortcuts step, see [Screenshot shortcuts](#screenshot-shortcuts). Combines with `--dry-run`. |
 | `--all`     | The same as `--brew --shottr`. |
 | `--help`, `-h` | Prints the usage comment from the top of the script and exits 0. |
@@ -434,6 +434,7 @@ The script runs under `set -euo pipefail`.
 | ---- | --------------------------------------------------------------------------- |
 | `0`  | Finished. The last line is `done — open a new terminal tab (or: exec zsh)`. |
 | `1`  | `--brew` and no `brew` on `PATH`.                                           |
+| `brew bundle`'s | `--brew` and `brew bundle` failed. Nothing after it ran.            |
 | `1`  | `jq` is not installed (not checked under `--dry-run`).                      |
 | `1`  | The settings merge failed. `settings.json` is untouched.                    |
 | `1`  | A bad signing key with `DOTFILES_NAME` set, including a file that is not a public key. No identity file is written. |

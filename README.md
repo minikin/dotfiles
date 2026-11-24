@@ -63,6 +63,11 @@ copied .env
 setup: just setup
 ```
 
+`jwx feat/y` does the same with Codex once the repo has a Codex profile,
+and `jreview --codex feat-x` asks Codex for a read-only review of a Claude
+agent's work. `just doctor` in the dotfiles checkout checks the links, the
+agent logins and the Homebrew packages in one run.
+
 Open a split with `cmd+d` and start the next one the same way. While they
 work, review from the main checkout. Each workspace's working copy shows up
 as `<name>@`, and `jj dft` is a structural diff through difftastic:

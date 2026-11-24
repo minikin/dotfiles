@@ -153,6 +153,19 @@ directory, but agy skips a plugin directory that is a link and a plugin whose
 files are links. The hook is merged into `hooks.json` under one key instead,
 like the Claude settings.
 
+The repo's own rules follow the same idea one level down: the root
+`AGENTS.md` is what Codex and agy load in a project, and `CLAUDE.md` only
+imports it, so the three agents cannot drift on how to work in this repo.
+
+The jw pre-push hook keys on the variables each agent sets in its commands
+(`CLAUDECODE`, `CODEX_SANDBOX`, `CODEX_THREAD_ID`, `CODEX_CI`, `OPENCODE`)
+and on `DOTFILES_AGENT_WORKSPACE`, which `jwc` and `jwx` set themselves. A
+process that is not an agent sets none of them, so your own pushes stay
+untouched. `jwx` refuses to start without a Codex profile instead of writing
+one: the profile holds absolute paths and an approval policy, which are
+choices about your machine, and a writer started without it fails on its
+first `jj commit`.
+
 The agy hook never answers `allow`. agy treats `allow` as approval and would
 skip its own permission prompt, so the hook either denies or says nothing.
 It tokenises commands with zsh's own lexer (`${(z)...}`), which ships with

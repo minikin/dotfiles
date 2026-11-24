@@ -88,3 +88,34 @@ MARKER='Shared rules marker: agents-rules-3f9c2a71'
     if grep -nE -- '-u OPENAI_API_KEY -u CODEX_HOME' "$REPO_ROOT/$f"; then echo "$f has the old prefix"; return 1; fi
   done
 }
+
+# codex_prefix: the prefix agy's guard requires, from its CODEX_VARS.
+codex_prefix() {
+  local vars
+  vars=$(sed -n 's/^typeset -ga CODEX_VARS=(\(.*\))$/\1/p' "$REPO_ROOT/agy/guard-agents.zsh")
+  echo "env -u ${vars// / -u }"
+}
+
+@test "rules: each Codex launch in the scripts and the Markdown code starts with that prefix" {
+  local files
+  files=(agents/AGENTS.md agy/GEMINI.md zsh/jj.zsh bin/agent-preflight README.md CONTRIBUTING.md SETUP_PROMPT.md AGENTS.md)
+  while IFS= read -r f; do files+=("$f"); done < <(cd "$REPO_ROOT" && find docs -name '*.md')
+  cd "$REPO_ROOT"
+  run python3 -I tests/codex_launches.py "$(codex_prefix)" "${files[@]}"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "rules: the launch check catches a prefix removed from one launch, continued lines included" {
+  local p
+  p=$(codex_prefix)
+  sed "s/^$p codex exec/codex exec/" "$REPO_ROOT/docs/guides/agent-rules.md" > agent-rules.md
+  sed "s/$p \\\\\$/\\\\/" "$REPO_ROOT/zsh/jj.zsh" > jj.zsh
+  printf '| Codex | `%s codex -p <repo>` |\n| Codex | `codex -s read-only -a never` |\n' "$p" > table.md
+  run python3 -I "$REPO_ROOT/tests/codex_launches.py" "$p" agent-rules.md jj.zsh table.md
+  [ "$status" -eq 1 ]
+  [[ $output == *"agent-rules.md:"*": codex exec --ephemeral"* ]] || false
+  [[ $output == *'jj.zsh:'*': (cd "$d" && codex exec -s read-only'* ]] || false
+  [[ $output == *"table.md:2: codex -s read-only -a never"* ]] || false
+  [[ $output != *"table.md:1"* ]] || false
+}

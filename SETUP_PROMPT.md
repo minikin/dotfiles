@@ -9,7 +9,7 @@ Set up my terminal and AI-agent development environment from this repo on this M
 Do this in order, and tell me before anything destructive:
 
 1. **Preflight.** Check macOS, Apple Silicon (`uname -m`), and that Homebrew is installed (if not, show me the install command and stop). After installing Homebrew, put `/opt/homebrew/bin` on PATH for `brew bundle` with `eval "$(/opt/homebrew/bin/brew shellenv)"`. The repo's zshrc adds it permanently. If Homebrew is not at `/opt/homebrew`, update `HOMEBREW_PREFIX` in `zsh/zshrc` and the path in `zsh/zprofile.snippet` first.
-2. **Packages.** Run `brew bundle --file=Brewfile`. Report anything that failed.
+2. **Packages.** Run `brew bundle --file=Brewfile`. If this Mac already has non-Homebrew copies of any Brewfile app in `/Applications`, tell me which casks conflicted so I can adopt them with `brew install --cask --adopt <cask>`. Report anything that failed.
 3. **Identity.** If `~/.config/jj/conf.d/identity.toml` doesn't exist yet, ask me for:
    - full name and the main email, used in every repo,
    - the main signing key: an SSH public key line (e.g. from the 1Password SSH agent) or a path to a `.pub` file, or empty for no signing,
@@ -26,9 +26,10 @@ Do this in order, and tell me before anything destructive:
    - `echo '{"workspace":{"current_dir":"'$PWD'"},"model":{"display_name":"test"}}' | ~/.claude/statusline.sh` prints a status line.
 7. **End-to-end test, ONLY in a temp directory.** Make it with `mktemp -d`, never use a real repo, and check that every `cd` succeeded. Create a repo with `jj git init --colocate`, add a `.env` (gitignored) and a `mise.toml`, commit, then run `jw test-agent` and check that `.env` was copied, `mise install` ran, and `git status` works inside the workspace. Then `jwrm test-agent` and delete the temp dir.
 8. **Manual steps for me**, listed at the end:
+   - Install Go (`/usr/local/go`) and Rust (`rustup`) from their official installers, then run `mise install` to install the global tools in `~/.config/mise/config.toml`.
+   - Follow `docs/guides/mac-apps.md` for optional desktop casks, `.pkg` casks (`tailscale-app`, `zoom`), `agent-caffeine`, Mac App Store (`mas`) installs, manual-only apps (`Rex Beta`), and post-install macOS permissions (1Password SSH Agent, Shottr, Kaleidoscope, Ghostty, Tailscale, OrbStack).
    - Add my signing public key(s) on GitHub as **Signing keys** (and the second key as an Authentication key if I push that folder's repos with it).
    - Restart Ghostty and Claude Code.
-   - Give Ghostty Accessibility permission for the global `` cmd+` `` quick terminal.
    - In each repo I want to use with agents: `jj git init --colocate`.
 
 Rules:

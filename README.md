@@ -113,6 +113,7 @@ has the Kafka and Redis commands.
   [reviewing and landing their work](docs/guides/review-and-land.md),
   [identity and commit signing](docs/guides/identity-and-signing.md),
   [local infra](docs/guides/local-infra.md),
+  [installing macOS apps](docs/guides/mac-apps.md),
   [per-project tools and MCP servers](docs/guides/project-tools.md),
   [saved workflows with navi](docs/guides/workflows.md),
   [Claude Code integration](docs/guides/claude-code.md),
@@ -122,6 +123,7 @@ has the Kafka and Redis commands.
   [keybindings](docs/reference/keybindings.md),
   [jj config](docs/reference/jj-config.md),
   [files and where they go](docs/reference/files.md),
+  [applications](docs/reference/applications.md),
   [the cheatsheet](docs/reference/cheatsheet.md).
 - How it works: [design](docs/explanation/design.md),
   [agents and PATH](docs/explanation/agents-and-path.md).

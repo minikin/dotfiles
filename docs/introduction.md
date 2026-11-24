@@ -59,9 +59,10 @@ read-only jj commands it may run without asking, and `JJ_EDITOR=false` so a
 jj command that would open an editor fails at once.
 [Claude Code](guides/claude-code.md) has the details.
 
-mise holds global tools that behave the same everywhere, such as node LTS,
-pnpm and gopls. Tools that must match CI belong in each project's
-`mise.toml`. [Project tools](guides/project-tools.md) draws the line, and
+mise holds global tools that behave the same everywhere, such as node 24,
+pnpm, yq, helm, gcloud, gopls and cargo inspection tools. Tools that must
+match CI belong in each project's `mise.toml`.
+[Project tools](guides/project-tools.md) draws the line, and
 [agents and PATH](explanation/agents-and-path.md) explains why Claude Code
 has to start from the project directory to see them.
 

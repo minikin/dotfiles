@@ -89,6 +89,32 @@ EOF
   [ "$output" = $'span.md:3: semicolon\nspan.md:5: semicolon\nspan.md:7: semicolon' ]
 }
 
+@test "prose: unmatched backticks in two headings or two list items do not hide what is between them" {
+  printf '# Head `x\nprose; here\n# Head `y\n' >head.md
+  prose head.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "head.md:2: semicolon" ]
+  printf -- '- item `a\n- semi; colon\n- item `b\n' >list.md
+  prose list.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "list.md:2: semicolon" ]
+  printf -- '1. item `a\n2. semi; colon\n3. item `b\n' >olist.md
+  prose olist.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "olist.md:2: semicolon" ]
+}
+
+@test "prose: a blockquote edge ends a code span, a table row starts a new one" {
+  printf 'text `a\n> quote\nsemi; after `b\n' >edge.md
+  prose edge.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "edge.md:3: semicolon" ]
+  printf '| a `x | b |\n| semi; c | d `y |\n' >table.md
+  prose table.md
+  [ "$status" -eq 1 ]
+  [ "$output" = "table.md:2: semicolon" ]
+}
+
 brewfile() { run "$REPO_ROOT/scripts/check-brewfile.sh" "$@"; }
 
 # fixture <files.md row cell>: a Brewfile in the repo's formats and a files.md with one row.

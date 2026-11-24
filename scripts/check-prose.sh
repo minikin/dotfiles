@@ -6,7 +6,8 @@
 # Skipped like the human-writing checker does: frontmatter (a leading --- block that has its
 # closing ---), fenced code (``` or ~~~, closed by a fence of the same character at least as long;
 # a ``` line with another backtick after it is inline code, not a fence), inline code spans of any
-# backtick count, also across the lines of one paragraph, HTML entities such as &amp; for the
+# backtick count, also across the lines of one paragraph but never across headings, list items,
+# table rows or blockquote edges, HTML entities such as &amp; for the
 # semicolon rule, and blockquote lines (a quoted source keeps its own punctuation) for the
 # semicolon rule.
 set -euo pipefail
@@ -69,7 +70,7 @@ awk '
   }
   function trimmed(s) { sub(/^[ \t]+/, "", s); return s }
   # doc: one whole file, buffered in L[1..n], so frontmatter can be told from a leading rule.
-  function doc(    i, start, f, j, t, fence, c, k, rest) {
+  function doc(    i, start, f, j, t, fence, c, k, rest, quote, heading) {
     start = 1
     for (f = 1; f <= n && L[f] ~ /^[ \t]*$/; f++) ;
     if (f <= n && L[f] == "---")
@@ -96,7 +97,13 @@ awk '
         }
       }
       if (t == "") { flush(); continue }
-      np++; pl[np] = L[i]; pn[np] = i; pq[np] = (t ~ /^>/)
+      # A code span never crosses a block: a heading, a list item, a table row, or the start or
+      # end of a blockquote begins a new one, and a heading is a block of its own.
+      quote = (t ~ /^>/)
+      heading = (t ~ /^#+([ \t]|$)/)
+      if (np && (heading || t ~ /^([-*+]|[0-9]+[.)])([ \t]|$)/ || t ~ /^[|]/ || quote != pq[np])) flush()
+      np++; pl[np] = L[i]; pn[np] = i; pq[np] = quote
+      if (heading) flush()
     }
     flush()
   }

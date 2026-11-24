@@ -32,7 +32,10 @@ fake_home() {
   unset DOTFILES_NAME DOTFILES_EMAIL DOTFILES_SIGNING_KEY DOTFILES_PERSONAL_EMAIL DOTFILES_PERSONAL_KEY DOTFILES_PERSONAL_DIR DOTFILES_DIR
   unset JW_NO_SETUP
   # The agy guard and agent-preflight react to these. A test that needs one sets a fake value.
-  unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_HOME
+  unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY CODEX_HOME
+  # The jw pre-push hook treats a push as an agent's when any of these is set. A test that runs
+  # under an agent must not inherit them.
+  unset CLAUDECODE CODEX_SANDBOX CODEX_THREAD_ID CODEX_CI OPENCODE DOTFILES_AGENT_WORKSPACE
   # The live shell exports these from navi.zsh, which would hide the defaults under test.
   unset NAVI_CONFIG NAVI_CONFIG_YAML NAVI_PATH
   # mise shims resolve tool versions from configs found via cwd (this repo's mise/config.toml)

@@ -3,7 +3,7 @@ ZSH_THEME=""
 # Hardcoded instead of $(brew --prefix) to keep new shells/splits fast
 HOMEBREW_PREFIX=/opt/homebrew
 typeset -U path
-path=($HOMEBREW_PREFIX/bin $HOMEBREW_PREFIX/sbin $path)
+path=($HOME/.local/bin $HOMEBREW_PREFIX/bin $HOMEBREW_PREFIX/sbin $path)
 
 # Completions (brew-installed + jj dynamic completion for bookmarks/revisions)
 FPATH=$HOMEBREW_PREFIX/share/zsh/site-functions:$FPATH

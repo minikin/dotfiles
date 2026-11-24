@@ -568,6 +568,27 @@ fake_brew() {
   grep -qx 'activate -u' "$BATS_TEST_TMPDIR/calls"
 }
 
+@test "install: a failing brew bundle keeps its exit status, hints at --adopt and changes nothing" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "brew $*" >> "%s"\nexit 42\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
+  chmod +x "$BATS_TEST_TMPDIR/bin/brew"
+  before_home=$(home_listing)
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --brew
+  [ "$status" -eq 42 ]
+  [[ $output == *"brew bundle failed (exit 42)"* ]] || false
+  [[ $output == *"If Homebrew reported an app that already exists in /Applications"* ]] || false
+  [[ $output == *"brew install --cask --adopt <cask>"* ]] || false
+  [[ $output != *"== symlinks"* ]] || false
+  [ "$(home_listing)" = "$before_home" ]
+
+  rm "$BATS_TEST_TMPDIR/calls"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --dry-run --brew
+  [ "$status" -eq 0 ]
+  [[ $output == *"+ brew bundle --file $DOTFILES/Brewfile"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/calls" ]
+  [ "$(home_listing)" = "$before_home" ]
+}
+
 @test "install: --brew without Homebrew fails before changing anything" {
   mkdir -p "$BATS_TEST_TMPDIR/nobrew"
   for t in bash dirname date; do ln -s "$(command -v "$t")" "$BATS_TEST_TMPDIR/nobrew/$t"; done

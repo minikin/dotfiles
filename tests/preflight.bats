@@ -52,6 +52,7 @@ case "$2 $3 $4" in
   "config get user.email") get "${STUB_JJ_EMAIL:-someone@example.com}" ;;
   "config get signing.behavior") get "${STUB_JJ_BEHAVIOR:-own}" ;;
   "config get signing.key") get "${STUB_JJ_KEY:-ssh-ed25519 AAAAtestnotakey}" ;;
+  "config get signing.backend") get "${STUB_JJ_BACKEND:-ssh}" ;;
   "workspace root --name") [[ -n ${STUB_JJ_ROOT:-} ]] || exit 1; echo "$STUB_JJ_ROOT" ;;
   *) exit 9 ;;
 esac
@@ -240,8 +241,29 @@ STUB
   STUB_JJ_KEY='ssh-ed25519 AAAA...your-work-key' preflight
   [ "$status" -eq 1 ]
   [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
+  STUB_JJ_BACKEND=none preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
+  STUB_JJ_BACKEND=none STUB_JJ_BEHAVIOR=force preflight
+  [ "$status" -eq 1 ]
   STUB_JJ_BEHAVIOR=force preflight
   [ "$status" -eq 0 ]
+}
+
+@test "preflight: jj with no signing.backend at all fails" {
+  stub jj <<'EOF'
+[[ $1 == --ignore-working-copy ]] || exit 9
+case "$2 $3 $4" in
+  "config get user.name") echo "Example Person" ;;
+  "config get user.email") echo "someone@example.com" ;;
+  "config get signing.behavior") echo own ;;
+  "config get signing.key") echo "ssh-ed25519 AAAAtestnotakey" ;;
+  *) exit 1 ;;
+esac
+EOF
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  jj: commit signing is not configured"* ]] || false
 }
 
 @test "preflight: no jj on PATH fails" {
@@ -295,6 +317,14 @@ STUB
   [ "$status" -eq 1 ]
   [[ $output == *"FAIL  agy: guard hook script ~/.gemini/config/hooks/dotfiles-guard-agents.zsh is missing or not executable"* ]] || false
 
+  rm "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  mkdir "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  agy: guard hook script ~/.gemini/config/hooks/dotfiles-guard-agents.zsh is missing or not executable"* ]] || false
+  rmdir "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
+  cp "$REPO_ROOT/agy/hooks.fragment.json" "$HOME/.gemini/config/hooks.json"
+
   rm "$STUBS/jq"
   local tools="$BATS_TEST_TMPDIR/tools" t
   mkdir -p "$tools"
@@ -330,20 +360,30 @@ STUB
   [ "$status" -eq 0 ]
   [[ $output == *"info  codex profile: no ~/.codex/app.config.toml, jwx will not start Codex here"* ]] || false
 
-  sed 's|/path/to/<repo>|/path/to/app|' "$REPO_ROOT/codex/repo-profile.example.toml" >"$HOME/.codex/app.config.toml"
+  sed 's|/path/to/<repo>|/path/to/app|g' "$REPO_ROOT/codex/repo-profile.example.toml" >"$HOME/.codex/app.config.toml"
   STUB_JJ_ROOT="$HOME/src/app" preflight
   [ "$status" -eq 0 ]
-  [[ $output == *"info  codex profile: ~/.codex/app.config.toml names no writable root for this checkout's .jj"* ]] || false
+  [[ $output == *"info  codex profile: ~/.codex/app.config.toml: [sandbox_workspace_write] writable_roots does not name this checkout's .jj"* ]] || false
+  [[ $output == *"info  codex profile: ~/.codex/app.config.toml: [sandbox_workspace_write] writable_roots does not name this checkout's .git"* ]] || false
 
-  sed "s|/path/to/<repo>|$HOME/src/app|" "$REPO_ROOT/codex/repo-profile.example.toml" >"$HOME/.codex/app.config.toml"
+  sed "s|/path/to/<repo>|$HOME/src/app|g" "$REPO_ROOT/codex/repo-profile.example.toml" >"$HOME/.codex/app.config.toml"
   STUB_JJ_ROOT="$HOME/src/app" preflight
   [ "$status" -eq 0 ]
   [[ $output == *"ok    codex profile: ~/.codex/app.config.toml"* ]] || false
 
-  # The same rule as jwx: only the absolute path counts, a ~/ root is not known to work in Codex.
-  printf 'writable_roots = ["~/src/app/.jj"]\n' >"$HOME/.codex/app.config.toml"
+  sed -e 's/"workspace-write"/"read-only"/' "$HOME/.codex/app.config.toml" >"$HOME/.codex/app.config.toml.new"
+  printf '# writable_roots = ["%s/src/app/.jj"]\n' "$HOME" >>"$HOME/.codex/app.config.toml.new"
+  mv "$HOME/.codex/app.config.toml.new" "$HOME/.codex/app.config.toml"
   STUB_JJ_ROOT="$HOME/src/app" preflight
-  [[ $output == *"info  codex profile: ~/.codex/app.config.toml names no writable root"* ]] || false
+  [ "$status" -eq 0 ]
+  [[ $output == *'info  codex profile: ~/.codex/app.config.toml: sandbox_mode is not "workspace-write"'* ]] || false
+  [[ $output != *"ok    codex profile"* ]] || false
+
+  # The same rule as jwx: only the absolute path counts, a ~/ root is not known to work in Codex.
+  printf 'sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nwritable_roots = ["~/src/app/.jj", "~/src/app/.git"]\n' >"$HOME/.codex/app.config.toml"
+  STUB_JJ_ROOT="$HOME/src/app" preflight
+  [[ $output == *"info  codex profile: ~/.codex/app.config.toml: [sandbox_workspace_write] writable_roots does not name this checkout's .jj"* ]] || false
+  [[ $output != *"$HOME"* ]] || false
 }
 
 @test "preflight: --help shows the usage and the new checks" {

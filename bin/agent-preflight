@@ -89,17 +89,19 @@ fi
 if have jj; then
   jjget() { jj --ignore-working-copy config get "$1" 2>/dev/null; }
   name=$(jjget user.name) email=$(jjget user.email)
-  behavior=$(jjget signing.behavior) key=$(jjget signing.key)
+  behavior=$(jjget signing.behavior) key=$(jjget signing.key) backend=$(jjget signing.backend)
   if [[ -z $name || -z $email ]]; then
     fail "jj: no user.name or user.email (run ./install.sh)"
   elif [[ $name == 'Your Name' || $email == you@*.example ]]; then
     fail "jj: identity has template placeholders (edit ~/.config/jj/conf.d/identity.toml)"
-  elif [[ ( $behavior != own && $behavior != force ) || -z $key || $key == *your-*-key* ]]; then
+  # jj's default backend is "none", which signs nothing whatever behavior and key say.
+  elif [[ ( $behavior != own && $behavior != force ) || -z $backend || $backend == none ||
+          -z $key || $key == *your-*-key* ]]; then
     fail "jj: commit signing is not configured (fill in [signing] in ~/.config/jj/conf.d/identity.toml)"
   else
     ok "jj: identity set, signing configured"
   fi
-  unset name email behavior key
+  unset name email behavior key backend
 else
   fail "jj: not installed"
 fi
@@ -121,7 +123,7 @@ if have agy; then
       and any(.PreToolUse[]?; .matcher == "*"
         and any(.hooks[]?; .type == "command" and .command == $cmd))' "$hooks" >/dev/null 2>&1; then
     fail "agy: guard hook dotfiles-agent-guard missing, disabled or changed in ~/.gemini/config/hooks.json (run ./install.sh)"
-  elif [[ ! -x $HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh ]]; then
+  elif [[ ! -f $HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh || ! -x $HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh ]]; then
     fail "agy: guard hook script ~/.gemini/config/hooks/dotfiles-guard-agents.zsh is missing or not executable (run ./install.sh)"
   else
     ok "agy: guard hook registered"
@@ -137,20 +139,29 @@ if have agy; then
   unset hooks guard skill dest
 fi
 
-# Codex: jwx starts a writer in a workspace only with ~/.codex/<repo>.config.toml, so in a jj repo
-# say whether it has one. Information, not a failure: jwx enforces it. Silent outside a jj repo.
+# Codex: jwx starts a writer in a workspace only with ~/.codex/<repo>.config.toml that
+# codex/check-profile.sh accepts, so in a jj repo say whether this one would. Information, not a
+# failure: jwx enforces it. Silent outside a jj repo. The checker lives in the repo this script
+# is linked from.
+src=$0
+[[ -L $src ]] && src=$(readlink "$src")
+checker=$(cd "$(dirname "$src")/.." 2>/dev/null && pwd)/codex/check-profile.sh
 if have jj && root=$(jj --ignore-working-copy workspace root --name default 2>/dev/null) && [[ -n $root ]]; then
   repo=${root##*/} profile=$HOME/.codex/${root##*/}.config.toml
   if [[ ! -f $profile ]]; then
     info "codex profile: no ~/.codex/$repo.config.toml, jwx will not start Codex here (template: codex/repo-profile.example.toml)"
-  elif ! grep -qF -- "$root/.jj" "$profile"; then
-    info "codex profile: ~/.codex/$repo.config.toml names no writable root for this checkout's .jj"
+  elif [[ ! -x $checker ]]; then
+    info "codex profile: ~/.codex/$repo.config.toml not checked, codex/check-profile.sh not found"
+  elif ! reasons=$("$checker" "$profile" "$root" 2>&1); then
+    while IFS= read -r reason; do
+      info "codex profile: ~/.codex/$repo.config.toml: $reason"
+    done <<<"$reasons"
   else
     ok "codex profile: ~/.codex/$repo.config.toml"
   fi
-  unset repo profile
+  unset repo profile reasons reason
 fi
-unset root
+unset root src checker
 
 if (( limits )); then
   if have codex && have jq; then

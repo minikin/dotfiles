@@ -77,3 +77,14 @@ MARKER='Shared rules marker: agents-rules-3f9c2a71'
   size=$(cat "$(SHARED)" "$REPO_ROOT/AGENTS.md" | wc -c)
   (( size < 32768 )) || false
 }
+
+@test "rules: every Codex launch prefix is the one the agy guard requires" {
+  local vars prefix f
+  vars=$(sed -n 's/^typeset -ga CODEX_VARS=(\(.*\))$/\1/p' "$REPO_ROOT/agy/guard-agents.zsh")
+  [[ $vars == *CODEX_API_KEY* ]] || false
+  prefix="env -u ${vars// / -u } codex"
+  for f in agents/AGENTS.md agy/GEMINI.md zsh/jj.zsh bin/agent-preflight docs/guides/agent-rules.md; do
+    grep -qF -- "$prefix" "$REPO_ROOT/$f" || { echo "$f has no '$prefix'"; return 1; }
+    if grep -nE -- '-u OPENAI_API_KEY -u CODEX_HOME' "$REPO_ROOT/$f"; then echo "$f has the old prefix"; return 1; fi
+  done
+}

@@ -220,15 +220,18 @@ Exit 2 blocks the call, and Claude sees the message:
 blocked: agents in jj workspaces and git worktrees do not push; the user pushes from the main checkout with jpush/jland
 ```
 
-The main checkout and directories outside a repo may still push, after the usual permission prompt. The guard reads the
-command text and nothing more. `echo git push` is blocked too, and a push
-hidden in a script gets through.
+The main checkout and directories outside a repo may still push, after the usual permission prompt. One narrow exemption also lets a T3 Code thread (`T3CODE_THREAD_ID` set) in a plain git worktree push a single explicit `<src>:<dst>` branch update (`HEAD` or a local branch source) to a configured remote's non-default feature branch. `--force`, `--force-with-lease`, `--force-if-includes`, implicit refspecs, shell expansion syntax, tag/note creation or updates, mirror remotes, configured `push.followTags`, command chaining, redirects, pipes, push options, and jj workspaces stay blocked, and the guard fails closed unless `refs/remotes/<remote>/HEAD` is resolved locally alongside `main`, `master` and `trunk`. When blocked in a T3 worktree, stderr prints a `hint:` line showing the accepted syntax. The guard reads the command text and local refs and config. `echo git push` is blocked too, and a push hidden in a script gets through.
 
 For that case `jw` adds a git `pre-push` hook to the repo (see
 [agent pre-push hook](../reference/shell-commands.md#agent-pre-push-hook)). It
-rejects a `git push` from a workspace or worktree whenever `CLAUDECODE` is set,
-however the push was started. jj 0.46 does not run git hooks, so a
-`jj git push` inside a script still gets through. Together they are a
+rejects a `git push` from a workspace or worktree whenever any agent variable
+(`CLAUDECODE`, `CODEX_SANDBOX`, `CODEX_THREAD_ID`, `CODEX_CI`, `OPENCODE`,
+`DOTFILES_AGENT_WORKSPACE` or `T3CODE_THREAD_ID`) is set, with the matching
+`T3CODE_THREAD_ID` plain-git worktree single fast-forward feature-branch
+exemption requiring a configured named remote (not a URL or path), non-mirror
+config, and a resolved live (`git ls-remote --symref`) or local
+(`refs/remotes/<remote>/HEAD`) default branch. jj 0.46 does not run git hooks,
+so a `jj git push` inside a script still gets through. Together they are a
 backstop for the global rule, not a sandbox.
 
 ## `JJ_EDITOR=false`

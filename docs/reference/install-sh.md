@@ -19,8 +19,8 @@ just install --dry-run   # the same through the justfile
 | ----------- | --------------------------------------------------------------------------------------------------------- |
 | none        | Full install.                                                                                             |
 | `--dry-run` | Prints each command as `+ <command>` instead of running it. Skips the identity prompts and the jq check. |
-| `--brew`    | Runs `brew bundle --file <repo>/Brewfile` before the links. Without `brew` on `PATH` it prints `Homebrew is required for --brew` and exits 1 before changing anything. When `brew bundle` fails, it prints `brew bundle failed (exit <n>), dotfile installation has not started.` and a hint to run `brew install --cask --adopt <cask>` if Homebrew reported an app already in `/Applications`, then exits with `brew bundle`'s status. |
-| `--shottr`  | Adds the screenshot shortcuts step, see [Screenshot shortcuts](#screenshot-shortcuts). Combines with `--dry-run`. |
+| `--brew`    | Runs `brew bundle --file <repo>/Brewfile` before the links. On Linux it pipes `scripts/linux-brewfile.sh`, the Brewfile without its `cask` lines and the lines tagged `# macos-only`, into `brew bundle --file=-`. Without `brew` on `PATH` it prints `Homebrew is required for --brew` and exits 1 before changing anything. When `brew bundle` fails, it prints `brew bundle failed (exit <n>), dotfile installation has not started.` and a hint to run `brew install --cask --adopt <cask>` if Homebrew reported an app already in `/Applications`, then exits with `brew bundle`'s status. |
+| `--shottr`  | Adds the screenshot shortcuts step, see [Screenshot shortcuts](#screenshot-shortcuts). Combines with `--dry-run`. On Linux it prints `skip --shottr: macOS only` and does nothing. |
 | `--all`     | The same as `--brew --shottr`. |
 | `--help`, `-h` | Prints the usage comment from the top of the script and exits 0. |
 
@@ -37,6 +37,7 @@ without changing anything.
 | `DOTFILES_PERSONAL_DIR`   | Folder for the second identity's repos, for example `~/src/personal`. Absolute or starting with `~`, created if missing. | One identity everywhere. |
 | `DOTFILES_PERSONAL_EMAIL` | Email for repos inside `DOTFILES_PERSONAL_DIR`. | One identity everywhere.                |
 | `DOTFILES_PERSONAL_KEY`   | Signing key for repos inside `DOTFILES_PERSONAL_DIR`. | The main key applies there too.   |
+| `DOTFILES_OS` | Operating system the script acts for, compared against `darwin*`. The tests set it to run the Linux path on a Mac. | `$OSTYPE` |
 | `DOTFILES_ACTIVATE_SETTINGS` | Program `--shottr` runs with `-u` to apply the shortcut change. The tests point it at a fake. | `/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings` |
 
 `DOTFILES_NAME` is the switch. With it set, all six values come from the
@@ -58,18 +59,20 @@ The script prints a `==` header before each step.
 
 | Step | Header                       | What it does                                                                                     |
 | ---- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| 0    | `== brew bundle`             | Only with `--brew` or `--all`: installs everything in the `Brewfile`.                            |
+| 0    | `== brew bundle`             | Only with `--brew` or `--all`: installs everything in the `Brewfile`, then runs `rustup default stable` when Homebrew's rustup has no default toolchain. |
 | 1    | `== symlinks`                | Links each repo file below into `$HOME`, then moves Ghostty's macOS config aside.               |
-| 2    | `== .zprofile`               | Appends `zsh/zprofile.snippet` to `~/.zprofile` if the mise shims line is missing.               |
+| 2    | `== .zprofile`               | Appends `zsh/zprofile.snippet` to `~/.zprofile` if the mise shims line is missing, and the keg-only rustup `PATH` line if an older snippet has none. |
 | 3    | `== .zshenv`                 | Appends `zsh/zshenv.snippet` to `~/.zshenv` if its marker line is missing.                       |
 | 4    | `== Claude Code settings`    | Merges `claude/settings.fragment.json` into `~/.claude/settings.json`.                           |
 | 5    | `== agy hooks`               | Merges `agy/hooks.fragment.json` into `~/.gemini/config/hooks.json`.                             |
-| 6    | `== Rex orchestrator skill for agy` | Links `~/.gemini/config/skills/rex-orchestrator` to the directory `~/.claude/skills/rex-orchestrator` resolves to, and prints a `note` for old agy rule files. |
-| 7    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
-| 8    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
-| 9    | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
-| 10   | `== screenshot shortcuts`    | Only with `--shottr`: turns off the macOS screenshot shortcuts.                                  |
-| 11   | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
+| 6    | `== T3 Code Antigravity provider config (skills, plugins)` | Ensures `~/.gemini/config/skills.json` and `~/.gemini/config/plugins.json`, then links them into `~/.t3/userdata/providers/antigravity/*/config/` without replacing provider-specific regular files or linking `hooks.json`. |
+| 7    | `== Rex orchestrator skill for agy` | Links `~/.gemini/config/skills/rex-orchestrator` to the directory `~/.claude/skills/rex-orchestrator` resolves to, and prints a `note` for old agy rule files. |
+| 8    | `== identity`                | Writes `~/.config/jj/conf.d/identity.toml` and the matching git config, if the file is missing. |
+| 9    | `== machine settings`        | Writes `~/.config/dotfiles/config` with `DOTFILES_DIR` and, with a second identity, `DOTFILES_PERSONAL_DIR`. |
+| 10   | `== git identity`            | Copies the main `user.name` and `user.email` into global git config if git has no email.        |
+| 11   | `== screenshot shortcuts`    | Only with `--shottr`: turns off the macOS screenshot shortcuts.                                  |
+| 12   | `== global mise tools`       | Only with `--brew` or `--all`: puts Homebrew's keg-only rustup on `PATH` and runs `mise --cd ~ install`. A failure prints `mise install failed: ...` and the install goes on. |
+| 13   | `== checks`                  | Runs `ghostty +validate-config` and, unless `--dry-run`, deletes `~/.zcompdump*`.               |
 
 ## Linked files
 
@@ -99,6 +102,9 @@ The script prints a `==` header before each step.
 | `agy/GEMINI.md`          | `~/.gemini/GEMINI.md`                 |
 | `agy/guard-agents.zsh`   | `~/.gemini/config/hooks/dotfiles-guard-agents.zsh` |
 | `bin/agent-preflight`    | `~/.local/bin/agent-preflight`        |
+| `bin/dotfiles-update`    | `~/.local/bin/dotfiles-update`        |
+| `bin/devvm`              | `~/.local/bin/devvm`                  |
+| `bin/t3-server-setup`    | `~/.local/bin/t3-server-setup`        |
 
 Each link is an absolute symlink to the file in the checkout. For each
 destination:
@@ -133,13 +139,13 @@ appends an empty line and the contents of `zsh/zprofile.snippet`:
 ```zsh
 # mise shims for non-interactive login shells (scripts, IDE tasks);
 # interactive shells get full `mise activate` from .zshrc
+# /opt/homebrew on macOS, Linuxbrew's prefix on Linux, plus Homebrew's keg-only rustup. Missing ones are left out.
 typeset -U path
-path=(/opt/homebrew/bin /opt/homebrew/sbin $path)
-eval "$(/opt/homebrew/bin/mise activate zsh --shims)"
+path=(/opt/homebrew/{bin,sbin}(N) /home/linuxbrew/.linuxbrew/{bin,sbin}(N) {/opt/homebrew,/home/linuxbrew/.linuxbrew}/opt/rustup/bin(N) $HOME/.cargo/bin(N) $path)
+if (( $+commands[mise] )); then eval "$(mise activate zsh --shims)"; fi
 ```
 
-The append happens once. Later edits to the snippet do not reach
-`~/.zprofile`.
+The append happens once (an older `.zprofile` that lacks `opt/rustup/bin` also gets the rustup `PATH` line appended once). Later edits to your local file stay intact, so copy updated snippet lines into existing `~/.zprofile` or `~/.zshenv` files by hand when upgrading while keeping local customizations.
 
 ### `~/.zshenv`
 
@@ -151,8 +157,9 @@ logins`, the script appends an empty line and the contents of
 # dotfiles: PATH for non-interactive ssh logins
 # `ssh host cmd` and Moshi setting up osewa read only ~/.zshenv, not .zprofile or .zshrc,
 # so moshi-hook (Homebrew) and osewa (~/.local/bin) must be on PATH here.
+# /opt/homebrew on macOS, Linuxbrew's prefix on Linux. A missing one is left out.
 typeset -U path
-path=($HOME/.local/bin /opt/homebrew/bin $path)
+path=($HOME/.local/bin /opt/homebrew/bin(N) /home/linuxbrew/.linuxbrew/bin(N) $path)
 ```
 
 A command run over ssh, such as `ssh host cmd` or Moshi setting up osewa,
@@ -205,6 +212,21 @@ unchanged, updated and created cases print the same lines as
 | Fragment key           | Event        | Matcher | Command                                              |
 | ---------------------- | ------------ | ------- | ---------------------------------------------------- |
 | `dotfiles-agent-guard` | `PreToolUse` | `*`     | `~/.gemini/config/hooks/dotfiles-guard-agents.zsh`, timeout 10 s |
+
+### `~/.gemini/config/skills.json`, `plugins.json` and T3 Antigravity profiles
+
+When `~/.agents/skills` or `~/.gemini/config/plugins` exists and the matching
+`skills.json` or `plugins.json` does not exist yet in `~/.gemini/config/`,
+`install.sh` creates it with `{ "entries": [{ "path": "<absolute dir>" }] }`
+so T3 Code's Antigravity discovery reads an absolute path. Existing files are
+kept untouched, and broken symlinks are skipped.
+
+For each Antigravity profile directory matching
+`~/.t3/userdata/providers/antigravity/*/config`, `install.sh` links those
+`skills.json` and `plugins.json` manifests into `config/`. Provider-specific
+regular files already present at either destination are preserved with `skip`
+instead of replaced, and `hooks.json` is never linked into T3 profiles because
+a non-empty profile `hooks.json` disables T3's Antigravity text generation.
 
 ### `~/.gemini/config/skills/rex-orchestrator`
 

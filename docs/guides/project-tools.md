@@ -13,7 +13,7 @@ which links to `mise/config.toml`:
 
 ```toml
 [tools]
-node = "24"
+node = "26"
 pnpm = "latest"
 yq = "latest"
 helm = "latest"
@@ -36,12 +36,11 @@ gcloud = "latest"
 "pypi:harbor" = "latest"
 ```
 
-Go and Rust are not managed by Homebrew or mise. Go comes from the official
-installer in `/usr/local/go` and Rust comes from `rustup`, so each project's
-`go.mod` `toolchain` line or `rust-toolchain.toml` selects the version a
-project builds with. On a new Mac, install Go and `rustup` before running
-`mise install`, because the `go:` and `cargo:` entries above need them on
-`PATH` (`install.sh` links `mise/config.toml` without running `mise install`).
+Go and Rust come from the `Brewfile` (`go` and `rustup`), not from mise. Each
+project's `go.mod` `toolchain` line or `rust-toolchain.toml` still selects the
+version a project builds with. The `go:` and `cargo:` entries above need them
+on `PATH`, so `install.sh --brew` sets rustup's stable toolchain before it runs
+`mise install`.
 
 ## Per-project tools in `mise.toml`
 

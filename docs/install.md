@@ -8,10 +8,49 @@ shell. The repo's `zshrc` does it permanently once installed:
 eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
-On an Intel Mac, change `HOMEBREW_PREFIX` in `zsh/zshrc` and the path in
-`zsh/zprofile.snippet` first. OrbStack or Docker Desktop is needed only for
-the [local infra](guides/local-infra.md). Go (`/usr/local/go`) and Rust
-(`rustup`) come from their official installers, not from Homebrew or mise.
+On an Intel Mac, change `HOMEBREW_PREFIX` in `zsh/zshrc` and the `/opt/homebrew` prefixes in `zsh/zprofile.snippet`, `zsh/zshenv.snippet`, `install.sh` and `bin/dotfiles-update` first. Linux works too, see [Linux](#linux). OrbStack or Docker Desktop is needed only for
+the [local infra](guides/local-infra.md). Go and Rust (`rustup`) come from the
+`Brewfile`, and `./install.sh --brew` sets the stable Rust toolchain and runs
+`mise install`.
+
+## Linux
+
+The same setup runs on Linux (tested on Ubuntu 24.04, x86_64) with
+[Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux) at its default
+prefix `/home/linuxbrew/.linuxbrew`. `zsh/zshrc` picks that prefix when
+`$OSTYPE` is not `darwin*`. On Linux, `./install.sh --brew` skips every
+`cask` line and every formula tagged `# macos-only` in the `Brewfile`,
+`just doctor` checks the same subset, and `--shottr` does nothing. `lsof` is
+in the `apt-get` line because `jwrm --merged` needs it to see agents still
+running in a workspace, and macOS ships it.
+
+```bash
+sudo apt-get install -y zsh build-essential procps curl file git jq lsof
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+git clone https://github.com/minikin/dotfiles ~/src/dotfiles
+cd ~/src/dotfiles
+./install.sh --brew
+sudo chsh -s "$(command -v zsh)" "$USER"
+exec zsh
+```
+
+The casks are the desktop apps and the three agents. Install the agents with
+their own Linux installers instead:
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash                 # Claude Code, into ~/.local/bin
+brew install codex                                             # Codex CLI
+curl -fsSL https://antigravity.google/cli/install.sh | bash    # agy, into ~/.local/bin
+```
+
+The agy installer appends an `export PATH` line to `~/.zshrc`, which is the
+repo's `zsh/zshrc` through its link. `zsh/zshrc` already puts `~/.local/bin`
+first, so drop that line with `jj restore zsh/zshrc` (or remove it by hand if
+you have other changes there or use a plain git clone) before you commit.
+
+Go and Rust come from the `Brewfile`, as on a Mac, and `--brew` runs
+`mise install`. `agent-preflight` skips its launchd check on Linux.
 
 ## New Mac order of steps
 
@@ -24,8 +63,9 @@ Follow these steps in order on a fresh Mac:
    2 to 6 to Claude Code with [SETUP_PROMPT.md](../SETUP_PROMPT.md)).
 3. If your commit signing key lives in 1Password, sign into 1Password and turn
    on **Use the SSH Agent** under Settings, Developer before signing commits.
-4. Install Go (`/usr/local/go`) and Rust (`rustup`) from their official
-   installers, then run `mise install` (see
+4. Check that `./install.sh --all` ended its `== global mise tools` step
+   without an error. If `mise install` failed, run `dotfiles-update` in a new
+   shell (see
    [Language toolchains and global mise tools](#language-toolchains-and-global-mise-tools)).
 5. Install optional desktop casks, `.pkg` casks, Mac App Store (`mas`) apps
    and manual-only apps, then complete macOS permissions using
@@ -121,17 +161,19 @@ Then run `agent-preflight`, or `just doctor` from the dotfiles checkout.
 
 ## Language toolchains and global mise tools
 
-`install.sh` links `mise/config.toml` to `~/.config/mise/config.toml`, but it
-does not run `mise install`. Because `mise/config.toml` includes `go:` and
-`cargo:` tools, install Go and Rust before running `mise install` on a new Mac:
+`mise/config.toml` has `go:` and `cargo:` tools, which mise builds with Go and
+Rust. Both are in the `Brewfile`: `go`, and `rustup`, which is keg-only, so
+`zsh/zshrc` puts `$HOMEBREW_PREFIX/opt/rustup/bin` and `~/.cargo/bin` on
+`PATH`. With `--brew`, `install.sh` then:
 
-1. Install Go (`/usr/local/go`) from the official macOS installer.
-2. Install Rust with `rustup` from the official installer.
-3. Restart your shell (`exec zsh`), then install the global mise tools:
+1. Runs `rustup default stable` when rustup has no default toolchain yet.
+2. Links `mise/config.toml` to `~/.config/mise/config.toml`.
+3. Runs `mise --cd ~ install` for the global tools. A failure prints a line
+   and does not stop the install.
 
-```bash
-mise install
-```
+Each project still picks its own version through the `go.mod` `toolchain`
+line or `rust-toolchain.toml`. `dotfiles-update` keeps both toolchains and
+the global tools current afterwards.
 
 See [Project tools and MCP servers](guides/project-tools.md) for what stays
 global versus per project.

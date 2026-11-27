@@ -34,7 +34,7 @@ extra, but only a prompt or a `cd` updates it.
 `zsh/zprofile.snippet`, appended to `~/.zprofile`, runs:
 
 ```zsh
-eval "$(/opt/homebrew/bin/mise activate zsh --shims)"
+if (( $+commands[mise] )); then eval "$(mise activate zsh --shims)"; fi
 ```
 
 This puts mise's shims directory on `PATH` and installs no hook. A shim is a

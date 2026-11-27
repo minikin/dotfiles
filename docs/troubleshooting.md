@@ -56,9 +56,10 @@ rm -f ~/.cache/zsh/init-*.zsh          # regenerate the jj, fzf, starship and zo
 zsh -i -x -c exit 2>&1 | tail -40      # trace startup to find the slow line
 ```
 
-`zsh/zshrc` hardcodes `HOMEBREW_PREFIX=/opt/homebrew` rather than run
-`brew --prefix` in every new split. On an Intel Mac that path is wrong, and
-every Homebrew tool goes missing.
+`zsh/zshrc` hardcodes `HOMEBREW_PREFIX` rather than run `brew --prefix` in
+every new split: `/opt/homebrew` on macOS, `/home/linuxbrew/.linuxbrew`
+elsewhere. On an Intel Mac, or a Linuxbrew in another prefix, that path is
+wrong, and every Homebrew tool goes missing.
 
 **Commits fail to sign.** `sign-as status` shows the email and the last 12
 characters of the key jj and git will use in this repo. With a public key

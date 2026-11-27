@@ -42,6 +42,7 @@ sets up. `<x>` is required, `[x]` is optional.
 | `JW_WHERE` | starship | Exported by `zsh/jj.zsh` as `<repo>/<workspace>` in a jj workspace or git worktree, unset elsewhere. The prompt shows it. |
 | `CLAUDECODE` | `zsh/jj.zsh`, the agent pre-push hook | Set by Claude Code in its shells. Any non-empty value turns off the repo-entry hint, the tab title and the tint, and marks a `git push` as an agent's. |
 | `CODEX_SANDBOX`, `CODEX_THREAD_ID`, `CODEX_CI`, `OPENCODE` | the agent pre-push hook | Set by Codex and opencode in the commands they run. Any non-empty value marks a `git push` as an agent's. |
+| `T3CODE_THREAD_ID` | `claude/guard-push.sh`, the agent pre-push hook | Set by T3 Code in its thread sessions. Also triggers the `pre-push` guard by itself, and in a plain git worktree permits up to one fast-forward feature-branch update while keeping `jj` workspaces blocked. |
 | `GHOSTTY_BIN` | `reload` | The Ghostty binary to validate the config with. Without it, `ghostty` on `PATH`, else `/Applications/Ghostty.app/Contents/MacOS/ghostty`. |
 | `NAVI_CONFIG_YAML` | navi | Set by `zsh/navi.zsh` to the palette's column layout, unless it is already set or `${NAVI_CONFIG:-~/.config/navi/config.yaml}` exists. |
 | `NAVI_DEFAULT_PATH` | `zsh/navi.zsh` | navi's default cheats folder, first in `NAVI_PATH`. Default `~/.local/share/navi/cheats`. |
@@ -118,8 +119,18 @@ push comes from an agent:
 | `DOTFILES_AGENT_WORKSPACE` | `jwc` and `jwx`, for the agent they start |
 
 It catches what the [push guard](../guides/claude-code.md#push-guard)
-cannot see, such as a push inside a script or a `just` recipe. Your own
-pushes, and any push from the main checkout, go through. `jj git push` does
+cannot see, such as a push inside a script or a `just` recipe. It also
+triggers when `T3CODE_THREAD_ID` is the only agent variable set, and when
+`T3CODE_THREAD_ID` is non-empty inside a plain git worktree (no `.jj`
+directory), the hook enforces the exemption on the proposed ref updates read
+from stdin: at most one `refs/heads/*` fast-forward branch update (including an
+already-up-to-date push with zero ref updates) to a non-default branch,
+blocking deletes, tag or notes pushes, multi-ref pushes, non-fast-forward
+rewrites, `main`, `master`, `trunk`, `HEAD`, `@` and local
+`refs/remotes/<remote>/HEAD` when set, as well as `.jj` workspaces. Because
+Git's `pre-push` receives ref updates rather than the original CLI command line,
+explicit refspecs and `git push` flags are enforced by `guard-push.sh` and the
+hook enforces fast-forward ref safety. Your own pushes, and any push from the main checkout, go through. `jj git push` does
 not run git hooks, so the hook never sees `jpush`, `jland` or the push in
 `jdone`, and `tests/jj.bats` checks that `jpush` from a workspace works with
 `CLAUDECODE` set.

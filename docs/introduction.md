@@ -17,7 +17,8 @@ Kafka. It assumes:
 
 - macOS on Apple Silicon, with [Homebrew](https://brew.sh) at
   `/opt/homebrew`. On Intel, change `HOMEBREW_PREFIX` in `zsh/zshrc` and the
-  path in `zsh/zprofile.snippet` before installing.
+  path in `zsh/zprofile.snippet` before installing. Linux with Homebrew at
+  `/home/linuxbrew/.linuxbrew` works too, see [Install](install.md#linux).
 - Claude Code as the agent. The Brewfile installs it, and the rules in
   `claude/CLAUDE.md` are written for it. Codex and Antigravity (`agy`) get
   the same shared rules from `agents/AGENTS.md`, see

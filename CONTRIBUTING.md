@@ -46,8 +46,8 @@ just check       # lint, tests, the secret scan and the commit check, the same a
 | `just commits` | `scripts/check-commits.sh`: every non-merge commit subject in `origin/main..HEAD` (or the range given, `just commits <range>`) follows Conventional Commits. |
 | `just check`   | All four.                                                                                 |
 | `just drift`   | Read-only: compares each file `install.sh` links with the repo copy. Not part of `check`. |
-| `just test-bash32` | `tests/drift.bats`, `tests/statusline.bats` and `tests/install.bats` with `/bin/bash` 3.2 first on `PATH`. bats starts with `env bash`, so plain `bats` runs on Homebrew's bash 5 even from `/bin/bash`. CI runs it. |
-| `just doctor`  | Read-only health check of your Mac: `just drift`, `agent-preflight`, `brew bundle check --no-upgrade`, and a pointer to `remote-check`. Exits 1 when preflight or brew fails. |
+| `just test-bash32` | `tests/drift.bats`, `tests/statusline.bats`, `tests/install.bats`, `tests/hooks.bats` and `tests/t3-server-setup.bats` with `/bin/bash` 3.2 first on `PATH`. bats starts with `env bash`, so plain `bats` runs on Homebrew's bash 5 even from `/bin/bash`. CI runs it. |
+| `just doctor`  | Read-only health check of this machine: `just drift`, `agent-preflight`, `brew bundle check --no-upgrade` (on Linux, of the `scripts/linux-brewfile.sh` subset), and a pointer to `remote-check`. Exits 1 when preflight or brew fails. |
 
 CI runs two jobs on every push to `main` and every pull request:
 
@@ -70,7 +70,7 @@ The tests are bats suites in `tests/`, one per area: `install.bats`,
 `jj.bats`, `sign.bats`, `drift.bats`, `statusline.bats`, `infra.bats`,
 `reload.bats`, `navi.bats`, `commits.bats`, `hooks.bats`, `where.bats`,
 `rules.bats`, `agy-guard.bats`, `preflight.bats`, `codex.bats`, `lint.bats`,
-`doctor.bats`. Each test calls the helpers in
+`doctor.bats`, `update.bats`, `devvm.bats`, `t3-server-setup.bats`. Each test calls the helpers in
 `tests/helpers.bash`, and those helpers are what keep a test run away from
 your machine:
 
@@ -191,7 +191,7 @@ Messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1
 lower case. The type is one of `feat`, `fix`, `docs`, `test`, `ci`,
 `refactor`, `chore` or `perf`. The scope is the area the change touches:
 `ghostty`, `zsh`, `jj`, `install`, `infra`, `claude`, `agents`, `agy`,
-`codex`, `navi`, `mise`, `starship`, `scripts` or `just`. Leave the scope out when the type already names the
+`codex`, `navi`, `mise`, `starship`, `scripts` or `just` (`scripts` and `install` cover `bin/` tools). Leave the scope out when the type already names the
 area (`docs:`, `ci:`, `test:`). Mark a change that breaks an existing setup
 with `!` after the scope and a `BREAKING CHANGE:` footer that says what to
 do. One change per scope per commit.
@@ -229,7 +229,7 @@ committed.
 | -------------------------- | ------------------------------------------------------------- |
 | `install.sh`               | The installer: links, settings merge, identity                |
 | `ghostty/`, `zsh/`, `starship/`, `jj/`, `mise/`, `claude/`, `agents/`, `agy/`, `infra/`, `navi/` | The configs it installs |
-| `bin/`                     | Commands linked into `~/.local/bin`: `agent-preflight`         |
+| `bin/`                     | Commands linked into `~/.local/bin`: `agent-preflight`, `dotfiles-update`, `devvm`, `t3-server-setup` |
 | `codex/`                   | `repo-profile.example.toml`, the Codex profile template `jwx` needs, and `check-profile.sh`, which checks a profile. Not installed |
 | `AGENTS.md`, `CLAUDE.md`   | The repo's rules for coding agents, and the Claude import of them |
 | `Brewfile`                 | Every package, including the tools the checks need            |

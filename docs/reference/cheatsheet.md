@@ -162,12 +162,12 @@ redis-cli monitor                                       # live command stream
 | `gremlins` | Go mutation testing, `gremlins unleash` |
 | `staticcheck` | Go static analysis, `staticcheck ./...` |
 | `cargo-*`, `abtop` | Rust inspection, coverage and mutation checks (`cargo audit`, `cargo deny`, `cargo insta`, `cargo llvm-cov`, `cargo mutants`, `cargo semver-checks`, `cargo crap`, `abtop`) |
-| `node` (24), `pnpm`, `npm:prettier` | `pnpm install --frozen-lockfile`, `pnpm run <script>`, `prettier --check .` |
+| `node` (26), `pnpm`, `npm:prettier` | `pnpm install --frozen-lockfile`, `pnpm run <script>`, `prettier --check .` |
 | `yq`, `helm`, `gcloud`, `pypi:harbor` | YAML querying, Helm charts, Google Cloud CLI and Harbor benchmarks |
 | `mise` | `mise ls`, `mise install`, `mise tasks`, `mise run <task>` |
 | `just` | `just --list`, `just <recipe>` |
 
-Go (`/usr/local/go`) and Rust (`rustup`) come from their official installers, and each project's `go.mod` `toolchain` or `rust-toolchain.toml` picks the version. CI-pinned tools belong in the project, not globally. See [Per-project tools](../guides/project-tools.md).
+Go and Rust (`rustup`) come from the Brewfile, and each project's `go.mod` `toolchain` or `rust-toolchain.toml` picks the version. CI-pinned tools belong in the project, not globally. See [Per-project tools](../guides/project-tools.md).
 
 ## Kubernetes
 
@@ -189,6 +189,13 @@ Go (`/usr/local/go`) and Rust (`rustup`) come from their official installers, an
 | `hurl --test *.hurl` | Run HTTP test files (`--variable k=v`) |
 | `d2 --watch in.d2 out.svg` | Render diagram with live preview |
 
+## Remote servers and dev VMs
+
+| Command | Action |
+|---|---|
+| `devvm [ssh args...]` / `devvm start\|stop\|status\|login` | Sign into AWS SSO, start the EC2 dev VM if stopped, wait for SSM `Online` and connect. See [Dev VM on AWS](../guides/dev-vm.md) |
+| `t3-server-setup [--check] [--pair] [--protect]` | Set up or check Tailscale Serve and T3 Code server (`--port`, `--base-dir`, `--dry-run`, `--no-install`) |
+
 ## Maintaining the dotfiles (from `$DOTFILES_DIR`)
 
 Guide: [Updating the dotfiles](../guides/updating.md).
@@ -201,7 +208,8 @@ Guide: [Updating the dotfiles](../guides/updating.md).
 | `just test` / `bats tests/<suite>.bats -f <regex>` | All tests, or the matching tests of one suite |
 | `just drift` | `linked`, `elsewhere`, `same (copy)`, `DIFFERS` or `missing` per live file |
 | `just doctor` | `just drift`, `agent-preflight` and `brew bundle check` in one run, exit 1 when preflight or brew fails |
-| `just test-bash32` | The drift, statusline and install suites under `/bin/bash` 3.2, as CI runs them |
+| `dotfiles-update [--greedy]` / `just update` | Update Homebrew (Brewfile, then everything outdated), agy, mise global tools, uv tools, rustup and mas, then print the Codex, Claude and agy versions. The agent casks always get the newest release, `--greedy` adds every other self-updating cask, `--dry-run` prints the commands |
+| `just test-bash32` | The drift, statusline, install, hooks and t3-server-setup suites under `/bin/bash` 3.2, as CI runs them |
 | `just commits [range]` | Conventional Commits check, default `origin/main..HEAD` |
 | `just infra-up` / `just infra-down` | Same as `infra up` / `infra down` |
 

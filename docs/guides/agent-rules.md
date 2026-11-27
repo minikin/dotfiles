@@ -135,7 +135,7 @@ just doctor                # from the dotfiles checkout: drift, agent-preflight,
 | --------------------- | ---------------------------------------------------------- |
 | Moshi paired          | `moshi-hook status` shows `status: paired`                 |
 | Rex answering         | `rex --autostart=false whoami --json` exits 0              |
-| No API-key variables  | none of `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_HOME` is set in the shell or in `launchctl getenv`. A missing or failing `launchctl` is a `FAIL`, not `ok` |
+| No API-key variables  | none of `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_HOME` is set in the shell or in `launchctl getenv`. A missing or failing `launchctl` is a `FAIL`, not `ok`. On Linux, which has no launchd, that half is skipped with an `info` line |
 | Claude subscription   | `claude auth status`: logged in, `authMethod` `claude.ai`  |
 | Codex subscription    | `codex login status` says `Logged in using ChatGPT`        |
 | jj identity and signing | `jj config get` finds `user.name` and `user.email` without the template's placeholders, `signing.behavior` `own` or `force`, a `signing.backend` that is set and not `none` (jj's default, which signs nothing), and a `signing.key` that is not the template's. The line says "signing configured": the config cannot prove that a commit verifies |

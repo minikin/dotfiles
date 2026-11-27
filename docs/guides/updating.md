@@ -121,8 +121,8 @@ reload                     # exec zsh if this machine has no reload yet
 New `Brewfile` entries need `brew bundle`. If a new cask already exists in
 `/Applications` outside Homebrew, adopt it first with
 `brew install --cask --adopt <cask>`. New global tools in `mise/config.toml`
-need `mise install` (after Go and `rustup` are installed for `go:` and
-`cargo:` entries).
+need `mise install`, or `dotfiles-update`, which also updates everything
+else.
 
 ## Add a new config file
 

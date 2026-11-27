@@ -28,6 +28,10 @@ id = "home-path"
 description = "Absolute home directory path (use ~/ or $HOME)"
 regex = '''/(Users|home)/[A-Za-z0-9._-]+/'''
 keywords = ["/users/", "/home/"]
+[[rules.allowlists]]
+description = "Linuxbrew's fixed prefix /home/linuxbrew/.linuxbrew, which belongs to no person"
+regexTarget = "match"
+regexes = ['''^/home/linuxbrew/$''']
 
 [[rules]]
 id = "ssh-public-key"

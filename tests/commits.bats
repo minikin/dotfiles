@@ -60,3 +60,9 @@ check() {
   check
   [ "$status" -eq 0 ]
 }
+
+@test "commits: an invalid revision range exits non-zero" {
+  run bash -c "cd '$repo' && '$REPO_ROOT/scripts/check-commits.sh' 'no-such-ref..HEAD'"
+  [ "$status" -ne 0 ]
+  [[ $output != *"0 commits ok"* ]] || false
+}

@@ -3,7 +3,8 @@
 #
 # Checks every tracked (and untracked, non-ignored) file for:
 #   - email addresses (reserved example domains and GitHub noreply are allowed)
-#   - absolute home paths (/Users/<name>/, /home/<name>/); use ~/ or $HOME instead
+#   - absolute home paths (/Users/<name>/, /home/<name>/); use ~/ or $HOME instead.
+#     Linuxbrew's prefix /home/linuxbrew/ is allowed.
 #   - private key headers
 #   - full SSH public key bodies (placeholders such as "AAAA..." are fine)
 #   - 1Password references (secret reference URIs, vault names passed to the vault flag, item IDs)
@@ -26,6 +27,8 @@ re_email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 # RFC 2606 example domains and the reserved .example TLD, GitHub noreply, and git@ host remotes.
 re_email_ok='@(example\.(com|org|net)|[A-Za-z0-9.-]+\.example|users\.noreply\.github\.com)$|^git@(github|gitlab)\.com$'
 re_home='/(Users|home)/[A-Za-z0-9._-]+/'
+# Linuxbrew's fixed prefix /home/linuxbrew/.linuxbrew belongs to no person.
+re_home_ok='^/home/linuxbrew/$'
 re_privkey="${dashes}BEGIN ([A-Z0-9]+ )*PRIVATE KEY${dashes}"
 re_sshkey='(ssh-(ed25519|rsa|dss)|ecdsa-sha2-nistp[0-9]+|sk-ssh-ed25519@openssh\.com) AAAA[A-Za-z0-9+/]{40,}'
 re_op="(o""p://|--vault[= ]+[\"']?[A-Za-z0-9]|\\bop (item|document) get [a-z0-9]{26}\\b)"
@@ -77,7 +80,13 @@ while IFS= read -r hit; do
   done < <(grep -oE -- "$re_email" <<<"$text")
 done < <(grep -nHIE -- "$re_email" "${files[@]}" || true)
 
-scan "$re_home" "absolute home path (use ~/ or \$HOME)"
+# Second pass, as for emails, so the Linuxbrew prefix on a line doesn't hide a real home path.
+while IFS= read -r hit; do
+  text=${hit#*:}; text=${text#*:}
+  while IFS= read -r path; do
+    grep -qE -- "$re_home_ok" <<<"$path" || { report "$hit" "absolute home path (use ~/ or \$HOME)"; break; }
+  done < <(grep -oE -- "$re_home" <<<"$text")
+done < <(grep -nHIE -- "$re_home" "${files[@]}" || true)
 scan "$re_privkey" "private key header"
 scan "$re_sshkey" "full SSH public key"
 scan "$re_op" "1Password reference"

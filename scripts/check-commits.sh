@@ -11,14 +11,16 @@ types='feat|fix|docs|test|ci|refactor|chore|perf'
 re="^($types)(\([a-z0-9-]+\))?!?: [^ ].*"
 
 bad=0 n=0
+log_out=$(git log --no-merges --format='%H %s' "$range")
 while IFS= read -r line; do
+  [[ -n $line ]] || continue
   sha=${line%% *} subject=${line#* }
   n=$((n + 1))
   if [[ ! $subject =~ $re ]]; then
     echo "${sha:0:12}: $subject"
     bad=$((bad + 1))
   fi
-done < <(git log --no-merges --format='%H %s' "$range")
+done <<<"$log_out"
 
 if (( bad )); then
   echo "$bad of $n commits do not follow Conventional Commits (<type>(<scope>): <summary>, types: ${types//|/, })" >&2

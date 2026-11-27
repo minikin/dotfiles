@@ -5,6 +5,7 @@ load helpers
 
 setup() {
   fake_home
+  unset T3CODE_THREAD_ID
 }
 
 NOTIFY() { echo "$REPO_ROOT/claude/notify.sh"; }
@@ -82,6 +83,12 @@ guard() {
   [ "$status" -eq 0 ]
   run bash "$(NOTIFY)" </dev/null
   [ "$status" -eq 0 ]
+}
+
+@test "notify: exits silently with no output when T3CODE_THREAD_ID is set" {
+  T3CODE_THREAD_ID=thread-1 run bash "$(NOTIFY)" <<<'{"hook_event_name":"Stop","cwd":"/x/app"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
 }
 
 @test "session-context: a jj workspace tells the agent its workspace, repo and root" {
@@ -224,4 +231,114 @@ guard() {
 @test "guard: invalid input exits 0" {
   run bash "$(GUARD)" <<<'not json'
   [ "$status" -eq 0 ]
+}
+
+@test "guard: T3CODE_THREAD_ID allows non-force explicit feature-branch pushes in git worktrees only" {
+  git init --quiet -b main "$HOME/src/plain"
+  git -C "$HOME/src/plain" commit --quiet --allow-empty -m init
+  git -C "$HOME/src/plain" remote add origin "$BATS_TEST_TMPDIR/origin.git"
+  git -C "$HOME/src/plain" tag v1
+  git -C "$HOME/src/plain" worktree add --quiet -b fix "$HOME/src/plain-wt/fix-x"
+
+  # Without T3CODE_THREAD_ID, git worktree pushes remain blocked.
+  guard "$HOME/src/plain-wt/fix-x" "git push origin HEAD:feat/fix"
+  [ "$status" -eq 2 ]
+
+  export T3CODE_THREAD_ID=thread-1
+  # Without refs/remotes/<remote>/HEAD populated, T3 pushes fail closed and show the hint.
+  for cmd in \
+    "git push origin HEAD:feat/fix" \
+    "git push origin HEAD:develop"; do
+    guard "$HOME/src/plain-wt/fix-x" "$cmd"
+    [ "$status" -eq 2 ]
+    [[ $output == *"hint: in a T3 git worktree,"* ]] || false
+  done
+
+  git -C "$HOME/src/plain" update-ref refs/remotes/origin/main "$(git -C "$HOME/src/plain" rev-parse HEAD)"
+  git -C "$HOME/src/plain" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+
+  for cmd in \
+    "git push origin HEAD:feat/fix" \
+    "git --no-pager push -u origin fix:feat/fix" \
+    "git push --no-follow-tags origin HEAD:feat/fix" \
+    "git push -q origin HEAD:feat/fix" \
+    "git push -v origin HEAD:feat/fix" \
+    "git push --porcelain origin HEAD:feat/fix" \
+    "git push --atomic origin HEAD:feat/fix"; do
+    guard "$HOME/src/plain-wt/fix-x" "$cmd"
+    echo "allowed cmd: $cmd status: $status"
+    [ "$status" -eq 0 ]
+  done
+
+  for cmd in \
+    "git push" \
+    "git push origin main" \
+    "git push origin feat/fix" \
+    "git push origin @" \
+    "git push . HEAD:feat/fix" \
+    "git push .. HEAD:feat/fix" \
+    "git push missing HEAD:feat/fix" \
+    "git push origin v1:newname" \
+    "git push origin HEAD:v1" \
+    "git push origin HEAD:notes/commits" \
+    "git push origin HEAD:main" \
+    "git push origin HEAD:master" \
+    "git push origin HEAD:trunk" \
+    "git push origin HEAD:heads/main" \
+    "git push origin HEAD:heads/master" \
+    "git push origin HEAD:refs/heads/feat" \
+    "git push origin HEAD:refs/tags/v1" \
+    "git push origin HEAD:tags/v1" \
+    "git push origin HEAD:remotes/origin/main" \
+    "git push origin HEAD:{main,feat}" \
+    "git push origin HEAD:mai[n]" \
+    "git push origin HEAD:ma?n" \
+    "git push --force origin HEAD:feat" \
+    "git push --force-with-lease origin HEAD:feat/fix" \
+    "git push --force-with-lease=feat/fix:abc123 origin HEAD:feat/fix" \
+    "git push --force-if-includes origin HEAD:feat/fix" \
+    "git push -f origin feat" \
+    "git push origin +HEAD:feat" \
+    "git push origin :feat" \
+    "git push --delete origin feat" \
+    "git push --all origin" \
+    "git push --push-option=x origin HEAD:feat/fix" \
+    "git push -o x origin HEAD:feat/fix" \
+    "git push origin feat main" \
+    "git push origin HEAD:feat && git push origin main" \
+    "git push origin HEAD:feat; echo hi" \
+    $'git push origin HEAD:feat\necho hi' \
+    "git push origin HEAD:feat 2>&1" \
+    "git push origin HEAD:feat >/dev/null" \
+    "git push origin HEAD:feat | cat" \
+    "git -C ../other push origin HEAD:feat" \
+    "jj git push -b feat"; do
+    guard "$HOME/src/plain-wt/fix-x" "$cmd"
+    echo "blocked cmd: $cmd status: $status"
+    [ "$status" -eq 2 ]
+  done
+
+  # Remote default branch named in refs/remotes/origin/HEAD is also blocked.
+  git -C "$HOME/src/plain" update-ref refs/remotes/origin/develop "$(git -C "$HOME/src/plain" rev-parse HEAD)"
+  git -C "$HOME/src/plain" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop
+  guard "$HOME/src/plain-wt/fix-x" "git push origin HEAD:develop"
+  [ "$status" -eq 2 ]
+
+  # push.followTags=true is blocked unless --no-follow-tags is passed; remote.origin.mirror=true is always blocked.
+  git -C "$HOME/src/plain" config push.followTags true
+  guard "$HOME/src/plain-wt/fix-x" "git push origin HEAD:feat/fix"
+  [ "$status" -eq 2 ]
+  guard "$HOME/src/plain-wt/fix-x" "git push --no-follow-tags origin HEAD:feat/fix"
+  [ "$status" -eq 0 ]
+  git -C "$HOME/src/plain" config --unset push.followTags
+  git -C "$HOME/src/plain" config remote.origin.mirror true
+  guard "$HOME/src/plain-wt/fix-x" "git push origin HEAD:feat/fix"
+  [ "$status" -eq 2 ]
+
+  # jj workspaces stay blocked even when T3CODE_THREAD_ID is set.
+  make_workspace
+  guard "$HOME/src/app-ws/feat" "git push origin HEAD:feat"
+  [ "$status" -eq 2 ]
+  guard "$HOME/src/app-ws/feat" "jj git push -b feat"
+  [ "$status" -eq 2 ]
 }

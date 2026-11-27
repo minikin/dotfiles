@@ -811,6 +811,86 @@ stub_gate() {
   [ "$output" = feature ]
 }
 
+@test "jw: the pre-push hook allows single fast-forward feature pushes only for T3CODE_THREAD_ID in plain git worktrees" {
+  remote="$BATS_TEST_TMPDIR/remote.git"
+  add_bare_remote "$REPO" "$remote"
+  git -C "$remote" symbolic-ref HEAD refs/heads/main
+  run_zsh "cd '$REPO' && jw feat"
+  [ "$status" -eq 0 ]
+
+  wt="$HOME/src/wt-t3"
+  git -C "$REPO" worktree add --quiet -b babysit "$wt"
+  git -C "$wt" commit --quiet --allow-empty -m "t3 fix"
+
+  # Without T3CODE_THREAD_ID, git worktree push is still blocked.
+  run env CLAUDECODE=1 git -C "$wt" push origin HEAD:refs/heads/feat/t3
+  [ "$status" -ne 0 ]
+
+  # Raw path/URL remotes stay blocked even with T3CODE_THREAD_ID.
+  run env CLAUDECODE=1 T3CODE_THREAD_ID=thread-1 git -C "$wt" push "$remote" HEAD:refs/heads/feat/t3
+  [ "$status" -ne 0 ]
+
+  # With T3CODE_THREAD_ID, fast-forward push to configured remote feature branch succeeds for Claude, Codex, and T3 alone (including up-to-date count=0).
+  for v in CLAUDECODE CODEX_THREAD_ID; do
+    run env "$v=1" T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin HEAD:refs/heads/feat/t3
+    [ "$status" -eq 0 ]
+    git -C "$wt" commit --quiet --allow-empty -m "t3 fix 2"
+  done
+  run env T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin HEAD:refs/heads/feat/t3
+  [ "$status" -eq 0 ]
+  # Immediate repeat push when everything is up-to-date (empty stdin, count=0).
+  run env T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin HEAD:refs/heads/feat/t3
+  [ "$status" -eq 0 ]
+  git -C "$wt" commit --quiet --allow-empty -m "t3 fix 3"
+
+  # T3CODE_THREAD_ID alone still blocks protected branches, non-FF, multi-ref, and jj workspaces.
+  run env T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin HEAD:refs/heads/main
+  [ "$status" -ne 0 ]
+  run env T3CODE_THREAD_ID=thread-1 git -C "$WS/feat" push origin HEAD:refs/heads/feat/jj
+  [ "$status" -ne 0 ]
+
+  # Protected branches, custom remote HEAD (live or local), non-FF force, deletes, tags, multi-ref, and jj workspaces remain blocked.
+  for bad_ref in HEAD:refs/heads/main HEAD:refs/tags/v1 :refs/heads/feat/t3; do
+    run env CLAUDECODE=1 T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin "$bad_ref"
+    [ "$status" -ne 0 ]
+    [[ $output == *"agents in jj workspaces and git worktrees do not push"* ]] || false
+  done
+
+  # Even if local refs/remotes/origin/HEAD is stale on main, live remote HEAD on develop blocks pushing develop.
+  git -C "$REPO" update-ref refs/remotes/origin/main "$(git -C "$REPO" rev-parse HEAD)"
+  git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  git -C "$remote" branch -f develop main
+  git -C "$remote" symbolic-ref HEAD refs/heads/develop
+  run env CLAUDECODE=1 T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin HEAD:refs/heads/develop
+  [ "$status" -ne 0 ]
+
+  # Detached remote HEAD with unset local refs/remotes/origin/HEAD fails closed.
+  git -C "$REPO" symbolic-ref -d refs/remotes/origin/HEAD
+  detached=$(git -C "$remote" rev-parse refs/heads/main)
+  printf '%s\n' "$detached" > "$remote/HEAD"
+  run env CLAUDECODE=1 T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin HEAD:refs/heads/feat/t3
+  [ "$status" -ne 0 ]
+
+  # Restore live HEAD for force and multi-ref tests.
+  git -C "$remote" symbolic-ref HEAD refs/heads/main
+
+  # Rewritten non-fast-forward push fails (both --force and --force-with-lease).
+  git -C "$wt" reset --quiet --hard HEAD~1
+  git -C "$wt" commit --quiet --amend --allow-empty -m "rewritten"
+  run env CODEX_THREAD_ID=1 T3CODE_THREAD_ID=thread-1 git -C "$wt" push --force origin HEAD:refs/heads/feat/t3
+  [ "$status" -ne 0 ]
+  run env CODEX_THREAD_ID=1 T3CODE_THREAD_ID=thread-1 git -C "$wt" push --force-with-lease origin HEAD:refs/heads/feat/t3
+  [ "$status" -ne 0 ]
+
+  # Multi-ref push fails.
+  run env CLAUDECODE=1 T3CODE_THREAD_ID=thread-1 git -C "$wt" push origin HEAD:refs/heads/f1 HEAD:refs/heads/f2
+  [ "$status" -ne 0 ]
+
+  # jj workspace stays blocked even with T3CODE_THREAD_ID.
+  run env CLAUDECODE=1 T3CODE_THREAD_ID=thread-1 git -C "$WS/feat" push origin HEAD:refs/heads/feat/jj
+  [ "$status" -ne 0 ]
+}
+
 @test "jw: reusing a workspace replaces an older jw hook, keeps a current one, leaves no temp file" {
   run_zsh "cd '$REPO' && jw feat >/dev/null 2>&1"
   [ "$status" -eq 0 ]

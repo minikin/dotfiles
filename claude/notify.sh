@@ -8,6 +8,8 @@
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 input=$(cat 2>/dev/null)
+# Inside T3 Code there is no Ghostty TTY, and T3 handles notifications natively.
+[[ -n ${T3CODE_THREAD_ID:-} ]] && exit 0
 fields=$(jq -r '
   def clean: gsub("[\n\t\r]"; " ") | gsub("[\u0000-\u001f\u007f]"; "") | gsub(";"; ",");
   (.cwd // "" | tostring | gsub("[\n\r]"; " ")),

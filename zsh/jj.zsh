@@ -108,9 +108,62 @@ _jw_pre_push_body() {
   cat <<'EOF'
 #!/bin/sh
 # jw-pre-push, written by jw (zsh/jj.zsh in the dotfiles): a coding agent must not push from a jj
-# workspace or git worktree. You, and pushes from the main checkout, pass.
-[ -n "$CLAUDECODE$CODEX_SANDBOX$CODEX_THREAD_ID$CODEX_CI$OPENCODE$DOTFILES_AGENT_WORKSPACE" ] || exit 0
+# workspace or git worktree, except a T3 Code thread in a plain git worktree pushing one fast-forward
+# non-default feature branch. You, and pushes from the main checkout, pass.
+[ -n "$CLAUDECODE$CODEX_SANDBOX$CODEX_THREAD_ID$CODEX_CI$OPENCODE$DOTFILES_AGENT_WORKSPACE$T3CODE_THREAD_ID" ] || exit 0
 [ "$(git rev-parse --absolute-git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ] && exit 0
+if [ -n "${T3CODE_THREAD_ID:-}" ]; then
+  top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$top" ] && [ ! -e "$top/.jj" ]; then
+    count=0
+    bad=0
+    remote=${1:-}
+    live_def=""
+    local_def=""
+    case $remote in
+      ""|-*|*/*) bad=1 ;;
+      *)
+        git remote get-url --push "$remote" >/dev/null 2>&1 || bad=1
+        mirror=$(git config --bool --get "remote.$remote.mirror" 2>/dev/null || true)
+        [ "$mirror" = true ] && bad=1
+        if [ "$bad" -eq 0 ]; then
+          live_def=$(git ls-remote --symref "$remote" HEAD 2>/dev/null | sed -n 's|^ref: refs/heads/\(.*\)[[:space:]]HEAD$|\1|p' | head -n 1 || true)
+          local_def=$(git symbolic-ref --quiet --short "refs/remotes/$remote/HEAD" 2>/dev/null || true)
+          local_def=${local_def#"$remote/"}
+          [ -n "$live_def" ] || [ -n "$local_def" ] || bad=1
+        fi
+        ;;
+    esac
+    while read -r _lref loid rref roid; do
+      [ -n "${rref:-}" ] || continue
+      count=$((count + 1))
+      case $loid in
+        *[!0]*) ;;
+        *) bad=1 ;;
+      esac
+      case $rref in
+        refs/heads/*) branch=${rref#refs/heads/} ;;
+        *) bad=1; branch='' ;;
+      esac
+      case $branch in
+        ''|HEAD|@|main|master|trunk) bad=1 ;;
+      esac
+      if [ -n "$live_def" ] && [ "$branch" = "$live_def" ]; then
+        bad=1
+      fi
+      if [ -n "$local_def" ] && [ "$branch" = "$local_def" ]; then
+        bad=1
+      fi
+      case $roid in
+        *[!0]*) git merge-base --is-ancestor "$roid" "$loid" 2>/dev/null || bad=1 ;;
+        *) [ -n "$roid" ] || bad=1 ;;
+      esac
+    done
+    if [ "$count" -le 1 ] && [ "$bad" -eq 0 ]; then
+      exit 0
+    fi
+  fi
+fi
 echo "blocked: agents in jj workspaces and git worktrees do not push; the user pushes from the main checkout with jpush/jland" >&2
 exit 1
 EOF
@@ -662,8 +715,9 @@ _jw_title_precmd() {
   _jw_title_set "${_jw_title:-${(%):-%~}}"
   [[ $want == "$_jw_tint_shown" ]] && return 0
   if [[ -n $want ]]; then
-    # Ghostty follows the macOS appearance (theme = dark:...,light:...)
-    if [[ $(defaults read -g AppleInterfaceStyle 2>/dev/null) == Dark ]]; then
+    # Ghostty follows the macOS appearance (theme = dark:...,light:...). Without `defaults`
+    # (Linux, often reached over ssh from a Mac) there is no appearance to ask, so assume dark.
+    if (( ! $+commands[defaults] )) || [[ $(defaults read -g AppleInterfaceStyle 2>/dev/null) == Dark ]]; then
       print -rn -- $'\e]11;'"$_jw_tint_dark[want]"$'\a'
     else
       print -rn -- $'\e]11;'"$_jw_tint_light[want]"$'\a'

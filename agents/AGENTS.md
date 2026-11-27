@@ -46,6 +46,8 @@ Shared rules marker: agents-rules-3f9c2a71
   - Never pass `--source claude`: the tool rejects it as a built-in name.
 - For a status ping with no question: `moshi-hook notify "<message>"`. It does not reach the phone
   while the app is closed, so a question always goes through `moshi-hook ask`.
+- Inside T3 Code (`T3CODE_THREAD_ID` set or T3 MCP tools available), rely on T3's native prompts
+  and notifications instead of mirroring through `moshi-hook`.
 
 ## Sub-agents on my subscriptions
 
@@ -56,6 +58,8 @@ uses those logins, never API keys.
   `env -u OPENAI_API_KEY -u CODEX_API_KEY -u CODEX_HOME codex ...`. A key exported in your own
   shell is inherited by every child, so strip it on every launch, also inside
   `rex window new ... --`. Codex bills to `CODEX_API_KEY` even with a ChatGPT login.
+- Inside T3 Code, prefer T3's `delegate_task` over launching CLI sub-agents in a shell. Keep the
+  `env -u` rules above for standalone CLI launches and remote VMs.
 - Never wrap an agent in `op run`, never set any of those five variables, never run
   `codex login --with-api-key`.
 - When an agent hits its usage limit, tell me. Never switch it to an API key.
@@ -91,6 +95,14 @@ Repos with a `.jj/` folder use jj, colocated with git.
 - Identity is picked automatically per folder. Switch it with `sign-as` only when I ask.
 - Push, open a PR, or move or delete a bookmark only with my explicit OK in chat, for that action
   or for a task I described.
+- When I explicitly assign a PR babysitting task on a feature branch (never `main`, never merging),
+  fixing review comments or CI failures includes creating signed commits, pushing updates to that
+  PR branch, replying to threads, and resolving fixed threads. Stop only if commit signing needs my
+  interaction or if a scope or product decision is needed. In a T3 git worktree, push with
+  explicit fast-forward `git push <remote> <src>:<dst>` (never `main`, never force-push). jj
+  workspaces stay blocked, so ask me to push from the main checkout or via `jpush`/`jland`.
+- After fixing a PR review finding and posting a reply (or an evidence-based rejection), verify the
+  reply posted and resolve the review thread on GitHub via `resolveReviewThread`.
 - Push to main, merge, tag or publish only when I ask for that exact action.
 - When to commit is in your tool's own part.
 
@@ -102,6 +114,14 @@ Repos with a `.jj/` folder use jj, colocated with git.
 - Run the project's documented gates before every commit, with its configured toolchain.
 - When a project marks files as approval-only (specs, contracts, schemas), never edit them without
   my approval.
+
+## Independent reviews
+
+- As soon as feature development or a fix is done, run independent code reviews by both Codex
+  (using Codex's code review feature) and Claude before shipping.
+- Whenever a change touches Rust code, also run a Beautiful Rust review using the installed
+  `beautiful-rust` skill available in Claude and Codex.
+- Keep reviews independent: do not share one reviewer's conclusions with the other before it reports.
 
 ## Local infrastructure
 
@@ -136,6 +156,7 @@ Repos with a `.jj/` folder use jj, colocated with git.
 Codex reads this file directly and has no part of its own, so its rules are here. Claude Code and
 Antigravity skip this section.
 
-- Do not create or amend commits without my explicit permission.
+- Do not create or amend commits without my explicit permission, except on an explicitly assigned
+  PR babysitting task on a non-main branch as stated above.
 - Permission to edit code, run autonomously, or run tests does not itself grant permission to
   commit, amend or push.

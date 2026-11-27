@@ -1,0 +1,206 @@
+#!/bin/bash
+# devvm: connect to an EC2 dev VM over SSM, signing in to AWS SSO and starting the VM when needed.
+# Usage: devvm [connect] [ssh args...]   sign in if needed, start the VM if stopped, then ssh to it
+#        devvm start | stop | status | login
+#        devvm proxy <instance-id> <port>    for ssh: ProxyCommand ~/.local/bin/devvm proxy %h %p
+#        devvm --help
+# Settings, from the environment or KEY=value lines in ~/.config/devvm/config:
+#   DEVVM_HOST         ssh host alias of the VM (default dev-vm). Its HostName is the instance ID.
+#   DEVVM_PROFILE      AWS CLI SSO profile (default: the host alias)
+#   DEVVM_REGION       AWS region (default: the profile's region)
+#   DEVVM_SIGNIN_URL   page that signs the browser in to the AWS access portal, opened before
+#                      `aws sso login`. Set it when the portal only accepts IdP-initiated sign-in.
+#   DEVVM_WAIT         seconds to wait for the VM to come online after a start (default 300)
+set -euo pipefail
+
+config=${XDG_CONFIG_HOME:-$HOME/.config}/devvm/config
+if [[ -r $config ]]; then
+  while IFS= read -r line || [[ -n $line ]]; do
+    case $line in
+      \#*|'') continue ;;
+      [A-Z_]*=*)
+        key=${line%%=*}
+        value=${line#*=}
+        case $key in
+          DEVVM_HOST|DEVVM_PROFILE|DEVVM_REGION|DEVVM_SIGNIN_URL|DEVVM_WAIT)
+            value=${value%\"} value=${value#\"}
+            # The environment wins over the file.
+            [[ -z ${!key:-} ]] && printf -v "$key" '%s' "$value" ;;
+        esac ;;
+    esac
+  done < "$config"
+fi
+
+host=${DEVVM_HOST:-dev-vm}
+profile=${DEVVM_PROFILE:-$host}
+wait_secs=${DEVVM_WAIT:-300}
+poll=${DEVVM_POLL:-5}
+
+# In proxy mode stdout is the ssh data channel, so every message goes to stderr.
+say() { echo "devvm: $*" >&2; }
+die() { say "$*"; exit 1; }
+
+[[ $wait_secs =~ ^[0-9]+$ ]] || die "DEVVM_WAIT must be a non-negative integer (got '$wait_secs')"
+[[ $poll =~ ^[0-9]+$ ]] || die "DEVVM_POLL must be a non-negative integer (got '$poll')"
+
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
+
+region=${DEVVM_REGION:-}
+resolve_region() {
+  command -v aws >/dev/null 2>&1 || die "aws CLI not found on PATH"
+  [[ -n $region ]] || region=$(aws configure get region --profile "$profile" 2>/dev/null || true)
+  [[ -n $region ]] || die "no region for profile '$profile': set DEVVM_REGION or region in ~/.aws/config"
+}
+awsp() { aws --profile "$profile" --region "$region" "$@"; }
+
+split_ssh_args() {
+  SSH_OPTS=()
+  SSH_REST=()
+  while (( $# )); do
+    case $1 in
+      --)
+        shift
+        SSH_REST+=("$@")
+        break ;;
+      -B|-b|-c|-D|-E|-e|-F|-I|-i|-J|-L|-l|-m|-O|-o|-P|-p|-Q|-R|-S|-W|-w)
+        (( $# >= 2 )) || die "ssh option '$1' requires an argument"
+        SSH_OPTS+=("$1" "$2")
+        shift 2 ;;
+      -*)
+        SSH_OPTS+=("$1")
+        shift ;;
+      *)
+        SSH_REST+=("$@")
+        break ;;
+    esac
+  done
+}
+
+instance_from_ssh() {
+  local id
+  id=$(ssh -G "$@" "$host" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }')
+  [[ $id == i-* ]] || die "ssh host '$host' has no instance ID as HostName (got '${id:-nothing}'), see devvm --help"
+  echo "$id"
+}
+
+signed_in() { awsp sts get-caller-identity >/dev/null 2>&1; }
+
+login() {
+  say "signing in to AWS SSO (profile $profile)"
+  if [[ -n ${DEVVM_SIGNIN_URL:-} ]]; then
+    say "opening the sign-in page first: sign in there, then come back"
+    if command -v open >/dev/null 2>&1; then
+      open "$DEVVM_SIGNIN_URL" >/dev/null 2>&1 || say "open it yourself: $DEVVM_SIGNIN_URL"
+    elif command -v xdg-open >/dev/null 2>&1; then
+      xdg-open "$DEVVM_SIGNIN_URL" >/dev/null 2>&1 || say "open it yourself: $DEVVM_SIGNIN_URL"
+    else
+      say "open it yourself: $DEVVM_SIGNIN_URL"
+    fi
+    if { exec 3</dev/tty; } 2>/dev/null; then
+      printf 'devvm: press Enter once the AWS access portal shows your accounts ' >&2
+      read -r _ <&3 || true
+      exec 3<&-
+    fi
+  fi
+  if ! aws sso login --profile "$profile" </dev/null >&2; then
+    say "sign-in failed. If AWS said \"We couldn't verify your sign-in credentials\", the browser"
+    say "is not signed in with your work Google account: sign in to Google with it, open AWS from"
+    say "Google's app launcher (the Amazon tile), then run: devvm login"
+    exit 1
+  fi
+}
+
+ensure_login() { signed_in || login; signed_in || die "still not signed in as profile '$profile'"; }
+
+state() {
+  local s
+  s=$(awsp ec2 describe-instances --instance-ids "$1" \
+    --query 'Reservations[0].Instances[0].State.Name' --output text) || return 1
+  [[ -n $s && $s != None ]] || { say "no EC2 state returned for $1"; return 1; }
+  echo "$s"
+}
+
+ssm_ping() {
+  awsp ssm describe-instance-information --filters "Key=InstanceIds,Values=$1" \
+    --query 'InstanceInformationList[0].PingStatus' --output text 2>/dev/null || true
+}
+
+ssm_ping_strict() {
+  local p
+  p=$(awsp ssm describe-instance-information --filters "Key=InstanceIds,Values=$1" \
+    --query 'InstanceInformationList[0].PingStatus' --output text) || return 1
+  echo "${p:-None}"
+}
+
+ensure_running() {
+  local id=$1 s waited=0
+  s=$(state "$id")
+  if [[ $s == stopping ]]; then
+    say "$id is stopping, waiting for it to stop before starting it"
+    awsp ec2 wait instance-stopped --instance-ids "$id"
+    s=stopped
+  fi
+  case $s in
+    running) ;;
+    stopped|pending)
+      if [[ $s == stopped ]]; then
+        say "starting $id"
+        awsp ec2 start-instances --instance-ids "$id" >/dev/null
+      fi
+      awsp ec2 wait instance-running --instance-ids "$id" ;;
+    *) die "$id is $s, cannot connect" ;;
+  esac
+  while [[ $(ssm_ping "$id") != Online ]]; do
+    (( waited >= wait_secs )) && die "$id is running but its SSM agent is not online after ${wait_secs}s"
+    (( waited == 0 )) && say "waiting for the SSM agent on $id"
+    sleep "$poll"
+    waited=$(( waited + poll ))
+  done
+}
+
+cmd=${1:-connect}
+case $cmd in
+  -h|--help|help) usage; exit 0 ;;
+  connect|start|stop|status|login|proxy) [[ $# -gt 0 ]] && shift ;;
+  -*) cmd=connect ;;
+  *) echo "unknown command: $cmd" >&2; usage >&2; exit 2 ;;
+esac
+resolve_region
+
+case $cmd in
+  login) login ;;
+  status)
+    id=$(instance_from_ssh)
+    if signed_in; then echo "signed in: yes (profile $profile)"
+    else echo "signed in: no, run devvm login"; exit 1; fi
+    vm_state=$(state "$id") || die "failed to read EC2 state for $id"
+    ssm_state=$(ssm_ping_strict "$id") || die "failed to read SSM status for $id"
+    echo "$id: $vm_state, ssm: $ssm_state" ;;
+  start)
+    id=$(instance_from_ssh)
+    ensure_login
+    ensure_running "$id"
+    say "$id is running" ;;
+  stop)
+    id=$(instance_from_ssh)
+    ensure_login
+    awsp ec2 stop-instances --instance-ids "$id" \
+      --query 'StoppingInstances[0].CurrentState.Name' --output text >/dev/null
+    say "stopping $id, the disk and files are kept" ;;
+  connect)
+    split_ssh_args "$@"
+    id=$(instance_from_ssh ${SSH_OPTS[@]+"${SSH_OPTS[@]}"})
+    ensure_login
+    ensure_running "$id"
+    DEVVM_READY="$id" exec ssh ${SSH_OPTS[@]+"${SSH_OPTS[@]}"} "$host" ${SSH_REST[@]+"${SSH_REST[@]}"} ;;
+  proxy)
+    [[ $# -eq 2 ]] || die "usage: devvm proxy <instance-id> <port>"
+    id=$1 port=$2
+    # devvm connect has already signed in and started this exact VM.
+    if [[ ${DEVVM_READY:-} != "$id" ]]; then
+      ensure_login
+      ensure_running "$id"
+    fi
+    exec aws ssm start-session --target "$id" --document-name AWS-StartSSHSession \
+      --parameters "portNumber=$port" --profile "$profile" --region "$region" ;;
+esac

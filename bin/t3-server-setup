@@ -1,0 +1,611 @@
+#!/bin/bash
+# t3-server-setup: bootstrap and verify a T3 Code server with Tailscale Serve.
+# Usage: t3-server-setup [options]
+#   --dry-run, -n     print planned actions without changing the host
+#   --check           read-only prerequisite and status check (exits 1 if incomplete)
+#   --protect         on Linux, run t3 service protect (OOM protection, uses sudo)
+#   --pair            run t3 pair --tailscale at the end (interactive terminal only)
+#   --port <port>     Tailscale Serve HTTPS port (default: 443)
+#   --base-dir <dir>  explicit T3CODE_HOME directory
+#   --no-install      fail instead of installing t3 when missing
+#   --help, -h        show this help
+set -euo pipefail
+
+DRY=0
+CHECK=0
+PROTECT=0
+PAIR=0
+NO_INSTALL=0
+SERVE_PORT=443
+BASE_DIR=''
+
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; }
+ok()   { printf 'ok   %s\n' "$*"; }
+note() { printf 'note %s\n' "$*"; }
+warn() { printf 'warn %s\n' "$*" >&2; }
+die()  { printf 't3-server-setup: %s\n' "$*" >&2; exit 1; }
+
+add_path_dir() {
+  local dir=$1
+  [[ -d $dir && :$PATH: != *:$dir:* ]] && PATH=$PATH:$dir
+  return 0
+}
+
+normalize_port() {
+  local raw=$1 stripped
+  [[ $raw =~ ^[0-9]+$ ]] || return 1
+  stripped=${raw#"${raw%%[!0]*}"}
+  [[ -n $stripped && ${#stripped} -le 5 ]] || return 1
+  (( 10#$stripped >= 1 && 10#$stripped <= 65535 )) || return 1
+  SERVE_PORT=$stripped
+}
+
+while (( $# )); do
+  case $1 in
+    --dry-run|-n) DRY=1; shift ;;
+    --check) CHECK=1; shift ;;
+    --protect) PROTECT=1; shift ;;
+    --pair) PAIR=1; shift ;;
+    --no-install) NO_INSTALL=1; shift ;;
+    --port)
+      (( $# >= 2 )) || { echo "missing value for --port" >&2; usage >&2; exit 2; }
+      SERVE_PORT=$2; shift 2 ;;
+    --port=*)
+      SERVE_PORT=${1#--port=}; shift ;;
+    --base-dir)
+      (( $# >= 2 )) || { echo "missing value for --base-dir" >&2; usage >&2; exit 2; }
+      BASE_DIR=$2; shift 2 ;;
+    --base-dir=*)
+      BASE_DIR=${1#--base-dir=}; shift ;;
+    -h|--help)
+      usage; exit 0 ;;
+    *)
+      echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+normalize_port "$SERVE_PORT" || { echo "invalid --port: $SERVE_PORT (expected 1..65535)" >&2; exit 2; }
+ALT_PORT=8443
+[[ $SERVE_PORT == 8443 ]] && ALT_PORT=8444
+
+if (( CHECK && (PAIR || PROTECT) )); then
+  echo "--check cannot be combined with --pair or --protect" >&2
+  exit 2
+fi
+if [[ -n $BASE_DIR ]]; then
+  case $BASE_DIR in
+    -*) echo "invalid --base-dir: $BASE_DIR" >&2; exit 2 ;;
+  esac
+fi
+
+OS=${T3_SETUP_OS:-$(uname -s)}
+TARGET_USER=${T3_SETUP_USER:-${USER:-$(id -un)}}
+INSTALL_URL=${T3_SETUP_INSTALL_URL:-https://t3.codes/install.sh}
+TAILSCALE_APP=${T3_SETUP_TAILSCALE_APP:-/Applications/Tailscale.app/Contents/MacOS/Tailscale}
+T3_HOME=${BASE_DIR:-${T3CODE_HOME:-$HOME/.t3}}
+T3_BASE_ARGS=()
+[[ -n $BASE_DIR ]] && T3_BASE_ARGS=(--base-dir "$BASE_DIR")
+
+add_path_dir "$HOME/.local/bin"
+add_path_dir "$HOME/.t3/bin"
+
+PAIR_CMD=(t3 pair --base-dir "$T3_HOME" --tailscale)
+if [[ $SERVE_PORT != 443 ]]; then
+  PAIR_CMD+=(--tailscale-serve-port "$SERVE_PORT")
+fi
+
+# Validate interactive terminal guards before any host mutation so pairing tokens stay off logs/pipes.
+if (( ! DRY && PAIR )) && { [[ ! -t 0 ]] || [[ ! -t 1 ]]; }; then
+  die "refusing --pair unless stdin and stdout are an interactive terminal so pairing tokens stay out of logs; run directly: ${PAIR_CMD[*]}"
+fi
+
+command -v jq >/dev/null 2>&1 || die "jq is required (install jq and re-run)"
+
+# Verify T3 runtime PID identity and bind host before upfront --protect checks and Serve checks.
+t3_running=0
+rt_pid=""
+rt_ppid=""
+rt_host=""
+rt_origin=""
+rt_kind=""
+runtime_file="$T3_HOME/userdata/server-runtime.json"
+if [[ -f $runtime_file ]]; then
+  if rt_fields=$(jq -r '
+    def line: tostring | gsub("[\r\n]"; " ");
+    (.pid // "" | line),
+    (.host // "" | line),
+    (.origin // "" | line),
+    "__END__"
+  ' "$runtime_file" 2>/dev/null); then
+    _end=""
+    {
+      IFS= read -r rt_pid
+      IFS= read -r rt_host
+      IFS= read -r rt_origin
+      IFS= read -r _end
+    } <<<"$rt_fields" || true
+    if [[ $_end == __END__ && $rt_pid =~ ^[0-9]+$ ]] && kill -0 "$rt_pid" 2>/dev/null; then
+      rt_proc=$(ps -ww -p "$rt_pid" -o comm=,args= 2>/dev/null || true)
+      if [[ -n $rt_proc ]] && printf '%s\n' "$rt_proc" | grep -qiE '(T3 Code[^/]*\.app|apps/desktop/dist-electron|apps/server/dist/bin\.mjs.*--bootstrap-fd)'; then
+        t3_running=1
+        rt_kind=desktop
+      elif [[ -n $rt_proc ]] && printf '%s\n' "$rt_proc" | grep -qiE '(^|[[:space:]/])t3([[:space:]]|$)|apps/server/dist/bin\.mjs|@t3tools/'; then
+        t3_running=1
+        rt_kind=server
+      else
+        rt_pid=""
+        rt_ppid=""
+        rt_host=""
+        rt_origin=""
+      fi
+      if (( t3_running )); then
+        rt_ppid=$(ps -p "$rt_pid" -o ppid= 2>/dev/null | tr -d '[:space:]' || true)
+        [[ $rt_ppid =~ ^[1-9][0-9]*$ ]] || rt_ppid=""
+      fi
+    else
+      rt_pid=""
+      rt_ppid=""
+      rt_host=""
+      rt_origin=""
+    fi
+  fi
+fi
+
+protect_will_skip=0
+if (( PROTECT )) && [[ $OS == Linux ]]; then
+  if (( t3_running )) || [[ -f "$T3_HOME/userdata/desktop-settings.json" ]]; then
+    if command -v t3 >/dev/null 2>&1; then
+      _early_st=$(t3 status ${T3_BASE_ARGS[@]+"${T3_BASE_ARGS[@]}"} --json 2>/dev/null || true)
+      if [[ -n $_early_st ]] && [[ $(jq -r '.service.installed // false' <<<"$_early_st" 2>/dev/null || true) != true ]]; then
+        protect_will_skip=1
+      fi
+    fi
+  fi
+fi
+if (( ! DRY && PROTECT && ! protect_will_skip )) && [[ $OS == Linux ]] && [[ $(id -u) -ne 0 ]] && [[ ! -t 0 ]]; then
+  die "t3 service protect requires an interactive terminal (run manually: t3 service protect${BASE_DIR:+ --base-dir $BASE_DIR})"
+fi
+
+CHECK_FAILS=()
+fail_check() { CHECK_FAILS+=("$1"); printf 'fail %s\n' "$1"; }
+fail_or_record() {
+  if (( CHECK )); then fail_check "$1"
+  else die "$1"; fi
+}
+
+TMP_FILES=()
+cleanup() {
+  local f
+  for f in ${TMP_FILES[@]+"${TMP_FILES[@]}"}; do
+    rm -f "$f"
+  done
+}
+trap cleanup EXIT
+
+run() {
+  echo "+ $*"
+  (( DRY )) && return 0
+  "$@"
+}
+
+run_sudo() {
+  if (( DRY )); then
+    echo "+ sudo $*"
+    return 0
+  fi
+  if [[ $(id -u) -eq 0 ]]; then
+    echo "+ $*"
+    "$@"
+    return
+  fi
+  if [[ -t 0 ]]; then
+    echo "+ sudo $*"
+    sudo "$@"
+    return
+  fi
+  echo "+ sudo -n $*"
+  sudo -n "$@" || die "non-interactive sudo failed (run manually: sudo $*)"
+}
+
+install_tailscale_wrapper() {
+  local dest="$HOME/.local/bin/tailscale" tmp escaped_app
+  if (( DRY )); then
+    echo "+ write executable wrapper $dest -> $TAILSCALE_APP"
+    return 0
+  fi
+  mkdir -p "$HOME/.local/bin"
+  tmp=$(mktemp "$HOME/.local/bin/.tailscale.XXXXXX")
+  TMP_FILES+=("$tmp")
+  escaped_app=$(printf '%s' "$TAILSCALE_APP" | sed "s/'/'\\\\''/g")
+  printf "#!/bin/sh\nexec '%s' \"\$@\"\n" "$escaped_app" > "$tmp"
+  chmod 755 "$tmp"
+  mv "$tmp" "$dest"
+  add_path_dir "$HOME/.local/bin"
+  ok "wrote $dest wrapper"
+}
+
+echo "== Tailscale"
+TS=$(command -v tailscale || true)
+if [[ -z $TS && $OS == Darwin && -x $TAILSCALE_APP ]]; then
+  if (( CHECK )); then
+    fail_check "$HOME/.local/bin/tailscale wrapper missing"
+    TS=$TAILSCALE_APP
+  else
+    install_tailscale_wrapper
+    TS=$(command -v tailscale || printf '%s' "$TAILSCALE_APP")
+  fi
+fi
+if [[ -z $TS ]]; then
+  fail_or_record "tailscale CLI not found on PATH (install Tailscale first)"
+else
+  if ! ts_json=$("$TS" status --json 2>/dev/null); then
+    fail_or_record "tailscale status --json failed (is Tailscale running?)"
+  else
+    ts_fields=$(jq -r '
+      def line: tostring | gsub("[\r\n]"; " ");
+      (.BackendState // "" | line),
+      (.MagicDNSSuffix // "" | line),
+      ((.CurrentTailnet.MagicDNSEnabled // false) | line),
+      ((.Self.CapMap // {}) | has("https") | line),
+      (.Self.KeyExpiry // "" | line),
+      (((.Self.Tags // []) | length) | line),
+      "__END__"
+    ' <<<"$ts_json" 2>/dev/null) || die "failed to parse tailscale status JSON"
+    _end=""
+    {
+      IFS= read -r backend_state
+      IFS= read -r magic_dns
+      IFS= read -r magic_dns_enabled
+      IFS= read -r cap_https
+      IFS= read -r key_expiry
+      IFS= read -r tag_count
+      IFS= read -r _end
+    } <<<"$ts_fields" || true
+    [[ $_end == __END__ ]] || die "failed to parse tailscale status JSON"
+
+    if [[ $backend_state != Running ]]; then
+      fail_or_record "Tailscale BackendState is '${backend_state:-unknown}' (expected Running; run: tailscale up)"
+    else
+      ok "Tailscale is Running"
+    fi
+    if [[ $magic_dns_enabled != true || -z $magic_dns ]]; then
+      fail_or_record "Tailscale MagicDNS is disabled (enable MagicDNS in Tailscale Admin Console -> DNS)"
+    else
+      ok "MagicDNS enabled ($magic_dns)"
+    fi
+    if [[ $cap_https != true ]]; then
+      fail_or_record "Tailscale HTTPS Certificates disabled (enable HTTPS Certificates in Tailscale Admin Console -> DNS)"
+    else
+      ok "Tailscale HTTPS certificates enabled"
+    fi
+    if [[ $OS == Linux && -n $key_expiry && $key_expiry != null && $key_expiry != 0001-01-01T00:00:00Z ]]; then
+      note "Tailscale node key expires ($key_expiry); disable key expiry in Tailscale Admin Console for an always-on server"
+    fi
+    if [[ $tag_count =~ ^[0-9]+$ ]] && (( tag_count > 0 )); then
+      note "Tailscale node is tagged ($tag_count tag(s)); ensure ACLs/Grants allow TCP $SERVE_PORT from your client devices"
+    fi
+
+    serve_json=""
+    if ! serve_json=$("$TS" serve status --json 2>/dev/null); then
+      fail_or_record "tailscale serve status --json failed (cannot verify Tailscale Serve port $SERVE_PORT)"
+      serve_json=""
+    elif [[ -z ${serve_json//[[:space:]]/} ]]; then
+      fail_or_record "tailscale serve status --json returned empty output (cannot verify Tailscale Serve port $SERVE_PORT)"
+      serve_json=""
+    elif ! jq -e 'type == "object"' <<<"$serve_json" >/dev/null 2>&1; then
+      fail_or_record "tailscale serve status --json returned non-object JSON (cannot verify Tailscale Serve port $SERVE_PORT)"
+      serve_json=""
+    fi
+
+    if [[ -n $serve_json ]]; then
+      serve_info=$(jq -rn --argjson s "$serve_json" --arg p "$SERVE_PORT" --arg rt_host "$rt_host" --arg t3_origin "$rt_origin" '
+        def line: tostring | gsub("[\r\n]"; " ");
+        def loopback_spec:
+          (try (capture("^(?<scheme>https?)://(?<host>127\\.0\\.0\\.1|localhost|\\[::1\\])(?::(?<port>[0-9]+))?/?$") // null) catch null)
+          | if . == null then null
+            else {scheme: .scheme, host: .host, port: (.port // (if .scheme == "https" then "443" else "80" end))}
+            end;
+        ($t3_origin | loopback_spec) as $t3
+        | ($rt_host | gsub("^\\[|\\]$"; "")) as $bind
+        | (if $t3 == null then []
+           elif ($bind == "127.0.0.1" or $bind == "0.0.0.0") then
+             (["127.0.0.1"] + (if $t3.host == "localhost" then ["localhost"] else [] end))
+           elif $bind == "::1" then ["[::1]"]
+           elif $bind == "::" then ["127.0.0.1", "[::1]", "localhost"]
+           elif $bind == "localhost" then [$t3.host]
+           elif $bind == "" then [$t3.host]
+           else []
+           end) as $allowed_hosts
+        | def matches_t3:
+            if $t3 == null then false
+            else
+              .has_https and .path == "/" and (
+                (.proxy | loopback_spec) as $ps
+                | $ps != null and $ps.scheme == $t3.scheme and $ps.port == $t3.port and ($allowed_hosts | index($ps.host) != null)
+              )
+            end;
+        [ $s, (($s.Foreground // {}) | to_entries[]? | .value) ] as $cfgs
+        | [ $cfgs[] as $c | ($c.AllowFunnel // {}) | to_entries[]? | select((.key | endswith(":" + $p)) and .value == true) ] as $funnels
+        | [ $cfgs[] as $c | (($c.TCP // {})[$p] // empty) | select((.TCPForward // "") != "" or (.HTTPS != true)) ] as $bad_tcps
+        | [ $cfgs[] as $c |
+            ((($c.TCP // {})[$p].HTTPS // false) == true) as $cfg_https |
+            ($c.Web // {}) as $web |
+            ($web | keys | map(select(endswith(":" + $p))))[] as $k |
+            ($web[$k].Handlers // {}) as $h |
+            if ($h | length) == 0 then {host: $k, path: "", proxy: "", has_https: $cfg_https}
+            else ($h | to_entries[] | {host: $k, path: .key, proxy: (.value.Proxy // ""), has_https: $cfg_https})
+            end
+          ] as $hs
+        | [ $cfgs[] as $c | select(($c.TCP // {}) | has($p)) ] as $any_tcps
+        | (if ($funnels | length) > 0 then
+            ["collision", ("Tailscale Funnel is enabled on port " + $p)]
+          elif ($bad_tcps | length) > 0 then
+            ["collision", (if ($bad_tcps[0].TCPForward // "") != "" then "TCP forward " + $bad_tcps[0].TCPForward + " on port " + $p else "non-HTTPS TCP listener on port " + $p end)]
+          elif ($hs | length) > 0 then
+            if $t3 != null and all($hs[]; matches_t3) then
+              ["t3_match", $hs[0].proxy]
+            else
+              ($hs | map(select(matches_t3 | not))[0] // $hs[0]) as $bad
+              | ["collision", (if ($bad.has_https | not) then $bad.host + " Web handler without HTTPS listener on port " + $p elif $bad.proxy != "" then $bad.path + " -> " + $bad.proxy else $bad.host + " handler " + ($bad.path | if . == "" then "(empty)" else . end) end)]
+            end
+          elif ($any_tcps | length) > 0 then
+            ["collision", ("TCP/HTTPS listener on port " + $p)]
+          else
+            ["free", ""]
+          end)
+        | (.[0] | line), (.[1] | line), "__END__"
+      ' 2>/dev/null) || die "failed to parse tailscale serve status JSON"
+      _end=""
+      {
+        IFS= read -r serve_state
+        IFS= read -r serve_detail
+        IFS= read -r _end
+      } <<<"$serve_info" || true
+      [[ $_end == __END__ ]] || die "failed to parse tailscale serve status JSON"
+
+      case $serve_state in
+        free) ok "Tailscale Serve port $SERVE_PORT is free" ;;
+        t3_match) ok "Tailscale Serve port $SERVE_PORT already proxies this T3 server ($serve_detail)" ;;
+        collision)
+          fail_or_record "Tailscale Serve port $SERVE_PORT is in use ($serve_detail); re-run with --port $ALT_PORT instead of resetting Serve" ;;
+      esac
+    fi
+  fi
+fi
+
+if [[ $OS == Linux ]]; then
+  echo "== Linux systemd & Tailscale operator"
+  if [[ -n $TS ]]; then
+    op_user=$("$TS" debug prefs 2>/dev/null | jq -r '.OperatorUser // ""' 2>/dev/null || true)
+    if [[ $op_user == "$TARGET_USER" ]]; then
+      ok "Tailscale operator is $TARGET_USER"
+    elif (( CHECK )); then
+      fail_check "Tailscale operator is not $TARGET_USER (run: sudo $TS set --operator=$TARGET_USER)"
+    else
+      run_sudo "$TS" set --operator="$TARGET_USER"
+    fi
+  fi
+
+  if ! command -v loginctl >/dev/null 2>&1; then
+    fail_or_record "loginctl not found (Linux systemd is required)"
+  else
+    linger_val=$(loginctl show-user "$TARGET_USER" -p Linger 2>/dev/null || true)
+    if [[ $linger_val == "Linger=yes" ]]; then
+      ok "systemd linger enabled for $TARGET_USER"
+    elif (( CHECK )); then
+      fail_check "systemd linger disabled for $TARGET_USER (run: sudo loginctl enable-linger $TARGET_USER)"
+    else
+      run_sudo loginctl enable-linger "$TARGET_USER"
+    fi
+  fi
+fi
+
+echo "== T3 Code CLI & service"
+t3_dry_missing=0
+if ! command -v t3 >/dev/null 2>&1; then
+  if (( CHECK )); then
+    fail_check "t3 CLI is not installed"
+  elif (( NO_INSTALL )); then
+    die "t3 CLI is not installed (--no-install set)"
+  elif (( DRY )); then
+    echo "+ curl --proto '=https' --tlsv1.2 -fsSL $INSTALL_URL -o <tmp> && sh <tmp>"
+    t3_dry_missing=1
+  else
+    command -v curl >/dev/null 2>&1 || die "curl is required to install t3"
+    installer=$(mktemp "${TMPDIR:-/tmp}/t3-install.XXXXXX")
+    TMP_FILES+=("$installer")
+    echo "+ curl --proto '=https' --tlsv1.2 -fsSL $INSTALL_URL -o $installer"
+    curl --proto '=https' --tlsv1.2 -fsSL "$INSTALL_URL" -o "$installer"
+    [[ -s $installer ]] || die "downloaded t3 installer from $INSTALL_URL is empty"
+    echo "+ sh $installer"
+    sh "$installer"
+    add_path_dir "$HOME/.t3/bin"
+    add_path_dir "$HOME/.local/bin"
+    command -v t3 >/dev/null 2>&1 || die "t3 still not on PATH after installer completed"
+  fi
+fi
+
+service_ready=0
+svc_installed=false
+t3_cmd=$(command -v t3 || true)
+if (( ! t3_dry_missing )) && [[ -n $t3_cmd ]]; then
+  t3_ver=$(t3 --version 2>/dev/null || true)
+  t3_ver=${t3_ver%%$'\n'*}
+  t3_ver=${t3_ver#t3 }
+  [[ -n $t3_ver ]] || t3_ver=unknown
+  ok "t3 $t3_ver ($t3_cmd)"
+
+  if status_json=$(t3 status ${T3_BASE_ARGS[@]+"${T3_BASE_ARGS[@]}"} --json 2>/dev/null); then
+    status_fields=$(jq -r '
+      def line: tostring | gsub("[\r\n]"; " ");
+      ((.service.supported // false) | line),
+      ((.service.installed // false) | line),
+      (.service.installedVersion // "" | line),
+      (.service.otherBaseDir // "" | line),
+      ((.lan.enabled // false) | line),
+      "__END__"
+    ' <<<"$status_json" 2>/dev/null) || die "failed to parse t3 status JSON"
+    _end=""
+    {
+      IFS= read -r svc_supported
+      IFS= read -r svc_installed
+      IFS= read -r svc_ver
+      IFS= read -r svc_other_base
+      IFS= read -r lan_enabled
+      IFS= read -r _end
+    } <<<"$status_fields" || true
+    [[ $_end == __END__ ]] || die "failed to parse t3 status JSON"
+
+    if [[ -n $svc_other_base ]]; then
+      note "another T3 service is installed for base dir: $svc_other_base"
+    fi
+
+    systemd_active=0
+    if [[ $OS != Linux ]]; then
+      systemd_active=-1
+    elif command -v systemctl >/dev/null 2>&1 && [[ -n $rt_pid ]]; then
+      while IFS= read -r unit; do
+        [[ -n $unit ]] || continue
+        unit_pid=$(systemctl --user show -p MainPID --value "$unit" 2>/dev/null || true)
+        if [[ $unit_pid =~ ^[1-9][0-9]*$ && $unit_pid == "$rt_pid" ]] || \
+           [[ $unit_pid =~ ^[1-9][0-9]*$ && $unit_pid != 1 && -n $rt_ppid && $unit_pid == "$rt_ppid" ]]; then
+          systemd_active=1
+          break
+        fi
+        if [[ -r "/proc/$rt_pid/cgroup" ]]; then
+          while IFS= read -r cg_line || [[ -n $cg_line ]]; do
+            if [[ $cg_line == *"/$unit" ]]; then
+              systemd_active=1
+              break 2
+            fi
+          done <"/proc/$rt_pid/cgroup"
+        fi
+      done < <(systemctl --user list-units --type=service --state=active --no-legend --plain 't3*.service' 2>/dev/null | awk '{print $1}')
+    fi
+
+    desktop_dir=0
+    if [[ $svc_installed != true && -f "$T3_HOME/userdata/desktop-settings.json" ]]; then
+      desktop_dir=1
+    fi
+
+    if (( desktop_dir )); then
+      if (( t3_running )) && [[ $rt_kind == desktop ]]; then
+        ok "$T3_HOME is owned by a running T3 desktop app (skipping t3 service install; pass --base-dir for a separate service)"
+      elif (( t3_running )); then
+        ok "$T3_HOME has desktop-settings.json and a running T3 server (pid $rt_pid; skipping t3 service install; pass --base-dir for a separate service)"
+      else
+        fail_or_record "$T3_HOME is desktop-owned (desktop-settings.json present) and the desktop app is not running (start T3 desktop or pass --base-dir <dir> for a separate service)"
+      fi
+    elif (( t3_running )) && [[ $svc_installed != true ]]; then
+      ok "T3 server is already running in $T3_HOME (pid $rt_pid; skipping t3 service install; pass --base-dir for a separate service)"
+    elif [[ $svc_installed == true ]]; then
+      if (( t3_running )) && [[ $rt_kind == server ]] && (( systemd_active != 0 )); then
+        ok "t3 service already installed (${svc_ver:-unknown}) and running (${rt_origin:-pid $rt_pid})"
+        service_ready=1
+      elif (( t3_running )); then
+        if (( CHECK )); then
+          fail_check "t3 service is installed (${svc_ver:-unknown}) but not active (live runtime pid $rt_pid is $rt_kind; run: t3 service restart${BASE_DIR:+ --base-dir $BASE_DIR})"
+        else
+          note "t3 service is installed (${svc_ver:-unknown}) but the service unit is not active (check: t3 service status${BASE_DIR:+ --base-dir $BASE_DIR})"
+        fi
+      elif (( CHECK )); then
+        fail_check "t3 service is installed (${svc_ver:-unknown}) but not running in $T3_HOME (run: t3 service restart${BASE_DIR:+ --base-dir $BASE_DIR})"
+      else
+        note "t3 service already installed (${svc_ver:-unknown}), not currently running (check: t3 service status${BASE_DIR:+ --base-dir $BASE_DIR})"
+      fi
+    elif [[ $svc_supported != true ]]; then
+      fail_or_record "t3 background service is not supported on this host"
+    elif (( CHECK )); then
+      fail_check "t3 background service is not installed (run: t3 service install${BASE_DIR:+ --base-dir $BASE_DIR})"
+    else
+      run t3 service install ${T3_BASE_ARGS[@]+"${T3_BASE_ARGS[@]}"}
+      service_ready=1
+    fi
+
+    if [[ $lan_enabled == true ]]; then
+      note "LAN mode is enabled on T3; consider t3 up --no-lan so only loopback + Tailscale Serve accept traffic"
+    fi
+  else
+    fail_or_record "t3 status --json failed"
+  fi
+elif (( t3_dry_missing )); then
+  echo "+ t3 service install${BASE_DIR:+ --base-dir $BASE_DIR}"
+fi
+
+if (( PROTECT )); then
+  if [[ $OS != Linux ]]; then
+    echo "skip --protect: Linux systemd only"
+  elif (( ! service_ready && ! t3_dry_missing )) && [[ $svc_installed != true ]]; then
+    note "skip --protect: no installed T3 background service for $T3_HOME"
+  elif (( DRY )); then
+    echo "+ t3 service protect${BASE_DIR:+ --base-dir $BASE_DIR}"
+  else
+    echo "+ t3 service protect${BASE_DIR:+ --base-dir $BASE_DIR}"
+    t3 service protect ${T3_BASE_ARGS[@]+"${T3_BASE_ARGS[@]}"}
+  fi
+fi
+
+echo "== Agent & toolchain audit"
+for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY CODEX_HOME; do
+  if [[ -n ${!var:-} ]]; then
+    warn "$var is set in this shell (unset it in shell and service environments for subscription-only CLI launches)"
+  fi
+done
+
+if command -v gh >/dev/null 2>&1; then
+  if gh auth status >/dev/null 2>&1; then
+    ok "gh authenticated"
+  else
+    note "gh is not signed in (run: gh auth login)"
+  fi
+else
+  note "gh CLI not found (required for GitHub PRs and issues)"
+fi
+
+for tool in claude codex git jj sccache cargo-nextest; do
+  if command -v "$tool" >/dev/null 2>&1; then
+    ok "$tool ($(command -v "$tool"))"
+  else
+    note "$tool not on PATH"
+  fi
+done
+if [[ $OS == Linux ]]; then
+  if command -v mold >/dev/null 2>&1; then
+    ok "mold ($(command -v mold))"
+  else
+    note "mold not on PATH"
+  fi
+fi
+
+if [[ -f "$HOME/.cargo/config.toml" ]] && grep -qsE 'rustc-wrapper[[:space:]]*=[[:space:]]*"[^"]*sccache"' "$HOME/.cargo/config.toml"; then
+  ok "$HOME/.cargo/config.toml sets rustc-wrapper = sccache"
+else
+  note "$HOME/.cargo/config.toml does not configure rustc-wrapper = \"sccache\""
+fi
+
+settings_file="$T3_HOME/userdata/settings.json"
+if [[ -f $settings_file ]] && jq -e '.linkedEnvironmentsEnabled == true' "$settings_file" >/dev/null 2>&1; then
+  ok "linkedEnvironmentsEnabled is true in $settings_file"
+else
+  note "enable Settings -> Labs -> Linked environments to delegate across hosts"
+fi
+
+echo "== Pairing"
+if (( CHECK )); then
+  if (( ${#CHECK_FAILS[@]} )); then
+    echo "check failed (${#CHECK_FAILS[@]} issue(s))" >&2
+    exit 1
+  fi
+  echo "all prerequisite checks passed"
+  exit 0
+fi
+
+if (( PAIR )); then
+  if (( DRY )); then
+    echo "+ ${PAIR_CMD[*]}"
+  else
+    "${PAIR_CMD[@]}"
+  fi
+else
+  note "run directly in your terminal (once per client): ${PAIR_CMD[*]}"
+fi

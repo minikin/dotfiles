@@ -1,0 +1,178 @@
+#!/bin/bash
+# dotfiles-update: update every package manager this setup uses, in one run. Homebrew (the
+# Brewfile, then everything else outdated), agy (its own installer in ~/.local/bin), rustup, the
+# global mise tools, uv tools and the Mac App Store. Each step is skipped when its tool is missing,
+# a failing step does not stop the rest, and the exit status is 1 when any step failed.
+# Usage: dotfiles-update [--greedy] [--dry-run] | --help
+#   --greedy   also upgrade every other cask that updates itself (Claude, ChatGPT, ...).
+#              brew quits a running app to replace it, so this is opt-in. The agent casks
+#              (antigravity, codex, claude-code@latest) are always upgraded this way.
+#   --dry-run  print the commands without running them.
+set -uo pipefail
+
+greedy=0 dry=0
+for arg in "$@"; do
+  case $arg in
+    --greedy) greedy=1 ;;
+    --dry-run|-n) dry=1 ;;
+    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown argument: $arg (usage: dotfiles-update [--greedy] [--dry-run] | --help)" >&2; exit 2 ;;
+  esac
+done
+
+# The script runs through its ~/.local/bin link, so the repo comes from install.sh's config.
+repo=${DOTFILES_DIR:-}
+config=${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/config
+if [[ -z $repo && -r $config ]]; then
+  # shellcheck disable=SC1090 # runtime-generated config file from install.sh
+  repo=$(DOTFILES_DIR=; source "$config" 2>/dev/null || true; printf '%s\n' "$DOTFILES_DIR")
+fi
+if [[ -z $repo ]]; then
+  self=$0
+  [[ -L $self ]] && self=$(readlink "$self")
+  repo=$(cd "$(dirname "$self")/.." && pwd)
+fi
+
+failed=()
+have() { command -v "$1" >/dev/null 2>&1; }
+section() { printf '\n== %s\n' "$*"; }
+skip() { echo "skip $*"; }
+run() {
+  echo "+ $*"
+  (( dry )) && return 0
+  "$@" || { echo "failed (exit $?): $*" >&2; failed+=("$*"); return 1; }
+}
+
+section "Homebrew"
+if have brew; then
+  run brew update
+  if [[ ! -f $repo/Brewfile ]]; then
+    skip "brew bundle: no Brewfile in $repo"
+  elif [[ $OSTYPE == darwin* ]]; then
+    run brew bundle --file "$repo/Brewfile"
+  else
+    echo "+ scripts/linux-brewfile.sh | brew bundle --file=-"
+    if (( ! dry )); then
+      "$repo/scripts/linux-brewfile.sh" "$repo/Brewfile" | brew bundle --file=- ||
+        failed+=("brew bundle")
+    fi
+  fi
+  if (( greedy )); then run brew upgrade --greedy; else run brew upgrade; fi
+  # The agent casks always get the newest release. Antigravity's cask sets auto_updates, so a
+  # plain brew upgrade leaves it to the app's own updater.
+  if [[ $OSTYPE == darwin* ]] && (( ! greedy )); then
+    agent_casks=()
+    for cask in antigravity codex claude-code@latest; do
+      brew list --cask "$cask" >/dev/null 2>&1 && agent_casks+=("$cask")
+    done
+    (( ${#agent_casks[@]} )) && run brew upgrade --cask --greedy "${agent_casks[@]}"
+  fi
+  run brew cleanup
+else
+  skip "Homebrew: brew not installed"
+fi
+
+section "agy"
+if have agy; then run agy update; else skip "agy: not installed"; fi
+
+section "rustup"
+# Before mise, which builds the cargo: tools with this toolchain. Homebrew's rustup is keg-only,
+# so its cargo and rustc proxies are put on PATH here as zshrc does.
+for dir in ${DOTFILES_RUSTUP_DIRS-/opt/homebrew/opt/rustup/bin /home/linuxbrew/.linuxbrew/opt/rustup/bin $HOME/.cargo/bin}; do
+  [[ -d $dir && :$PATH: != *:$dir:* ]] && PATH=$PATH:$dir
+done
+if ! have rustup; then
+  skip "rustup: not installed (brew bundle installs it from the Brewfile)"
+elif (( ! dry )) && ! rustup default >/dev/null 2>&1; then
+  run rustup default stable
+else
+  run rustup update
+fi
+
+section "mise global tools"
+# From $HOME, so a project's mise.toml in the current folder is not upgraded instead.
+if ! have mise; then
+  skip "mise: not installed"
+elif ! have jq; then
+  run mise --cd "$HOME" install
+  run mise --cd "$HOME" upgrade
+else
+  # go: tools build with Homebrew's go, which mise does not install, so without go every one
+  # fails. cargo: tools come from cargo-binstall's prebuilt binaries when there is one
+  # and need cargo only to build the rest. Without cargo, a crate that binstall already installed
+  # stays in, and one that is still missing is a crate binstall could not fetch.
+  tools=() no_go=0 no_cargo=() mise_err=0
+  if ! mise_json=$(mise --cd "$HOME" ls --global --json); then
+    echo "failed (exit $?): mise --cd $HOME ls --global --json" >&2
+    failed+=("mise --cd $HOME ls --global --json")
+    mise_err=1
+  elif ! mise_rows=$(jq -r 'to_entries[] | "\(.key)\t\(any(.value[]; .installed))"' <<<"$mise_json"); then
+    echo "failed (exit $?): jq mise ls --global --json" >&2
+    failed+=("jq mise ls --global --json")
+    mise_err=1
+  else
+    while IFS=$'\t' read -r tool installed; do
+      [[ -n $tool ]] || continue
+      case $tool in
+        go:*) have go || { no_go=$((no_go + 1)); continue; } ;;
+        cargo:*)
+          if ! have cargo && { ! have cargo-binstall || [[ $installed != true ]]; }; then
+            no_cargo+=("${tool#cargo:}"); continue
+          fi ;;
+      esac
+      tools+=("$tool")
+    done <<<"$mise_rows"
+  fi
+  (( no_go )) && skip "$no_go go: tools: go not on PATH (brew install go, it is in the Brewfile)"
+  (( ${#no_cargo[@]} )) && skip "cargo: ${no_cargo[*]}: needs cargo to build (brew install rustup, then rustup default stable)"
+  if (( ${#tools[@]} )); then
+    run mise --cd "$HOME" install "${tools[@]}"
+    run mise --cd "$HOME" upgrade "${tools[@]}"
+  elif (( ! mise_err && ! no_go && ! ${#no_cargo[@]} )); then
+    skip "mise: no global tools"
+  fi
+fi
+
+section "uv tools"
+if have uv; then run uv tool upgrade --all; else skip "uv: not installed"; fi
+
+section "Mac App Store"
+if [[ $OSTYPE != darwin* ]]; then skip "mas: not macOS"
+elif ! have mas; then skip "mas: not installed"
+else
+  echo "+ mas upgrade"
+  if (( ! dry )); then
+    mas_log=$(mktemp)
+    mas upgrade 2>&1 | tee "$mas_log"
+    mas_rc=${PIPESTATUS[0]}
+    if (( mas_rc )); then
+      echo "failed (exit $mas_rc): mas upgrade" >&2
+      failed+=("mas upgrade")
+      # -128 is the App Store refusing the download, which is what it does with no Apple ID
+      # signed in. mas 7 has no command that reports the account, so the error is the only sign.
+      if grep -qiE 'ISErrorDomain Code=-128|not signed in|sign in' "$mas_log"; then
+        echo "mas: the App Store refused the updates. Sign in with your Apple ID in App Store.app (Store > Sign In), then run dotfiles-update again." >&2
+      fi
+    fi
+    rm -f "$mas_log"
+  fi
+fi
+
+section "Agent CLIs"
+for tool in codex claude agy; do
+  if ! have "$tool"; then skip "$tool: not installed"; continue; fi
+  printf '%-7s %s  (%s)\n' "$tool" "$("$tool" --version 2>/dev/null | head -1)" "$(command -v "$tool")"
+done
+# A second codex earlier on PATH (npm -g, a mise tool) would shadow the Brewfile's cask.
+codex_path=$(command -v codex || true)
+if [[ -n $codex_path && $codex_path != */homebrew/* && $codex_path != */linuxbrew/* ]]; then
+  echo "note codex runs from $codex_path, not Homebrew. Remove that copy to use the cask." >&2
+fi
+
+if (( ${#failed[@]} )); then
+  section "Failed"
+  printf '  %s\n' "${failed[@]}"
+  exit 1
+fi
+echo
+echo "done"

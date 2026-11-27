@@ -43,11 +43,14 @@ else
 fi
 
 here=() launchd=() unchecked=() launchd_err=''
-have launchctl || launchd_err='launchctl not found'
+# Overridable so tests can run the Linux path on a Mac.
+os=${DOTFILES_OS:-$OSTYPE}
+if [[ $os != darwin* ]]; then launchd_err='no launchd'
+elif ! have launchctl; then launchd_err='launchctl not found'; fi
 for v in "${VARS[@]}"; do
   [[ -n ${!v+set} ]] && here+=("$v")
   # GUI apps, and so the Rex server, inherit launchd's environment, not this shell's.
-  [[ $launchd_err == 'launchctl not found' ]] && continue
+  [[ $launchd_err == 'launchctl not found' || $launchd_err == 'no launchd' ]] && continue
   if ! value=$(launchctl getenv "$v" 2>/dev/null); then
     launchd_err='launchctl getenv failed'; unchecked+=("$v"); continue
   fi
@@ -57,7 +60,8 @@ unset value
 if (( ${#here[@]} )); then fail "env: set in this shell: ${here[*]} (unset them)"
 else ok "env: no API-key variables in this shell"; fi
 (( ${#launchd[@]} )) && fail "env: set in launchd: ${launchd[*]} (launchctl unsetenv <name>)"
-if [[ $launchd_err == 'launchctl not found' ]]; then fail "env: cannot check launchd ($launchd_err)"
+if [[ $launchd_err == 'no launchd' ]]; then info "env: no launchd on $os, skipped"
+elif [[ $launchd_err == 'launchctl not found' ]]; then fail "env: cannot check launchd ($launchd_err)"
 elif [[ -n $launchd_err ]]; then fail "env: cannot check launchd for ${unchecked[*]} ($launchd_err)"
 elif (( ! ${#launchd[@]} )); then ok "env: no API-key variables in launchd"; fi
 

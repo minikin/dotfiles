@@ -396,3 +396,15 @@ EOF
   [[ $output == *"jj identity and signing configured"* ]] || false
   [[ $output != *set\ -uo* ]] || false
 }
+
+@test "preflight: on Linux the launchd check is skipped, not failed" {
+  rm "$STUBS/launchctl"
+  DOTFILES_OS=linux-gnu preflight
+  [ "$status" -eq 0 ]
+  [[ $output == *"info  env: no launchd on linux-gnu, skipped"* ]] || false
+  [[ $output != *"cannot check launchd"* ]] || false
+
+  OPENAI_API_KEY=test-not-a-key DOTFILES_OS=linux-gnu preflight
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  env: set in this shell: OPENAI_API_KEY"* ]] || false
+}

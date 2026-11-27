@@ -1,3 +1,5 @@
+# On Linux, install.sh --brew drops every cask and every line tagged "# macos-only".
+
 # Terminal
 cask "ghostty"
 cask "font-jetbrains-mono-nerd-font"
@@ -6,7 +8,7 @@ brew "tmux"
 brew "zellij"
 brew "nushell"
 brew "btop"
-brew "terminal-notifier"
+brew "terminal-notifier"  # macos-only
 
 # Screenshots (./install.sh --shottr frees ⇧⌘3/4/5 for it)
 cask "shottr"
@@ -48,6 +50,8 @@ cask "github"
 
 # Tooling
 brew "mise"
+brew "go"                 # projects pick their own version through go.mod toolchain
+brew "rustup"             # keg-only: zshrc puts its bin on PATH, install.sh --brew sets the stable toolchain
 brew "just"
 brew "uv"
 brew "prek"
@@ -61,7 +65,7 @@ brew "cargo-nextest"
 brew "cargo-binstall"
 brew "poetry"
 brew "ffmpeg"
-brew "mas"                # CLI for Mac App Store installs listed in docs/reference/applications.md
+brew "mas"                # macos-only: CLI for Mac App Store installs listed in docs/reference/applications.md
 cask "1password"
 cask "1password-cli"
 cask "orbstack"
@@ -97,7 +101,7 @@ brew "redis"              # redis-cli (server runs in Docker)
 brew "kcat"               # Kafka produce/consume/metadata
 cask "redis-insight"
 brew "mkcert"
-brew "pinentry-mac"
+brew "pinentry-mac"       # macos-only
 
 # APIs / distributed systems
 brew "grpcurl"

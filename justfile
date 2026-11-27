@@ -45,7 +45,7 @@ lint:
 test:
     bats tests
 
-# Run the drift, statusline and install suites under macOS's /bin/bash 3.2 (bats itself starts with env bash)
+# Run the drift, statusline, install, hooks and t3-server-setup suites under macOS's /bin/bash 3.2 (bats itself starts with env bash)
 test-bash32:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -56,7 +56,7 @@ test-bash32:
     version=$(bash -c 'echo "${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}"')
     [[ $version == 3.2 ]] || { echo "test-bash32: bash on PATH is $version, not 3.2" >&2; exit 1; }
     echo "== bats under bash $(bash -c 'echo "$BASH_VERSION"')"
-    bats --print-output-on-failure tests/drift.bats tests/statusline.bats tests/install.bats
+    bats --print-output-on-failure tests/drift.bats tests/statusline.bats tests/install.bats tests/hooks.bats tests/t3-server-setup.bats
 
 # Scan for secrets and personal data
 secrets:
@@ -106,7 +106,7 @@ drift:
       printf '%-12s %s%s\n' "$status" "${dest/#$HOME/$tilde}" "$target"
     fi
 
-# Read-only health check of this Mac: just drift, agent-preflight, brew bundle check, then a pointer to remote-check. Exits 1 if preflight or brew fails
+# Read-only health check of this machine: just drift, agent-preflight, brew bundle check, then a pointer to remote-check. Exits 1 if preflight or brew fails
 doctor:
     #!/usr/bin/env bash
     set -uo pipefail
@@ -117,13 +117,18 @@ doctor:
     ./bin/agent-preflight || rc=1
     echo "== brew bundle check"
     if command -v brew >/dev/null; then
-      brew bundle check --file Brewfile --no-upgrade || rc=1
+      if [[ $OSTYPE == darwin* ]]; then brew bundle check --file Brewfile --no-upgrade || rc=1
+      else scripts/linux-brewfile.sh | brew bundle check --file=- --no-upgrade || rc=1; fi
     else
       echo "skip brew bundle check: brew not installed"
     fi
     echo "== phone access"
     echo "run remote-check in zsh: it is a shell function, so a just recipe cannot call it"
     exit "$rc"
+
+# Update Homebrew (Brewfile and the rest), agy, mise global tools, uv tools, rustup and mas, e.g. `just update --greedy`
+update *args:
+    ./bin/dotfiles-update {{args}}
 
 # Start the local Redis / Kafka / Jaeger stack and wait until healthy
 infra-up:

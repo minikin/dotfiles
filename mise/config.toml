@@ -1,11 +1,11 @@
 # Global mise tools: inspection/dev tools that behave the same in every project.
 # Project-specific tools that must match CI (golangci-lint, biome, typescript, buf...)
 # belong in each project's mise.toml / package.json / go.mod `tool` directive instead.
-# Go (/usr/local/go) and Rust (rustup) come from their official installers rather than
-# mise, so each project's go.mod `toolchain` or rust-toolchain.toml picks the version.
+# Go and Rust (rustup) come from the Brewfile rather than mise, so each project's go.mod
+# `toolchain` or rust-toolchain.toml picks the version. go: and cargo: tools need them on PATH.
 
 [tools]
-node = "24"
+node = "26"
 pnpm = "latest"
 yq = "latest"
 helm = "latest"

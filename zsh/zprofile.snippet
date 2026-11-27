@@ -1,5 +1,6 @@
 # mise shims for non-interactive login shells (scripts, IDE tasks);
 # interactive shells get full `mise activate` from .zshrc
+# /opt/homebrew on macOS, Linuxbrew's prefix on Linux. A missing one is left out.
 typeset -U path
-path=(/opt/homebrew/bin /opt/homebrew/sbin $path)
-eval "$(/opt/homebrew/bin/mise activate zsh --shims)"
+path=(/opt/homebrew/{bin,sbin}(N) /home/linuxbrew/.linuxbrew/{bin,sbin}(N) {/opt/homebrew,/home/linuxbrew/.linuxbrew}/opt/rustup/bin(N) $HOME/.cargo/bin(N) $path)
+if (( $+commands[mise] )); then eval "$(mise activate zsh --shims)"; fi

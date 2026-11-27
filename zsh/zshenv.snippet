@@ -1,5 +1,6 @@
 # dotfiles: PATH for non-interactive ssh logins
 # `ssh host cmd` and Moshi setting up osewa read only ~/.zshenv, not .zprofile or .zshrc,
 # so moshi-hook (Homebrew) and osewa (~/.local/bin) must be on PATH here.
+# /opt/homebrew on macOS, Linuxbrew's prefix on Linux. A missing one is left out.
 typeset -U path
-path=($HOME/.local/bin /opt/homebrew/bin $path)
+path=($HOME/.local/bin /opt/homebrew/bin(N) /home/linuxbrew/.linuxbrew/bin(N) $path)

@@ -29,13 +29,15 @@ fake_home() {
   export JJ_USER=Test JJ_EMAIL=test@example.com
   export JJ_EDITOR=false EDITOR=false VISUAL=false
   export DOCKER_CONFIG="$HOME/.docker"
-  unset DOTFILES_NAME DOTFILES_EMAIL DOTFILES_SIGNING_KEY DOTFILES_PERSONAL_EMAIL DOTFILES_PERSONAL_KEY DOTFILES_PERSONAL_DIR DOTFILES_DIR
+  unset DOTFILES_NAME DOTFILES_EMAIL DOTFILES_SIGNING_KEY DOTFILES_PERSONAL_EMAIL DOTFILES_PERSONAL_KEY DOTFILES_PERSONAL_DIR DOTFILES_DIR DOTFILES_OS
   unset JW_NO_SETUP
+  # install.sh --brew and dotfiles-update look for Homebrew's rustup here. Empty keeps the real one
+  # on this machine out of a test.
+  export DOTFILES_RUSTUP_DIRS=""
   # The agy guard and agent-preflight react to these. A test that needs one sets a fake value.
   unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY CODEX_HOME
-  # The jw pre-push hook treats a push as an agent's when any of these is set. A test that runs
-  # under an agent must not inherit them.
-  unset CLAUDECODE CODEX_SANDBOX CODEX_THREAD_ID CODEX_CI OPENCODE DOTFILES_AGENT_WORKSPACE
+  # The jw pre-push hook and Claude hooks react to these when run under an agent. A test must not inherit them.
+  unset CLAUDECODE CODEX_SANDBOX CODEX_THREAD_ID CODEX_CI OPENCODE DOTFILES_AGENT_WORKSPACE T3CODE_THREAD_ID
   # The live shell exports these from navi.zsh, which would hide the defaults under test.
   unset NAVI_CONFIG NAVI_CONFIG_YAML NAVI_PATH
   # mise shims resolve tool versions from configs found via cwd (this repo's mise/config.toml)

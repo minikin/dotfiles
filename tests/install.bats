@@ -7,6 +7,10 @@ load helpers
 setup() {
   fake_home
   copy_repo
+  # --brew runs mise install, and the tests that pass it put this folder first on PATH.
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "mise $* cwd=$PWD" >> "%s"\n' "$BATS_TEST_TMPDIR/mise-calls" > "$BATS_TEST_TMPDIR/bin/mise"
+  chmod +x "$BATS_TEST_TMPDIR/bin/mise"
 }
 
 home_listing() { (cd "$HOME" && find . | LC_ALL=C sort); }
@@ -556,7 +560,9 @@ fake_screenshot_tools() {
 # fake_brew: a logging `brew` on PATH, so --brew never installs anything for real.
 fake_brew() {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
-  printf '#!/bin/sh\necho "brew $*" >> "%s"\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
+  # Drains stdin: on the Linux path install.sh pipes the Brewfile in, and an early exit would
+  # SIGPIPE the writer under pipefail.
+  printf '#!/bin/sh\necho "brew $*" >> "%s"\ncat >/dev/null\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
   chmod +x "$BATS_TEST_TMPDIR/bin/brew"
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
@@ -567,6 +573,72 @@ fake_brew() {
   [ "$status" -eq 0 ]
   grep -qx "brew bundle --file $DOTFILES/Brewfile" "$BATS_TEST_TMPDIR/calls"
   [[ ${output%%== symlinks*} == *"== brew bundle"* ]] || false
+}
+
+@test "install: --brew sets the stable toolchain when Homebrew's rustup has none" {
+  keg="$BATS_TEST_TMPDIR/keg"
+  mkdir -p "$BATS_TEST_TMPDIR/bin" "$keg/bin"
+  printf '#!/bin/sh\necho "brew $*" >> "%s"\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
+  printf '#!/bin/sh\necho "rustup $*" >> "%s"\n[ "$*" = default ] && exit 1\nexit 0\n' "$BATS_TEST_TMPDIR/calls" > "$keg/bin/rustup"
+  chmod +x "$BATS_TEST_TMPDIR/bin/brew" "$keg/bin/rustup"
+  DOTFILES_RUSTUP_DIRS="$keg/bin" PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --brew
+  [ "$status" -eq 0 ]
+  grep -qx 'rustup default stable' "$BATS_TEST_TMPDIR/calls"
+
+  # A toolchain that is already set is left alone.
+  printf '#!/bin/sh\necho "rustup $*" >> "%s"\n' "$BATS_TEST_TMPDIR/calls" > "$keg/bin/rustup"
+  : > "$BATS_TEST_TMPDIR/calls"
+  DOTFILES_RUSTUP_DIRS="$keg/bin" PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --brew
+  [ "$status" -eq 0 ]
+  ! grep -q 'rustup default stable' "$BATS_TEST_TMPDIR/calls" || false
+}
+
+@test "install: a failing rustup default stable warns and still installs links" {
+  fake_brew
+  keg="$BATS_TEST_TMPDIR/keg"
+  mkdir -p "$keg/bin"
+  printf '#!/bin/sh\necho "rustup $*" >> "%s"\nexit 1\n' "$BATS_TEST_TMPDIR/calls" > "$keg/bin/rustup"
+  chmod +x "$keg/bin/rustup"
+  DOTFILES_RUSTUP_DIRS="$keg/bin" run_install --brew
+  [ "$status" -eq 0 ]
+  [[ $output == *"rustup default stable failed: continuing with dotfile links"* ]] || false
+  [ -L "$HOME/.zshrc" ]
+}
+
+@test "install: --brew installs the global mise tools from HOME after linking" {
+  fake_brew
+  run_install --brew
+  [ "$status" -eq 0 ]
+  grep -qx "mise --cd $HOME install cwd=$PWD" "$BATS_TEST_TMPDIR/mise-calls"
+  [[ ${output#*== symlinks} == *"== global mise tools"* ]] || false
+}
+
+@test "install: a failing mise install leaves the links in place and still exits 0" {
+  fake_brew
+  printf '#!/bin/sh\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/mise"
+  run_install --brew
+  [ "$status" -eq 0 ]
+  [[ $output == *"mise install failed: the links are in place"* ]] || false
+  [ -L "$HOME/.config/mise/config.toml" ]
+}
+
+@test "install: without --brew, mise install does not run" {
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install
+  [ "$status" -eq 0 ]
+  [ ! -e "$BATS_TEST_TMPDIR/mise-calls" ]
+}
+
+@test "install: an older .zprofile gets the rustup PATH once, a new one already has it" {
+  printf '# old snippet\neval "$(/opt/homebrew/bin/mise activate zsh --shims)"\n' > "$HOME/.zprofile"
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'opt/rustup/bin' "$HOME/.zprofile")" -eq 1 ]
+  run_install
+  [ "$(grep -c 'opt/rustup/bin' "$HOME/.zprofile")" -eq 1 ]
+
+  rm "$HOME/.zprofile"
+  run_install
+  [ "$(grep -c 'opt/rustup/bin' "$HOME/.zprofile")" -eq 1 ]
 }
 
 @test "install: --all runs brew bundle and the screenshot step" {
@@ -795,4 +867,77 @@ STUB
   chmod 640 "$BATS_TEST_TMPDIR/f"
   PATH="$BATS_TEST_TMPDIR/gnu:$PATH" run file_mode "$BATS_TEST_TMPDIR/f"
   [ "$output" = "640" ]
+}
+
+@test "install: on Linux --brew drops casks and macos-only formulae from the Brewfile" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "brew $*" >> "%s"\ncat > "%s"\n' "$BATS_TEST_TMPDIR/calls" "$BATS_TEST_TMPDIR/used" > "$BATS_TEST_TMPDIR/bin/brew"
+  chmod +x "$BATS_TEST_TMPDIR/bin/brew"
+  DOTFILES_OS=linux-gnu PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --brew
+  [ "$status" -eq 0 ]
+  [[ $output == *"linux-gnu: casks and macos-only formulae skipped"* ]] || false
+  grep -qx 'brew bundle --file=-' "$BATS_TEST_TMPDIR/calls"
+  ! grep -qE '^[[:space:]]*cask[[:space:]]|# macos-only' "$BATS_TEST_TMPDIR/used" || false
+  grep -qx 'brew "jj"' "$BATS_TEST_TMPDIR/used"
+  grep -q '^tap "rjyo/moshi"' "$BATS_TEST_TMPDIR/used"
+}
+
+@test "install: on Linux --all skips the screenshot step" {
+  fake_brew
+  fake_screenshot_tools
+  DOTFILES_OS=linux-gnu run_install --all
+  [ "$status" -eq 0 ]
+  [[ $output == *"skip --shottr: macOS only"* ]] || false
+  ! grep -q 'activate -u' "$BATS_TEST_TMPDIR/calls" || false
+}
+
+@test "install: on Linux a failing brew bundle keeps its exit status and --dry-run runs nothing" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\necho "brew $*" >> "%s"\ncat >/dev/null\nexit 42\n' "$BATS_TEST_TMPDIR/calls" > "$BATS_TEST_TMPDIR/bin/brew"
+  chmod +x "$BATS_TEST_TMPDIR/bin/brew"
+  DOTFILES_OS=linux-gnu PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --brew
+  [ "$status" -eq 42 ]
+  [[ $output == *"brew bundle failed (exit 42)"* ]] || false
+
+  rm "$BATS_TEST_TMPDIR/calls"
+  DOTFILES_OS=linux-gnu PATH="$BATS_TEST_TMPDIR/bin:$PATH" run_install --dry-run --brew
+  [ "$status" -eq 0 ]
+  [[ $output == *"+ scripts/linux-brewfile.sh | brew bundle --file=-"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/calls" ]
+}
+
+@test "install: T3 Code antigravity provider links skills/plugins, preserves custom files, and skips hooks and non-profiles" {
+  local prof1="$HOME/.t3/userdata/providers/antigravity/prof1"
+  local prof2="$HOME/.t3/userdata/providers/antigravity/prof2"
+  local nonprof="$HOME/.t3/userdata/providers/antigravity/not-a-profile"
+  mkdir -p "$HOME/.agents/skills" "$HOME/.gemini/config/plugins" "$prof1/config" "$prof2/config" "$nonprof"
+  printf '{"entries":[{"path":"/custom"}]}\n' > "$prof2/config/skills.json"
+
+  before_home=$(home_listing)
+  run_install --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(home_listing)" = "$before_home" ]
+  [ ! -e "$HOME/.gemini/config/skills.json" ]
+  [ ! -e "$HOME/.gemini/config/plugins.json" ]
+
+  run_install
+  [ "$status" -eq 0 ]
+  jq -e --arg p "$HOME/.agents/skills" '.entries == [{"path": $p}]' "$HOME/.gemini/config/skills.json"
+  jq -e --arg p "$HOME/.gemini/config/plugins" '.entries == [{"path": $p}]' "$HOME/.gemini/config/plugins.json"
+  [ "$(readlink "$prof1/config/skills.json")" = "$HOME/.gemini/config/skills.json" ]
+  [ "$(readlink "$prof1/config/plugins.json")" = "$HOME/.gemini/config/plugins.json" ]
+  [ ! -e "$prof1/config/hooks" ]
+  [ ! -e "$prof1/config/hooks.json" ]
+  [ ! -e "$nonprof/config" ]
+
+  [ ! -L "$prof2/config/skills.json" ]
+  jq -e '.entries == [{"path": "/custom"}]' "$prof2/config/skills.json"
+  [ "$(readlink "$prof2/config/plugins.json")" = "$HOME/.gemini/config/plugins.json" ]
+  [[ $output == *"skip $prof2/config/skills.json (provider-specific file)"* ]] || false
+
+  before_backups=$(count_backups)
+  run_install
+  [ "$status" -eq 0 ]
+  [ "$(count_backups)" -eq "$before_backups" ]
+  [[ $output != *"+ ln -s"* ]] || false
 }

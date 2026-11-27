@@ -23,6 +23,11 @@ for arg in "$@"; do
   esac
 done
 STAMP=$(date +%Y%m%d-%H%M%S)
+# Overridable so tests can run the Linux path on a Mac.
+OS=${DOTFILES_OS:-$OSTYPE}
+if [[ $OS != darwin* ]] && (( SHOTTR )); then
+  echo "skip --shottr: macOS only"; SHOTTR=0
+fi
 
 run() { echo "+ $*"; (( DRY )) || "$@"; }
 
@@ -84,13 +89,33 @@ replace_if_changed() {
 if (( BREW )); then
   echo "== brew bundle"
   command -v brew >/dev/null || { echo "Homebrew is required for --brew: https://brew.sh" >&2; exit 1; }
-  if run brew bundle --file "$REPO/Brewfile"; then :; else
+  bundle() {
+    if [[ $OS == darwin* ]]; then run brew bundle --file "$REPO/Brewfile"; return; fi
+    # Linuxbrew has no casks, and the formulae tagged macos-only do not build there.
+    echo "$OS: casks and macos-only formulae skipped"
+    echo "+ scripts/linux-brewfile.sh | brew bundle --file=-"
+    (( DRY )) || "$REPO/scripts/linux-brewfile.sh" | brew bundle --file=-
+  }
+  if bundle; then :; else
     rc=$?
     # brew bundle may have installed some packages before the one that failed.
     echo "brew bundle failed (exit $rc), dotfile installation has not started." >&2
     echo "If Homebrew reported an app that already exists in /Applications, install it over that copy" >&2
     echo "with brew install --cask --adopt <cask>, then re-run ./install.sh --brew." >&2
     exit "$rc"
+  fi
+  # Homebrew's rustup installs no toolchain, and cargo: tools in mise/config.toml need one.
+  if (( DRY )); then
+    echo "+ rustup default stable (when Homebrew's rustup has no default toolchain)"
+  else
+    for dir in ${DOTFILES_RUSTUP_DIRS-/opt/homebrew/opt/rustup/bin /home/linuxbrew/.linuxbrew/opt/rustup/bin}; do
+      [[ -x $dir/rustup ]] || continue
+      if ! "$dir/rustup" default >/dev/null 2>&1; then
+        run "$dir/rustup" default stable ||
+          echo "rustup default stable failed: continuing with dotfile links, run dotfiles-update when online to retry" >&2
+      fi
+      break
+    done
   fi
 fi
 
@@ -119,6 +144,9 @@ link agents/AGENTS.md         "$HOME/.config/dotfiles/AGENTS.md"   # agy include
 link agy/GEMINI.md            "$HOME/.gemini/GEMINI.md"
 link agy/guard-agents.zsh     "$HOME/.gemini/config/hooks/dotfiles-guard-agents.zsh"
 link bin/agent-preflight      "$HOME/.local/bin/agent-preflight"
+link bin/dotfiles-update      "$HOME/.local/bin/dotfiles-update"
+link bin/devvm                "$HOME/.local/bin/devvm"
+link bin/t3-server-setup      "$HOME/.local/bin/t3-server-setup"
 
 # Ghostty on macOS also reads this file *after* ~/.config/ghostty/config; an empty or stale
 # copy silently overrides settings, so move it aside.
@@ -131,6 +159,18 @@ if ! grep -qs 'mise activate zsh --shims' "$HOME/.zprofile"; then
   else { echo; cat "$REPO/zsh/zprofile.snippet"; } >> "$HOME/.zprofile"; fi
 else
   echo "ok   ~/.zprofile"
+fi
+# A .zprofile from an older snippet has no rustup path, so scripts and IDE tasks find no cargo.
+if ! grep -qs 'opt/rustup/bin' "$HOME/.zprofile"; then
+  if (( DRY )); then echo "+ append rustup PATH >> ~/.zprofile"
+  else
+    {
+      echo
+      echo "# dotfiles: Homebrew's keg-only rustup (cargo, rustc) for non-interactive login shells"
+      # shellcheck disable=SC2016 # expanded by zsh when .zprofile runs
+      echo 'path=({/opt/homebrew,/home/linuxbrew/.linuxbrew}/opt/rustup/bin(N) $HOME/.cargo/bin(N) $path)'
+    } >> "$HOME/.zprofile"
+  fi
 fi
 
 echo "== .zshenv (append the PATH for non-interactive ssh logins if missing)"
@@ -164,20 +204,74 @@ else
   replace_if_changed "$SETTINGS" "$tmp"
 fi
 
-echo "== agy hooks (merge; the dotfiles hook's entry is replaced whole, every other named hook stays)"
-AGY_HOOKS=$HOME/.gemini/config/hooks.json
-if (( DRY )); then
-  echo "+ merge agy/hooks.fragment.json into $AGY_HOOKS"
-else
+merge_agy_hooks() {
+  local dest=$1 tmp
+  if (( DRY )); then
+    echo "+ merge agy/hooks.fragment.json into $dest"
+    return
+  fi
   command -v jq >/dev/null || { echo "jq is required — run: brew bundle" >&2; exit 1; }
-  mkdir -p "${AGY_HOOKS%/*}"
-  tmp=$(merge_tmp "$AGY_HOOKS")
+  mkdir -p "${dest%/*}"
+  tmp=$(merge_tmp "$dest")
   # Top-level keys are hook names. `+` replaces dotfiles-agent-guard whole, so a stale
   # "enabled": false in it cannot survive, and keeps every other named hook.
-  jq -n --slurpfile cur <(cat "$AGY_HOOKS" 2>/dev/null || true) \
+  jq -n --slurpfile cur <(cat "$dest" 2>/dev/null || true) \
         --slurpfile add "$REPO/agy/hooks.fragment.json" '($cur[0] // {}) + $add[0]' > "$tmp" ||
-    { rm -f "$tmp"; echo "agy hooks merge failed; $AGY_HOOKS untouched" >&2; exit 1; }
-  replace_if_changed "$AGY_HOOKS" "$tmp"
+    { rm -f "$tmp"; echo "agy hooks merge failed; $dest untouched" >&2; exit 1; }
+  replace_if_changed "$dest" "$tmp"
+}
+
+ensure_agy_entries() {
+  local src_dir=$1 dest=$2 entry_path=$3 tmp
+  if [[ -d $src_dir && ! -e $dest && ! -L $dest ]]; then
+    if (( DRY )); then
+      echo "+ write $dest"
+    else
+      command -v jq >/dev/null || { echo "jq is required — run: brew bundle" >&2; exit 1; }
+      mkdir -p "${dest%/*}"
+      tmp=$(merge_tmp "$dest")
+      if ! jq -nc --arg p "$entry_path" '{entries:[{path:$p}]}' > "$tmp"; then
+        rm -f "$tmp"; echo "failed to write $dest" >&2; exit 1
+      fi
+      chmod "$(printf '%o' $(( 0666 & ~$(umask) )))" "$tmp"
+      mv "$tmp" "$dest"
+      echo "ok   $dest created"
+    fi
+  elif [[ -L $dest && ! -e $dest ]]; then
+    echo "skip $dest (broken symlink)"
+  elif [[ -e $dest ]]; then
+    echo "ok   $dest"
+  fi
+}
+
+link_t3_config() {
+  local src=$1 dst=$2
+  if [[ -e $dst && ! -L $dst ]]; then
+    echo "skip $dst (provider-specific file)"
+  else
+    link_to "$src" "$dst"
+  fi
+}
+
+echo "== agy hooks (merge; the dotfiles hook's entry is replaced whole, every other named hook stays)"
+merge_agy_hooks "$HOME/.gemini/config/hooks.json"
+
+echo "== T3 Code Antigravity provider config (skills, plugins)"
+AGY_CONFIG=$HOME/.gemini/config
+ensure_agy_entries "$HOME/.agents/skills" "$AGY_CONFIG/skills.json"  "$HOME/.agents/skills"
+ensure_agy_entries "$AGY_CONFIG/plugins"  "$AGY_CONFIG/plugins.json" "$AGY_CONFIG/plugins"
+T3_AGY_DIR=$HOME/.t3/userdata/providers/antigravity
+if [[ -d $T3_AGY_DIR ]]; then
+  # Skip hooks/hooks.json in T3 profiles: a non-empty hooks.json disables T3's Antigravity text generation.
+  for prof in "$T3_AGY_DIR"/*; do
+    [[ -d $prof/config ]] || continue
+    if [[ -f $AGY_CONFIG/skills.json ]] || { (( DRY )) && [[ -d $HOME/.agents/skills ]]; }; then
+      link_t3_config "$AGY_CONFIG/skills.json" "$prof/config/skills.json"
+    fi
+    if [[ -f $AGY_CONFIG/plugins.json ]] || { (( DRY )) && [[ -d $AGY_CONFIG/plugins ]]; }; then
+      link_t3_config "$AGY_CONFIG/plugins.json" "$prof/config/plugins.json"
+    fi
+  done
 fi
 
 echo "== Rex orchestrator skill for agy (the source Claude's skill links to)"
@@ -375,6 +469,21 @@ if (( SHOTTR )); then
   if [[ -x $ACTIVATE ]]; then run "$ACTIVATE" -u
   else echo "skip applying now: $ACTIVATE not found, log out and back in" >&2; fi
   echo "ok   now assign ⇧⌘3, ⇧⌘4 and ⇧⌘5 in Shottr → Preferences → Hotkeys, and turn on Launch at login"
+fi
+
+if (( BREW )); then
+  # After the links, so mise reads the linked mise/config.toml. From $HOME, so a project's
+  # mise.toml in the current folder is not installed instead.
+  echo "== global mise tools"
+  if ! command -v mise >/dev/null; then
+    echo "skip mise install: mise not installed"
+  else
+    for dir in ${DOTFILES_RUSTUP_DIRS-/opt/homebrew/opt/rustup/bin /home/linuxbrew/.linuxbrew/opt/rustup/bin}; do
+      [[ -d $dir ]] && PATH=$dir:$PATH
+    done
+    run mise --cd "$HOME" install ||
+      echo "mise install failed: the links are in place, run dotfiles-update in a new shell to retry" >&2
+  fi
 fi
 
 echo "== checks"

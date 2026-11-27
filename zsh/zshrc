@@ -1,9 +1,15 @@
 ZSH_THEME=""
 
-# Hardcoded instead of $(brew --prefix) to keep new shells/splits fast
-HOMEBREW_PREFIX=/opt/homebrew
+# Hardcoded instead of $(brew --prefix) to keep new shells/splits fast.
+# /opt/homebrew on Apple Silicon, Linuxbrew's default prefix on Linux.
+if [[ $OSTYPE == darwin* ]]; then
+  HOMEBREW_PREFIX=/opt/homebrew
+else
+  HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew
+fi
 typeset -U path
-path=($HOME/.local/bin $HOMEBREW_PREFIX/bin $HOMEBREW_PREFIX/sbin $path)
+# rustup is keg-only, so its cargo and rustc proxies are not in $HOMEBREW_PREFIX/bin.
+path=($HOME/.local/bin $HOMEBREW_PREFIX/bin $HOMEBREW_PREFIX/sbin $HOMEBREW_PREFIX/opt/rustup/bin(N) $HOME/.cargo/bin(N) $path)
 
 # Completions (brew-installed + jj dynamic completion for bookmarks/revisions)
 FPATH=$HOMEBREW_PREFIX/share/zsh/site-functions:$FPATH
@@ -30,6 +36,7 @@ _cached_init() {
   source $f
 }
 COMPLETE=zsh _cached_init jj
+_cached_init t3 --completions zsh
 
 source $HOMEBREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 
@@ -66,6 +73,6 @@ source ~/.config/zsh/navi.zsh
 # Must be sourced last
 source $HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
-. "$HOME/.atuin/bin/env"
-
-eval "$(atuin init zsh)"
+# atuin's own installer puts it in ~/.atuin/bin. Homebrew's is already on PATH.
+[[ -f ~/.atuin/bin/env ]] && . ~/.atuin/bin/env
+if (( $+commands[atuin] )); then eval "$(atuin init zsh)"; fi

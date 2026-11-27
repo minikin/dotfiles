@@ -22,7 +22,10 @@ remote-check() {
     esac
   fi
 
-  if nc -z -G 2 127.0.0.1 22 >/dev/null 2>&1; then
+  # -G is the connect timeout of macOS nc. OpenBSD nc on Linux has no -G and uses -w for it.
+  local nc_timeout=-G
+  [[ $OSTYPE == darwin* ]] || nc_timeout=-w
+  if nc -z $nc_timeout 2 127.0.0.1 22 >/dev/null 2>&1; then
     print -r -- "ok   ssh: Remote Login is on"
   else
     print -r -- "!!   ssh: Remote Login is off, fix: moshi-hook host enable-ssh"; fail=1
